@@ -1,36 +1,117 @@
-import type { FastifyInstance } from 'fastify';
-import { OrganizationsService } from './organizations.service.js';
-import { updateOrganizationSchema } from './organizations.schema.js';
+// backend/src/modules/organizations/organizations.routes.ts
+// ==================================================================
+// Zero Plus - Organizations Routes
+// ==================================================================
+
+import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
+import { OrganizationsService } from './organizations.service.js'
+import { updateOrganizationSchema } from './organizations.schema.js'
 
 export async function organizationRoutes(fastify: FastifyInstance) {
-  const service = new OrganizationsService(fastify);
+  const service = new OrganizationsService(fastify)
 
-  fastify.addHook('onRequest', async (request, reply) => {
-    try {
-      await request.jwtVerify();
-    } catch (err) {
-      return reply.status(401).send({ message: 'غير مصرح للوصول' });
-    }
-  });
+  // ================================================================
+  // GET /organizations/me
+  // جلب بيانات شركتي
+  // ================================================================
+  /**
+   * محتاج:
+   * - Header: Authorization: Bearer <token>
+   * - التوكن لازم يكون فيه: organizationId
+   *
+   * بيرجع:
+   * - بيانات الشركة + عدد المستخدمين والسيرفرات
+   */
+  fastify.get(
+    '/me',
+    {
+      preHandler: [fastify.authenticate], // الحماية عن طريق التوكن
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      try {
+        const { organizationId } = request.user
 
-  fastify.get('/me', async (request, reply) => {
-    try {
-      const user = request.user as { organizationId: string };
-      const organization = await service.getMyOrganization(user.organizationId);
-      return reply.send(organization);
-    } catch (error: any) {
-      return reply.status(400).send({ message: error.message });
-    }
-  });
+        const organization = await service.getMyOrganization(organizationId)
 
-  fastify.patch('/me', async (request, reply) => {
-    try {
-      const user = request.user as { organizationId: string };
-      const body = updateOrganizationSchema.parse(request.body);
-      const updatedOrg = await service.updateOrganization(user.organizationId, body);
-      return reply.send({ message: 'تم تحديث البيانات بنجاح', organization: updatedOrg });
-    } catch (error: any) {
-      return reply.status(400).send({ message: error.message });
+        return reply.status(200).send({
+          success: true,
+          data: organization,
+        })
+      } catch (error: any) {
+        if (error.message === 'الشركة غير موجودة') {
+          return reply.status(404).send({
+            success: false,
+            message: error.message,
+          })
+        }
+
+        request.log.error(error)
+        return reply.status(500).send({
+          success: false,
+          message: 'Internal server error',
+        })
+      }
     }
-  });
+  )
+
+  // ================================================================
+  // PATCH /organizations/me
+  // تعديل اسم الشركة أو الـ slug
+  // ================================================================
+  /**
+   * محتاج:
+   * - Header: Authorization: Bearer <token>
+   * - Body (JSON):
+   *   {
+   *     "name": "اسم جديد"        // اختياري
+   *     "slug": "new-slug"        // اختياري
+   *   }
+   * - لازم تبعت واحد منهم على الأقل
+   *
+   * بيرجع:
+   * - بيانات الشركة بعد التعديل
+   */
+  fastify.patch(
+    '/me',
+    {
+      preHandler: [fastify.authenticate], // الحماية عن طريق التوكن
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      try {
+        const { organizationId } = request.user
+        const body = updateOrganizationSchema.parse(request.body)
+
+        const updatedOrg = await service.updateOrganization(organizationId, body)
+
+        return reply.status(200).send({
+          success: true,
+          message: 'تم تحديث البيانات بنجاح',
+          data: updatedOrg,
+        })
+      } catch (error: any) {
+        // خطأ من Zod
+        if (error.name === 'ZodError') {
+          return reply.status(400).send({
+            success: false,
+            message: 'Validation failed',
+            errors: error.errors,
+          })
+        }
+
+        // الـ slug مستخدم قبل كده
+        if (error.message === 'الـ slug مستخدم بالفعل') {
+          return reply.status(409).send({
+            success: false,
+            message: error.message,
+          })
+        }
+
+        request.log.error(error)
+        return reply.status(500).send({
+          success: false,
+          message: 'Internal server error',
+        })
+      }
+    }
+  )
 }
