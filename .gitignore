@@ -16,6 +16,8 @@
 **/dist/
 **/build/
 **/.vite/
+**/.next/
+**/out/
 
 # =========================================================
 # Python
@@ -44,21 +46,24 @@ build/
 # Environment Variables
 # =========================================================
 
-# IMPORTANT:
-# .env is intentionally NOT ignored.
-# This private repository is being shared with the teammate,
-# so .env files can be committed intentionally.
+# .env files are INTENTIONALLY NOT ignored
+# لأن المستودع خاص ومشترك مع الزميل
+
+# =========================================================
+# Prisma
+# =========================================================
+
+# بنرفع schema.prisma وmigrations عادي
+# مفيش أي تجاهل هنا
 
 # =========================================================
 # IDE / Editors
 # =========================================================
 
-# VS Code
 .vscode/*
 !.vscode/settings.json
 !.vscode/extensions.json
 
-# JetBrains
 .idea/
 
 # =========================================================
@@ -111,19 +116,9 @@ coverage/
 *.tsbuildinfo
 
 # =========================================================
-# Local databases
-# =========================================================
-
-# Uncomment ONLY if you create local DB files
-# *.db
-# *.sqlite
-# *.sqlite3
-
-# =========================================================
 # Docker
 # =========================================================
 
-# Docker volumes / local runtime data
 docker-data/
 docker-volumes/
 

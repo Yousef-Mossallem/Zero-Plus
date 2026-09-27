@@ -1,0 +1,473 @@
+// ==================================================================
+// Zero Plus - Database Schema (Professional & Complete)
+// Prisma 7.x / 6.x compatible
+// Shared / Collective Immunity parts are commented out for now
+// ==================================================================
+
+generator client {
+  provider = "prisma-client-js"
+  // لو بتستخدم output مخصص زي ما كنت كاتب، سيب السطر ده:
+  // output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  //url      = env("DATABASE_URL")
+}
+
+// ==================================================================
+// ENUMS
+// ==================================================================
+
+enum UserRole {
+  OWNER     // أول شخص عمل الحساب - صلاحيات كاملة + إدارة الفواتير لاحقاً
+  ADMIN     // صلاحيات إدارية كاملة داخل الشركة
+  ANALYST   // يشوف كل حاجة ويقدر يعدل Policies لكن مش يدير Users
+  VIEWER    // مشاهدة فقط (Live Traffic + Events + Reports)
+}
+
+enum ServerStatus {
+  PENDING     // اتضاف لسه، النظام بيفحص الـ Origin أول مرة
+  ONLINE      // شغال وسعته معروفة
+  DEGRADED    // بيرد بس بطيء أو فيه مشاكل جزئية
+  OFFLINE     // مش بيرد
+  MAINTENANCE // الشركة حاطاه في صيانة يدوي
+}
+
+enum Decision {
+  ALLOW
+  RATE_LIMIT
+  CHALLENGE     // JS Challenge أو فحص إضافي
+  BLOCK
+}
+
+enum BanStatus {
+  NONE
+  TEMPORARY
+  PERMANENT
+}
+
+enum IpType {
+  RESIDENTIAL   // منزل / موبايل عادي
+  MOBILE
+  DATACENTER
+  VPN_PROXY
+  TOR
+  UNKNOWN
+}
+
+enum ThreatCategory {
+  DDOS_BURST
+  BOTNET
+  BRUTE_FORCE
+  SCRAPER
+  SUSPICIOUS_BEHAVIOR
+  KNOWN_MALICIOUS
+  SMOKESCREEN     // استخدام DDoS كستار دخاني
+  OTHER
+}
+
+enum NotificationType {
+  DDOS_START
+  NEW_BLOCK
+  CRITICAL_REPUTATION
+  SERVER_CAPACITY_WARNING
+  // THREAT_INTEL_UPDATE   // ← مش هيستخدم دلوقتي
+  SERVER_RECOVERY
+  POLICY_CHANGED
+  SYSTEM
+}
+
+enum ReportStatus {
+  PENDING
+  GENERATING
+  READY
+  FAILED
+}
+
+enum ChallengeType {
+  JS_SILENT       // الاختبار الصامت اللي بيشتغل لوحده في المتصفح
+  RATE_LIMIT_SOFT
+  CAPTCHA_FALLBACK // احتياطي لو احتجنا (مش أساسي)
+}
+
+enum SimulationPattern {
+  NORMAL
+  SUSPICIOUS_BURST
+  REPEATED_REQUESTS
+  UNUSUAL_BEHAVIOR
+  KNOWN_TEST_SOURCE
+}
+
+// ==================================================================
+// CORE TENANT MODELS
+// ==================================================================
+
+model Organization {
+  id          String   @id @default(uuid())
+  name        String
+  slug        String   @unique          // zeroplus.com/acme مثلاً
+  plan        String   @default("free") // free / pro / enterprise (مستقبلي)
+  isActive    Boolean  @default(true)
+
+  // علاقات
+  users               User[]
+  servers             Server[]
+  securityEvents      SecurityEvent[]
+  reputationEntries   ReputationEntry[]
+  policies            Policy?
+  notifications       Notification[]
+  reports             Report[]
+  simulationRuns      SimulationRun[]
+  // sharedThreatMatches SharedThreatMatch[] // ← مش هيستخدم دلوقتي (Collective Immunity)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([slug])
+}
+
+model User {
+  id             String   @id @default(uuid())
+  email          String   @unique
+  passwordHash   String
+  fullName       String
+  role           UserRole @default(OWNER)
+  isActive       Boolean  @default(true)
+  lastLoginAt    DateTime?
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+  @@index([email])
+}
+
+// ==================================================================
+// PROTECTED SERVERS
+// ==================================================================
+
+model Server {
+  id                   String       @id @default(uuid())
+  domain               String
+  originIp             String       // الـ IP الحقيقي للسيرفر الأصلي
+  originPort           Int          @default(443)
+  status               ServerStatus @default(PENDING)
+
+  // معلومات السعة الحقيقية (بتتحدد من Health Check)
+  maxRequestsPerSecond Int?
+  cpuCores             Int?
+  ramMb                Int?
+  avgResponseTimeMs    Int?
+  currentLoadPercent   Float?       // 0-100
+  lastHealthCheckAt    DateTime?
+
+  // DNS & Verification
+  dnsVerified          Boolean      @default(false)
+  originReachable      Boolean      @default(false)
+  sslEnabled           Boolean      @default(true)
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  securityEvents SecurityEvent[]
+  simulationRuns SimulationRun[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, domain])
+  @@index([organizationId])
+  @@index([status])
+}
+
+// ==================================================================
+// REPUTATION SYSTEM (القلب النابض)
+// ==================================================================
+
+model ReputationEntry {
+  id                  String    @id @default(uuid())
+  ipAddress           String
+  deviceFingerprint   String?   // بصمة الجهاز (Canvas + WebGL + Fonts...)
+  ja3Fingerprint      String?   // TLS JA3
+  ja4Fingerprint      String?   // TLS JA4 (أحدث وأدق)
+
+  // معلومات جغرافية وشبكة
+  countryCode         String?   // EG, US, RU...
+  asn                 Int?
+  asOrg               String?   // اسم الـ ASN
+  ipType              IpType    @default(UNKNOWN)
+
+  // نظام السمعة المتدرج
+  score               Int       @default(1)  // 1 = بريء نسبياً → 10 = أسوأ حالة
+  banStatus           BanStatus @default(NONE)
+  bannedUntil         DateTime? // لو TEMPORARY
+  failedChecksCount   Int       @default(0)  // كام مرة فشل اختبارات
+  successfulChecks    Int       @default(0)
+  totalRequests       Int       @default(0)
+
+  // سلوك
+  lastPath            String?
+  lastUserAgent       String?
+  avgRequestRate      Float?    // متوسط الطلبات في الدقيقة
+  isKnownBotnet       Boolean   @default(false)
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  securityEvents SecurityEvent[]
+  challenges     ChallengeLog[]
+
+  firstSeenAt DateTime @default(now())
+  lastSeenAt  DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([organizationId, ipAddress])
+  @@index([organizationId])
+  @@index([banStatus])
+  @@index([score])
+  @@index([ja3Fingerprint])
+  @@index([ja4Fingerprint])
+  @@index([ipType])
+}
+
+// ==================================================================
+// SECURITY EVENTS (كل طلب اتاخد عليه قرار)
+// ==================================================================
+
+model SecurityEvent {
+  id              String   @id @default(uuid())
+
+  // بيانات الطلب الأساسية
+  ipAddress       String
+  path            String
+  method          String
+  userAgent       String?
+  referer         String?
+  requestId       String?  // ID داخلي من الـ Gateway للتتبع
+
+  // الإشارات المجمعة (Signals)
+  riskScore       Int      // 0-100
+  anomalyScore    Float?   // من الـ AI Service (0.0 - 1.0)
+  confidence      Float?   // ثقة الموديل
+
+  decision        Decision
+  reasonSummary   String?  // "IP Datacenter + High Rate + Bad History"
+  reasonDetails   Json?    // تفاصيل كاملة للإشارات (مرنة)
+
+  // معلومات إضافية
+  countryCode     String?
+  asn             Int?
+  ipType          IpType?
+  isChallenged    Boolean  @default(false)
+  challengePassed Boolean?
+
+  // علاقات
+  serverId            String
+  server              Server @relation(fields: [serverId], references: [id], onDelete: Cascade)
+
+  organizationId      String
+  organization        Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  reputationEntryId   String?
+  reputationEntry     ReputationEntry? @relation(fields: [reputationEntryId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([organizationId])
+  @@index([serverId])
+  @@index([ipAddress])
+  @@index([decision])
+  @@index([riskScore])
+  @@index([createdAt])
+}
+
+// ==================================================================
+// CHALLENGE LOGS (تتبع اختبارات التحقق)
+// ==================================================================
+
+model ChallengeLog {
+  id              String       @id @default(uuid())
+  challengeType   ChallengeType
+  passed          Boolean
+  durationMs      Int?         // قد إيه خد عشان ينفذ الـ JS Challenge
+  failureReason   String?
+
+  reputationEntryId String
+  reputationEntry   ReputationEntry @relation(fields: [reputationEntryId], references: [id], onDelete: Cascade)
+
+  organizationId String
+  createdAt      DateTime @default(now())
+
+  @@index([reputationEntryId])
+  @@index([organizationId])
+  @@index([passed])
+}
+
+// ==================================================================
+// POLICIES (حدود Risk Score قابلة للتخصيص لكل شركة)
+// ==================================================================
+
+model Policy {
+  id                    String @id @default(uuid())
+
+  // الحدود الافتراضية (قابلة للتعديل)
+  allowMaxScore         Int    @default(30)   // 0-30 → ALLOW
+  rateLimitMaxScore     Int    @default(60)   // 31-60 → RATE_LIMIT
+  challengeMaxScore     Int    @default(80)   // 61-80 → CHALLENGE
+  // فوق 80 → BLOCK
+
+  // إعدادات Rate Limit
+  rateLimitRequests     Int    @default(30)   // عدد الطلبات المسموحة
+  rateLimitWindowSec    Int    @default(60)   // في كام ثانية
+
+  // إعدادات الحظر التلقائي
+  autoBanAfterFails     Int    @default(2)    // بعد كام فشل اختبار → حظر مؤقت
+  temporaryBanMinutes   Int    @default(120)  // ساعتين افتراضي
+  permanentBanScore     Int    @default(9)    // لو وصلت السمعة لـ 9 أو 10 → دائم
+
+  // تفعيل/تعطيل ميزات
+  enableJsChallenge     Boolean @default(true)
+  enableAiAnomaly       Boolean @default(true)
+  // enableCollectiveImmunity Boolean @default(true) // ← مش هيستخدم دلوقتي
+
+  organizationId String       @unique
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ==================================================================
+// THREAT INTELLIGENCE (المناعة الجماعية - Federated Threat Memory)
+// ← كل الجزء ده متعطل دلوقتي ومش هيستخدم
+// ==================================================================
+
+// model SharedThreatIndicator {
+//   id              String         @id @default(uuid())
+//
+//   // البصمة المجردة فقط (مفيش أي بيانات حساسة)
+//   ja3Fingerprint  String?
+//   ja4Fingerprint  String?
+//   deviceFingerprint String?
+//   ipAddressHash   String?        // Hash مش الـ IP الخام (خصوصية)
+//
+//   category        ThreatCategory
+//   confidence      Float          // 0.0 - 1.0
+//   severity        Int            // 1-10
+//
+//   firstSeenAt     DateTime       @default(now())
+//   lastSeenAt      DateTime       @default(now())
+//   hitCount        Int            @default(1)  // كام مرة ظهرت عند عملاء مختلفين
+//
+//   // مين اكتشفها أول مرة (اختياري ومش بيكشف هوية الشركة)
+//   discoveredByOrgHash String?    // Hash للـ organizationId
+//
+//   matches         SharedThreatMatch[]
+//
+//   createdAt DateTime @default(now())
+//   updatedAt DateTime @updatedAt
+//
+//   @@index([ja3Fingerprint])
+//   @@index([ja4Fingerprint])
+//   @@index([category])
+//   @@index([severity])
+// }
+
+// // جدول الربط: أي شركة شافت المؤشر ده
+// model SharedThreatMatch {
+//   id                    String @id @default(uuid())
+//
+//   sharedThreatId        String
+//   sharedThreat          SharedThreatIndicator @relation(fields: [sharedThreatId], references: [id], onDelete: Cascade)
+//
+//   organizationId        String
+//   organization          Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+//
+//   matchedAt             DateTime @default(now())
+//   riskBoostApplied      Int      @default(0) // كام نقطة اتضافت على الـ Risk Score
+//
+//   @@unique([sharedThreatId, organizationId])
+//   @@index([organizationId])
+// }
+
+// ==================================================================
+// NOTIFICATIONS
+// ==================================================================
+
+model Notification {
+  id          String           @id @default(uuid())
+  type        NotificationType
+  title       String
+  message     String           // ممكن يكون من Gemini
+  severity    Int              @default(1) // 1-5
+  isRead      Boolean          @default(false)
+  metadata    Json?            // بيانات إضافية (IP, Risk Score...)
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([organizationId])
+  @@index([isRead])
+  @@index([createdAt])
+}
+
+// ==================================================================
+// REPORTS (Gemini)
+// ==================================================================
+
+model Report {
+  id            String       @id @default(uuid())
+  title         String
+  status        ReportStatus @default(PENDING)
+  periodStart   DateTime
+  periodEnd     DateTime
+  content       String?      // النص اللي Gemini كتبه
+  summary       String?      // ملخص قصير
+  eventCount    Int          @default(0)
+  blockedCount  Int          @default(0)
+  metadata      Json?
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+  @@index([status])
+}
+
+// ==================================================================
+// SIMULATION LAB
+// ==================================================================
+
+model SimulationRun {
+  id            String           @id @default(uuid())
+  pattern       SimulationPattern
+  status        String           @default("running") // running / stopped / completed
+  targetRps     Int              // Requests per second المستهدف
+  durationSec   Int?
+  totalSent     Int              @default(0)
+  totalBlocked  Int              @default(0)
+  totalAllowed  Int              @default(0)
+
+  serverId      String
+  server        Server @relation(fields: [serverId], references: [id], onDelete: Cascade)
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  startedAt     DateTime @default(now())
+  stoppedAt     DateTime?
+
+  @@index([organizationId])
+  @@index([serverId])
+  @@index([status])
+}
