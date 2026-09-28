@@ -22,9 +22,9 @@ import jwtPlugin from './plugins/jwt.plugin.js'
 import * as authRoutes from './modules/auth/auth.routes.js'
 
 // باقي الموديولات هتتضاف هنا تدريجيًا:
-// import { organizationRoutes } from './modules/organizations/organizations.routes'
-// import { serverRoutes } from './modules/servers/servers.routes'
-// import { eventRoutes } from './modules/events/events.routes'
+import { organizationRoutes } from './modules/organizations/organizations.routes.js'
+import { serverRoutes } from './modules/servers/servers.routes.js'
+import  eventRoutes  from './modules/events/events.routes.js'
 // import { reputationRoutes } from './modules/reputation/reputation.routes'
 // import { policyRoutes } from './modules/policies/policies.routes'
 // import { notificationRoutes } from './modules/notifications/notifications.routes'
@@ -94,9 +94,9 @@ export async function buildApp() {
   await app.register(authRoutes.authRoutes, { prefix: '/auth' })
 
   // ---------- باقي الموديولات (هتتفتح واحدة واحدة) ----------
-  // await app.register(organizationRoutes, { prefix: '/organizations' })
-  // await app.register(serverRoutes, { prefix: '/servers' })
-  // await app.register(eventRoutes, { prefix: '/events' })
+  await app.register(organizationRoutes, { prefix: '/organizations' })
+  await app.register(serverRoutes, { prefix: '/servers' })
+  await app.register(eventRoutes, { prefix: '/events' })
   // await app.register(reputationRoutes, { prefix: '/reputation' })
   // await app.register(policyRoutes, { prefix: '/policies' })
   // await app.register(notificationRoutes, { prefix: '/notifications' })
