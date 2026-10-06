@@ -287,14 +287,7 @@ export default async function eventRoutes(fastify: FastifyInstance) {
     {
       preHandler: fastify.authenticate,
     },
-    async (
-      request: FastifyRequest<{
-        Params: {
-          id: string;
-        };
-      }>,
-      reply: FastifyReply,
-    ) => {
+    async (request: FastifyRequest, reply: FastifyReply) => {
       try {
         /**
          * --------------------------------------------------------

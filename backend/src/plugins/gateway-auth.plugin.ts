@@ -1,9 +1,15 @@
+// backend/src/plugins/gateway-auth.plugin.ts
 // ==================================================================
 // Zero Plus - Gateway Auth Plugin
-// Header: X-Gateway-Key = process.env.GATEWAY_SECRET
+// الـ Gateway بيثبت هويته للـ Backend بالـ Header:
+//   X-Gateway-Key: <GATEWAY_SECRET>
+//
+// الاستخدام في أي route داخلي:
+//   fastify.get('/x', { preHandler: [fastify.authenticateGateway] }, handler)
 // ==================================================================
 
 import fp from 'fastify-plugin'
+import { timingSafeEqual } from 'node:crypto'
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
 
 declare module 'fastify' {
@@ -18,32 +24,36 @@ declare module 'fastify' {
 async function gatewayAuthPlugin(fastify: FastifyInstance) {
   const secret = process.env.GATEWAY_SECRET
 
-  if (!secret) {
-    fastify.log.warn(
-      'GATEWAY_SECRET is not set in .env — Gateway internal routes will reject all requests'
+  // نوقف السيرفر من أول لحظة لو المفتاح ناقص أو ضعيف،
+  // بدل ما الـ Gateway يفضل ياخد 500 من غير ما حد يلاحظ
+  if (!secret || secret.length < 32) {
+    throw new Error(
+      '❌ GATEWAY_SECRET is missing or too short (min 32 chars). ' +
+        'Generate one with: openssl rand -hex 32'
     )
   }
 
+  const expected = Buffer.from(secret)
+
   fastify.decorate(
     'authenticateGateway',
-    async function (request: FastifyRequest, reply: FastifyReply) {
-      const key = request.headers['x-gateway-key']
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const header = request.headers['x-gateway-key']
 
-      if (!secret) {
-        return reply.status(500).send({
-          success: false,
-          message: 'Server misconfiguration: GATEWAY_SECRET is not set',
-        })
-      }
-
-      if (!key || typeof key !== 'string') {
+      if (!header || typeof header !== 'string') {
         return reply.status(401).send({
           success: false,
           message: 'Missing X-Gateway-Key header',
         })
       }
 
-      if (key !== secret) {
+      // مقارنة ثابتة الزمن: تمنع تسريب معلومات عن المفتاح من توقيت الرد
+      const provided = Buffer.from(header)
+      const valid =
+        provided.length === expected.length &&
+        timingSafeEqual(provided, expected)
+
+      if (!valid) {
         request.log.warn({ ip: request.ip }, 'Invalid Gateway key attempt')
         return reply.status(403).send({
           success: false,
@@ -52,6 +62,8 @@ async function gatewayAuthPlugin(fastify: FastifyInstance) {
       }
     }
   )
+
+  fastify.log.info('✅ Gateway auth plugin registered successfully')
 }
 
 export default fp(gatewayAuthPlugin, { name: 'gateway-auth-plugin' })

@@ -1,0 +1,8 @@
+{
+  "_zeroplus-verify.shop-a.alnoor.test": {
+    "TXT": ["zeroplus-verify=58f8f132-ac7e-4624-820d-dd7bf4eb2168"]
+  },
+  "shop-a.alnoor.test": {
+    "CNAME": ["edge.zeroplus.test"]
+  }
+}
