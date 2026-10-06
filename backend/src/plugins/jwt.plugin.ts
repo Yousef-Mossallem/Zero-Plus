@@ -1,7 +1,8 @@
 // backend/src/plugins/jwt.plugin.ts
 // ==================================================================
 // Zero Plus - JWT Plugin
-// مسؤول عن كل حاجة تخص المصادقة والتوكنات
+// مسؤول عن كل حاجة تخص المصادقة والتوكنات (الـ Dashboard فقط)
+// الـ Gateway له plugin منفصل: gateway-auth.plugin.ts
 // ==================================================================
 
 import fp from 'fastify-plugin'
@@ -34,6 +35,11 @@ declare module '@fastify/jwt' {
 declare module 'fastify' {
   interface FastifyInstance {
     authenticate: (request: FastifyRequest, reply: FastifyReply) => Promise<void>
+    // فحص الصلاحية بعد authenticate
+    // الاستخدام: preHandler: [fastify.authenticate, fastify.requireRole(['OWNER', 'ADMIN'])]
+    requireRole: (
+      roles: string[]
+    ) => (request: FastifyRequest, reply: FastifyReply) => Promise<void>
   }
 }
 
@@ -53,7 +59,6 @@ const jwtPlugin: FastifyPluginAsync = async (fastify) => {
     sign: {
       expiresIn: '7d', // التوكن صالح لمدة 7 أيام (مناسب للـ MVP)
     },
-    // ممكن تضيف options تانية هنا لو احتجت (issuer, audience...)
   })
 
   // ------------------------------------------------------------------
@@ -61,14 +66,33 @@ const jwtPlugin: FastifyPluginAsync = async (fastify) => {
   // الاستخدام:
   // fastify.get('/protected', { preHandler: [fastify.authenticate] }, handler)
   // ------------------------------------------------------------------
-  fastify.decorate('authenticate', async (request: FastifyRequest, reply: FastifyReply) => {
-    try {
-      await request.jwtVerify()
-    } catch (err) {
-      reply.status(401).send({
-        success: false,
-        message: 'Unauthorized - Invalid or missing token',
-      })
+  fastify.decorate(
+    'authenticate',
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      try {
+        await request.jwtVerify()
+      } catch (err) {
+        // return ضروري: من غيره الـ handler ممكن يكمل بعد الرد
+        return reply.status(401).send({
+          success: false,
+          message: 'Unauthorized - Invalid or missing token',
+        })
+      }
+    }
+  )
+
+  // ------------------------------------------------------------------
+  // فحص الدور (Role)
+  // لازم يجي بعد fastify.authenticate في الـ preHandler
+  // ------------------------------------------------------------------
+  fastify.decorate('requireRole', (roles: string[]) => {
+    return async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!request.user || !roles.includes(request.user.role)) {
+        return reply.status(403).send({
+          success: false,
+          message: 'ليس لديك صلاحية لتنفيذ هذا الإجراء',
+        })
+      }
     }
   })
 

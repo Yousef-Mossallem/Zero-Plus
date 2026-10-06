@@ -287,6 +287,7 @@ export default async function eventRoutes(fastify: FastifyInstance) {
     {
       preHandler: fastify.authenticate,
     },
+
     async (
       request,
       reply: FastifyReply,
