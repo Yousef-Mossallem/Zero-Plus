@@ -10,8 +10,8 @@ import * as eventsService from './events.service.js';
 
 import {
   createEventSchema,
-  getEventsQuerySchema,
   getEventByIdSchema,
+  getEventsQuerySchema,
 } from './events.schema.js';
 
 /**
@@ -287,7 +287,11 @@ export default async function eventRoutes(fastify: FastifyInstance) {
     {
       preHandler: fastify.authenticate,
     },
-    async (request: FastifyRequest, reply: FastifyReply) => {
+
+    async (
+      request,
+      reply: FastifyReply,
+    ) => {
       try {
         /**
          * --------------------------------------------------------
