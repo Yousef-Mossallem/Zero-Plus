@@ -8,6 +8,15 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 
 // ------------------------------------------------------------------
+// Landing Pages (الصفحات العامة الجديدة) - إضافة جديدة
+// ------------------------------------------------------------------
+
+import LandingPage from '../pages/landing/LandingPage'
+import AboutPage from '../pages/landing/AboutPage'
+import ContactPage from '../pages/landing/ContactPage'
+import SitePoliciesPage from '../pages/landing/SitePoliciesPage'
+
+// ------------------------------------------------------------------
 // Auth Pages (شغالة دلوقتي)
 // ------------------------------------------------------------------
 
@@ -84,6 +93,17 @@ export default function AppRouter() {
 
       {/* TODO: هتتشال الكومنت دي لما LoginPage.tsx يتعمل */}
       <Route path="/login" element={<LoginPage />} />
+
+      {/* ============================================================
+          Landing Routes (الموقع العام) - إضافة جديدة
+          "/" هي أول صفحة بتظهر للمستخدم
+          السياسات على /legal لأن /policies محجوزة لسياسات الـ Dashboard
+      ============================================================ */}
+
+      <Route path="/" element={<LandingPage />} />
+      <Route path="/about" element={<AboutPage />} />
+      <Route path="/contact" element={<ContactPage />} />
+      <Route path="/legal" element={<SitePoliciesPage />} />
 
       {/* ============================================================
           Protected Routes (محتاجة تسجيل دخول)
