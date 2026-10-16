@@ -259,3 +259,77 @@ svg {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* -------------------------------------------------------------------------- */
+/* Zero Plus — Animations (additive: used by the dashboard pages)             */
+/* -------------------------------------------------------------------------- */
+
+@keyframes zp-fade-up {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes zp-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes zp-scale-in {
+  from { opacity: 0; transform: scale(0.96) translateY(8px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+@keyframes zp-slide-in-right {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+}
+
+@keyframes zp-toast-in {
+  from { opacity: 0; transform: translateX(24px) scale(0.96); }
+  to   { opacity: 1; transform: translateX(0) scale(1); }
+}
+
+@keyframes zp-toast-out {
+  from { opacity: 1; transform: translateX(0) scale(1); }
+  to   { opacity: 0; transform: translateX(24px) scale(0.96); }
+}
+
+@keyframes zp-progress {
+  from { transform: scaleX(1); }
+  to   { transform: scaleX(0); }
+}
+
+@keyframes zp-shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes zp-pulse-ring {
+  0%   { box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.45); }
+  100% { box-shadow: 0 0 0 10px rgba(56, 189, 248, 0); }
+}
+
+@keyframes zp-bar-grow {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+
+.zp-anim-fade-up    { animation: zp-fade-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.zp-anim-fade-in    { animation: zp-fade-in 0.25s ease-out both; }
+.zp-anim-scale-in   { animation: zp-scale-in 0.22s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.zp-anim-drawer     { animation: zp-slide-in-right 0.3s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.zp-anim-toast-in   { animation: zp-toast-in 0.35s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.zp-anim-toast-out  { animation: zp-toast-out 0.25s ease-in both; }
+.zp-anim-bar        { transform-origin: left; animation: zp-bar-grow 0.8s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.zp-anim-pulse-ring { animation: zp-pulse-ring 1.6s ease-out infinite; }
+
+.zp-skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.04) 25%,
+    rgba(255, 255, 255, 0.09) 50%,
+    rgba(255, 255, 255, 0.04) 75%
+  );
+  background-size: 200% 100%;
+  animation: zp-shimmer 1.6s linear infinite;
+}
