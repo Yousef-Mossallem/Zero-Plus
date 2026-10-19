@@ -1,7 +1,15 @@
 // frontend/src/pages/LoginPage.tsx
 // ==================================================================
-// Zero Plus - Login Page
+// Zero Plus - Login Page (WebAuthn / Passkeys)
 // Professional • Modern • Strong Visual Identity
+// ==================================================================
+//
+// التدفق:
+//   1) المستخدم يكتب الإيميل
+//   2) login({ email }) → login/start → نافذة البصمة → login/finish
+//   3) نجاح → /dashboard
+//
+// ملاحظة: مفيش باسورد في الدخول الأساسي.
 // ==================================================================
 
 import { useState, useEffect, type FormEvent } from 'react'
@@ -9,9 +17,6 @@ import { Link, useNavigate } from 'react-router-dom'
 import {
   Shield,
   Mail,
-  Lock,
-  Eye,
-  EyeOff,
   ArrowRight,
   AlertCircle,
   Loader2,
@@ -19,18 +24,32 @@ import {
   Activity,
   LockKeyhole,
   ShieldCheck,
+  Fingerprint,
+  Info,
 } from 'lucide-react'
-
 import { useAuthStore } from '../store/authStore'
 import type { LoginRequest } from '../services/authService'
 
 // ==================================================================
-// Types
+// Constants & Helpers
 // ==================================================================
 
-interface FormErrors {
-  email?: string
-  password?: string
+/** نفس قيود emailSchema في الباك */
+const EMAIL_MIN_LENGTH = 5
+const EMAIL_MAX_LENGTH = 255
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+/**
+ * هل المتصفح يدعم WebAuthn؟
+ * لو لأ، مش هنقدر نعمل login أصلًا.
+ */
+function isPasskeySupported(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    typeof window.PublicKeyCredential !== 'undefined' &&
+    typeof navigator !== 'undefined' &&
+    typeof navigator.credentials !== 'undefined'
+  )
 }
 
 // ==================================================================
@@ -46,21 +65,16 @@ export default function LoginPage() {
   const clearError = useAuthStore((s) => s.clearError)
   const isAuthenticated = useAuthStore((s) => s.status === 'authenticated')
 
+  const isLoading = status === 'loading'
+
   // ----------------------------------------------------------------
   // Form State
   // ----------------------------------------------------------------
 
-  const [form, setForm] = useState({
-    email: '',
-    password: '',
-  })
-
-  const [showPassword, setShowPassword] = useState(false)
-  const [formErrors, setFormErrors] = useState<FormErrors>({})
-  const [touched, setTouched] = useState<Record<string, boolean>>({})
-  const [rememberMe, setRememberMe] = useState(true)
-
-  const isLoading = status === 'loading'
+  const [email, setEmail] = useState('')
+  const [emailError, setEmailError] = useState<string | undefined>()
+  const [emailTouched, setEmailTouched] = useState(false)
+  const [passkeySupported] = useState(isPasskeySupported)
 
   // ----------------------------------------------------------------
   // Redirect if already authenticated
@@ -72,57 +86,57 @@ export default function LoginPage() {
     }
   }, [isAuthenticated, navigate])
 
-  // Clear global error when unmounting
+  // مسح الخطأ العام عند الخروج من الصفحة
   useEffect(() => {
     return () => clearError()
   }, [clearError])
 
   // ----------------------------------------------------------------
+  // Validation
+  // ----------------------------------------------------------------
+
+  const validateEmail = (value: string): string | undefined => {
+    const trimmed = value.trim()
+
+    if (!trimmed) return 'Work email is required'
+    if (trimmed.length < EMAIL_MIN_LENGTH) return 'Email is too short'
+    if (trimmed.length > EMAIL_MAX_LENGTH) return 'Email is too long'
+    if (!EMAIL_REGEX.test(trimmed)) return 'Invalid email format'
+
+    return undefined
+  }
+
+  // ----------------------------------------------------------------
   // Handlers
   // ----------------------------------------------------------------
 
-  const handleChange = (field: keyof typeof form, value: string) => {
-    setForm((prev) => ({ ...prev, [field]: value }))
-    if (formErrors[field as keyof FormErrors]) {
-      setFormErrors((prev) => ({ ...prev, [field]: undefined }))
-    }
+  const handleEmailChange = (value: string) => {
+    setEmail(value)
+
+    // لو كان فيه خطأ تحقق، نمسحه أول ما المستخدم يبدأ يكتب
+    if (emailError) setEmailError(undefined)
     if (error) clearError()
   }
 
-  const handleBlur = (field: string) => {
-    setTouched((prev) => ({ ...prev, [field]: true }))
+  const handleEmailBlur = () => {
+    setEmailTouched(true)
+    setEmailError(validateEmail(email))
   }
 
-  const validate = (): boolean => {
-    const errors: FormErrors = {}
-
-    if (!form.email.trim()) {
-      errors.email = 'Email is required'
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
-      errors.email = 'Invalid email format'
-    }
-
-    if (!form.password) {
-      errors.password = 'Password is required'
-    }
-
-    setFormErrors(errors)
-    return Object.keys(errors).length === 0
-  }
-
-  const handleSubmit = async (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
 
-    setTouched({
-      email: true,
-      password: true,
-    })
+    if (isLoading) return
 
-    if (!validate()) return
+    setEmailTouched(true)
+
+    const validationError = validateEmail(email)
+    setEmailError(validationError)
+
+    if (validationError) return
 
     const payload: LoginRequest = {
-      email: form.email.trim().toLowerCase(),
-      password: form.password,
+      email: email.trim().toLowerCase(),
     }
 
     const result = await login(payload)
@@ -130,7 +144,11 @@ export default function LoginPage() {
     if (result.success) {
       navigate('/dashboard', { replace: true })
     }
+    // لو فشل: الـ error في الـ store بيتعرض تلقائيًا في الكارد
+    // والزرار بيفضل شغال عشان المستخدم يعيد المحاولة
   }
+
+  const showEmailError = emailTouched && !!emailError
 
   // ----------------------------------------------------------------
   // Render
@@ -144,7 +162,6 @@ export default function LoginPage() {
 
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,var(--tw-gradient-stops))] from-[#0b1224] via-[#05070f] to-[#02040a]" />
 
-      {/* Animated grid */}
       <div
         className="pointer-events-none absolute inset-0 opacity-[0.07]"
         style={{
@@ -156,7 +173,6 @@ export default function LoginPage() {
         }}
       />
 
-      {/* Soft glow orbs */}
       <div className="pointer-events-none absolute -left-40 top-1/4 h-105 w-105 rounded-full bg-cyan-500/10 blur-[120px]" />
       <div className="pointer-events-none absolute -right-40 bottom-1/4 h-95 w-95 rounded-full bg-indigo-600/15 blur-[110px]" />
       <div className="pointer-events-none absolute left-1/2 top-0 h-70 w-150 -translate-x-1/2 rounded-full bg-emerald-500/5 blur-[100px]" />
@@ -186,12 +202,12 @@ export default function LoginPage() {
             </div>
           </div>
 
-          {/* Hero Text */}
+          {/* Hero */}
           <div className="max-w-md space-y-8">
             <div className="space-y-4">
               <div className="inline-flex items-center gap-2 rounded-full border border-cyan-500/20 bg-cyan-500/10 px-3 py-1 text-xs font-medium text-cyan-300">
                 <ShieldCheck className="h-3.5 w-3.5" />
-                Your defense layer is ready
+                Passwordless. Phishing-resistant.
               </div>
 
               <h1 className="text-4xl font-bold leading-[1.15] tracking-tight text-white xl:text-5xl">
@@ -202,8 +218,9 @@ export default function LoginPage() {
               </h1>
 
               <p className="text-base leading-relaxed text-slate-400">
-                Access your live traffic, threat intelligence, and adaptive
-                policies. Everything is already watching the edge for you.
+                Sign in with your fingerprint, face, or device PIN. No
+                passwords to leak, no codes to type. Your live traffic and
+                policies are one touch away.
               </p>
             </div>
 
@@ -258,35 +275,63 @@ export default function LoginPage() {
                   Sign in to Zero Plus
                 </h2>
                 <p className="text-sm text-slate-400">
-                  Enter your credentials to access the dashboard.
+                  Enter your work email, then confirm with your passkey.
                 </p>
               </div>
 
+              {/* Unsupported browser */}
+              {!passkeySupported && (
+                <div className="mb-6 flex items-start gap-3 rounded-xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-300">
+                  <Info className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>
+                    This browser doesn&apos;t support passkeys. Please use a
+                    recent version of Chrome, Safari, Edge, or Firefox.
+                  </span>
+                </div>
+              )}
+
               {/* Global Error */}
               {error && (
-                <div className="mb-6 flex items-start gap-3 rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">
+                <div
+                  role="alert"
+                  className="mb-6 flex items-start gap-3 rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-300"
+                >
                   <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
                   <span>{error}</span>
                 </div>
               )}
 
               {/* Form */}
-              <form onSubmit={handleSubmit} className="space-y-5" noValidate>
+              <form
+                onSubmit={handleSubmit}
+                className="space-y-5"
+                noValidate
+                aria-busy={isLoading}
+              >
                 {/* Email */}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-medium uppercase tracking-wider text-slate-400">
+                  <label
+                    htmlFor="login-email"
+                    className="text-xs font-medium uppercase tracking-wider text-slate-400"
+                  >
                     Work Email
                   </label>
+
                   <div className="relative">
                     <Mail className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+
                     <input
+                      id="login-email"
                       type="email"
-                      value={form.email}
-                      onChange={(e) => handleChange('email', e.target.value)}
-                      onBlur={() => handleBlur('email')}
+                      value={email}
+                      onChange={(e) => handleEmailChange(e.target.value)}
+                      onBlur={handleEmailBlur}
                       placeholder="you@company.com"
                       disabled={isLoading}
-                      autoComplete="email"
+                      autoComplete="username webauthn"
+                      autoFocus
+                      aria-invalid={showEmailError}
+                      aria-describedby={showEmailError ? 'login-email-error' : undefined}
                       className={`
                         w-full rounded-xl border bg-white/3 py-3 pl-11 pr-4
                         text-sm text-white placeholder:text-slate-600
@@ -294,97 +339,34 @@ export default function LoginPage() {
                         focus:border-cyan-500/50 focus:bg-white/5 focus:ring-2 focus:ring-cyan-500/20
                         disabled:opacity-50
                         ${
-                          touched.email && formErrors.email
+                          showEmailError
                             ? 'border-rose-500/50'
                             : 'border-white/10 hover:border-white/20'
                         }
                       `}
                     />
                   </div>
-                  {touched.email && formErrors.email && (
-                    <p className="text-xs text-rose-400">{formErrors.email}</p>
+
+                  {showEmailError && (
+                    <p id="login-email-error" className="text-xs text-rose-400">
+                      {emailError}
+                    </p>
                   )}
                 </div>
 
-                {/* Password */}
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-medium uppercase tracking-wider text-slate-400">
-                      Password
-                    </label>
-                    <button
-                      type="button"
-                      className="text-xs font-medium text-cyan-400/80 transition hover:text-cyan-300"
-                      tabIndex={-1}
-                    >
-                      Forgot password?
-                    </button>
-                  </div>
-                  <div className="relative">
-                    <Lock className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-                    <input
-                      type={showPassword ? 'text' : 'password'}
-                      value={form.password}
-                      onChange={(e) => handleChange('password', e.target.value)}
-                      onBlur={() => handleBlur('password')}
-                      placeholder="Enter your password"
-                      disabled={isLoading}
-                      autoComplete="current-password"
-                      className={`
-                        w-full rounded-xl border bg-white/3 py-3 pl-11 pr-12
-                        text-sm text-white placeholder:text-slate-600
-                        outline-none transition-all duration-200
-                        focus:border-cyan-500/50 focus:bg-white/5 focus:ring-2 focus:ring-cyan-500/20
-                        disabled:opacity-50
-                        ${
-                          touched.password && formErrors.password
-                            ? 'border-rose-500/50'
-                            : 'border-white/10 hover:border-white/20'
-                        }
-                      `}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword((v) => !v)}
-                      className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 transition hover:text-slate-300"
-                      tabIndex={-1}
-                    >
-                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </button>
-                  </div>
-                  {touched.password && formErrors.password && (
-                    <p className="text-xs text-rose-400">{formErrors.password}</p>
-                  )}
-                </div>
-
-                {/* Remember me */}
-                <div className="flex items-center gap-2.5">
-                  <button
-                    type="button"
-                    onClick={() => setRememberMe((v) => !v)}
-                    className={`
-                      flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded
-                      border transition-all duration-200
-                      ${
-                        rememberMe
-                          ? 'border-cyan-500 bg-cyan-500'
-                          : 'border-white/20 bg-transparent hover:border-white/40'
-                      }
-                    `}
-                  >
-                    {rememberMe && (
-                      <svg className="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                      </svg>
-                    )}
-                  </button>
-                  <span className="text-sm text-slate-400">Keep me signed in</span>
+                {/* Passkey hint */}
+                <div className="flex items-start gap-3 rounded-xl border border-white/5 bg-white/2 px-4 py-3">
+                  <Fingerprint className="mt-0.5 h-4 w-4 shrink-0 text-cyan-400" />
+                  <p className="text-xs leading-relaxed text-slate-400">
+                    After you continue, your device will ask for Face ID,
+                    Touch ID, Windows Hello, or your device PIN.
+                  </p>
                 </div>
 
                 {/* Submit */}
                 <button
                   type="submit"
-                  disabled={isLoading}
+                  disabled={isLoading || !passkeySupported}
                   className="
                     group relative mt-2 flex w-full items-center justify-center gap-2
                     overflow-hidden rounded-xl bg-linear-to-r from-cyan-500 to-blue-600
@@ -399,11 +381,12 @@ export default function LoginPage() {
                   {isLoading ? (
                     <>
                       <Loader2 className="h-4 w-4 animate-spin" />
-                      Signing in...
+                      Waiting for your passkey...
                     </>
                   ) : (
                     <>
-                      Sign In
+                      <Fingerprint className="h-4 w-4" />
+                      Continue with Passkey
                       <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />
                     </>
                   )}
@@ -411,20 +394,25 @@ export default function LoginPage() {
               </form>
 
               {/* Footer */}
-              <p className="mt-8 text-center text-sm text-slate-500">
-                Don&apos;t have an account?{' '}
-                <Link
-                  to="/signup"
-                  className="font-medium text-cyan-400 transition hover:text-cyan-300"
-                >
-                  Create one
-                </Link>
-              </p>
+              <div className="mt-8 space-y-3 text-center text-sm text-slate-500">
+                <p>
+                  Don&apos;t have an account?{' '}
+                  <Link
+                    to="/signup"
+                    className="font-medium text-cyan-400 transition hover:text-cyan-300"
+                  >
+                    Create one
+                  </Link>
+                </p>
+                <p className="text-xs text-slate-600">
+                  Lost access to your device? Contact your organization admin.
+                </p>
+              </div>
             </div>
 
             {/* Trust note */}
             <p className="mt-6 text-center text-[11px] text-slate-600">
-              Protected by Zero Plus adaptive authentication
+              Protected by Zero Plus passwordless authentication
             </p>
           </div>
         </div>

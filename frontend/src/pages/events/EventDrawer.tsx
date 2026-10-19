@@ -1,6 +1,6 @@
 // frontend/src/pages/events/EventDrawer.tsx — تفاصيل الحدث (Drawer جانبي)
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Copy, ExternalLink } from 'lucide-react'
 import RiskGauge from '../../components/RiskGauge'
@@ -8,7 +8,6 @@ import { useToast } from '../../components/ui/Toast'
 import { Badge, Button, DecisionBadge, Drawer, KeyValue, Skeleton } from '../../components/ui/kit'
 import { parseApiError } from '../../services/apiError'
 import { getEventById, type SecurityEvent, type SecurityEventDetail } from '../../services/eventsService'
-import { type Server } from '../../services/serversService'
 import { formatDateTime } from '../../utils/format'
 
 

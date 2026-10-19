@@ -1,152 +1,134 @@
 // frontend/src/store/auth.store.ts
-
 // ==================================================================
-// Zero Plus - Authentication Store
-// إدارة حالة المستخدم والـ Authentication على مستوى الـ Frontend
+// Zero Plus - Authentication Store (WebAuthn / Passkeys)
+// ==================================================================
+//
+// التدفق الجديد (مش إيميل+باسورد):
+//
+//   Signup:
+//     1) registerStart(org, name, email) → options من الباك
+//     2) navigator / @simplewebauthn → المستخدم يحط بصمته
+//     3) registerFinish(email, credential) → JWT + User + Org
+//
+//   Login:
+//     1) loginStart(email) → options
+//     2) المستخدم يحط بصمته
+//     3) loginFinish(email, credential) → JWT
+//
+// الـ Store هنا بيلف الخطوات دي عشان الصفحات تفضل بسيطة:
+//   await signup({ organizationName, fullName, email, sizeProfile })
+//   await login({ email })
+//
 // ==================================================================
 
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
+import {
+  startRegistration,
+  startAuthentication,
+} from '@simplewebauthn/browser'
 
 import {
-  signup,
-  login,
+  registerStart,
+  registerFinish,
+  loginStart,
+  loginFinish,
   getMe,
   clearAuthSession,
   getAuthErrorMessage,
   type AuthUser,
   type AuthOrganization,
   type AuthResponseData,
-  type SignupRequest,
-  type LoginRequest,
+  type RegisterStartRequest,
+  type LoginStartRequest,
 } from '../services/authService'
 
 // ==================================================================
 // Types
 // ==================================================================
 
-// ------------------------------------------------------------------
-// Auth Status
-// ------------------------------------------------------------------
-
-// idle
-// لسه مفيش عملية Authentication بدأت.
-//
-// loading
-// فيه Login / Signup / Restore Session شغال.
-//
-// authenticated
-// المستخدم مسجل دخول.
-//
-// unauthenticated
-// المستخدم مش مسجل دخول.
-
+/**
+ * idle            → لسه مفيش عملية
+ * loading         → start / finish / restore شغال
+ * authenticated   → معاه JWT صالح
+ * unauthenticated → مش داخل
+ */
 export type AuthStatus =
   | 'idle'
   | 'loading'
   | 'authenticated'
   | 'unauthenticated'
 
-// ==================================================================
-// Store State
-// ==================================================================
-
 export interface AuthState {
-  // --------------------------------------------------------------
-  // Authentication Data
-  // --------------------------------------------------------------
+  // ------------------------------------------------------------------
+  // Data
+  // ------------------------------------------------------------------
 
+  /** JWT بعد register/finish أو login/finish */
   token: string | null
 
   user: AuthUser | null
 
   organization: AuthOrganization | null
 
-  // --------------------------------------------------------------
-  // Authentication Status
-  // --------------------------------------------------------------
-
   status: AuthStatus
 
-  // --------------------------------------------------------------
-  // Initialization
-  // --------------------------------------------------------------
-
-  // هل الـ Store خلص محاولة استعادة الـ Session؟
+  /**
+   * هل خلصنا محاولة استعادة الجلسة من localStorage + /auth/me؟
+   * الصفحات المحمية تستنى initialized === true قبل ما تقرر redirect.
+   */
   initialized: boolean
 
-  // --------------------------------------------------------------
-  // Error
-  // --------------------------------------------------------------
-
+  /** آخر رسالة خطأ للعرض في الـ UI */
   error: string | null
 
-  // ==================================================================
+  // ------------------------------------------------------------------
   // Actions
-  // ==================================================================
+  // ------------------------------------------------------------------
 
-  // --------------------------------------------------------------
-  // Signup
-  // --------------------------------------------------------------
-
+  /**
+   * إنشاء حساب كامل:
+   * register/start → WebAuthn create → register/finish
+   *
+   * بيرجع success:false لو المستخدم لغى نافذة البصمة أو فشل التحقق.
+   */
   signup: (
-    data: SignupRequest,
-  ) => Promise<{
-    success: boolean
-    error?: string
-  }>
+    data: RegisterStartRequest,
+  ) => Promise<{ success: boolean; error?: string }>
 
-  // --------------------------------------------------------------
-  // Login
-  // --------------------------------------------------------------
-
+  /**
+   * تسجيل دخول كامل:
+   * login/start → WebAuthn get → login/finish
+   */
   login: (
-    data: LoginRequest,
-  ) => Promise<{
-    success: boolean
-    error?: string
-  }>
+    data: LoginStartRequest,
+  ) => Promise<{ success: boolean; error?: string }>
 
-  // --------------------------------------------------------------
-  // Restore Session
-  // --------------------------------------------------------------
-
+  /**
+   * عند فتح التطبيق: لو فيه token → GET /auth/me
+   * لو فشل → نمسح الجلسة
+   */
   initializeAuth: () => Promise<void>
 
-  // --------------------------------------------------------------
-  // Refresh User
-  // --------------------------------------------------------------
-
+  /** إعادة جلب /auth/me */
   refreshUser: () => Promise<boolean>
 
-  // --------------------------------------------------------------
-  // Logout
-  // --------------------------------------------------------------
-
   logout: () => void
-
-  // --------------------------------------------------------------
-  // Error
-  // --------------------------------------------------------------
 
   clearError: () => void
 }
 
 // ==================================================================
-// Helper
+// Helpers
 // ==================================================================
 
 /**
- * تطبيق بيانات Authentication على الـ Store.
- *
- * بنستخدمها بعد Login أو Signup.
+ * بعد ما الباك يرجع token + user + organization
+ * نحدّث الـ state دفعة واحدة.
  */
 function applyAuthData(
   data: AuthResponseData,
-): Pick<
-  AuthState,
-  'token' | 'user' | 'organization' | 'status' | 'error'
-> {
+): Pick<AuthState, 'token' | 'user' | 'organization' | 'status' | 'error'> {
   return {
     token: data.token,
     user: data.user,
@@ -156,78 +138,110 @@ function applyAuthData(
   }
 }
 
+/**
+ * رسائل WebAuthn الشائعة من المتصفح (إلغاء المستخدم، مفيش authenticator...)
+ */
+function getWebAuthnErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error) {
+    const name = error.name
+    const msg = error.message.toLowerCase()
+
+    if (name === 'NotAllowedError') {
+      return 'تم إلغاء التحقق بالبصمة أو انتهت المهلة'
+    }
+    if (name === 'InvalidStateError') {
+      return 'هذا المفتاح مسجّل بالفعل على هذا الجهاز'
+    }
+    if (name === 'NotSupportedError') {
+      return 'جهازك أو متصفحك لا يدعم Passkeys'
+    }
+    if (name === 'SecurityError') {
+      return 'بيئة غير آمنة — WebAuthn يحتاج HTTPS أو localhost'
+    }
+    if (msg.includes('timed out') || msg.includes('timeout')) {
+      return 'انتهت مهلة التحقق بالبصمة — حاول مرة أخرى'
+    }
+
+    return error.message || fallback
+  }
+
+  return fallback
+}
+
 // ==================================================================
-// Zustand Store
+// Store
 // ==================================================================
 
 export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
-      // ==============================================================
+      // ================================================================
       // Initial State
-      // ==============================================================
+      // ================================================================
 
       token: null,
-
       user: null,
-
       organization: null,
-
       status: 'idle',
-
       initialized: false,
-
       error: null,
 
-      // ==============================================================
-      // Signup
-      // ==============================================================
+      // ================================================================
+      // Signup = register/start → create() → register/finish
+      // ================================================================
 
-      signup: async (data: SignupRequest) => {
-        // ------------------------------------------------------------
-        // Start Loading
-        // ------------------------------------------------------------
-
-        set({
-          status: 'loading',
-          error: null,
-        })
+      signup: async (data: RegisterStartRequest) => {
+        set({ status: 'loading', error: null })
 
         try {
           // ----------------------------------------------------------
-          // Call Backend
+          // 1) الباك يجهّز challenge + options
           // ----------------------------------------------------------
-
-          const result = await signup(data)
+          const startResult = await registerStart(data)
+          // متوقع: { options, rpId }
 
           // ----------------------------------------------------------
-          // Save Authentication Data
+          // 2) المتصفح يطلب البصمة / الوجه
+          //    startRegistration من @simplewebauthn/browser
           // ----------------------------------------------------------
-
-          set({
-            ...applyAuthData(result),
+          const credential = await startRegistration({
+            optionsJSON: startResult.options,
           })
 
           // ----------------------------------------------------------
-          // Success
+          // 3) نبعِت الـ credential للباك عشان يتحقق ويحفظ Public Key
           // ----------------------------------------------------------
+          const finishResult = await registerFinish({
+            email: data.email.trim().toLowerCase(),
+            deviceName: undefined, // ممكن الفرونت يخمّن اسم الجهاز لاحقًا
+            credential,
+          })
 
-          return {
-            success: true,
-          }
+          set({ ...applyAuthData(finishResult) })
+
+          return { success: true }
         } catch (error: unknown) {
-          // ----------------------------------------------------------
-          // Extract Backend Error
-          // ----------------------------------------------------------
-
-          const message = getAuthErrorMessage(
-            error,
-            'Account creation failed. Please try again.',
-          )
-
-          // ----------------------------------------------------------
-          // Reset Authentication State
-          // ----------------------------------------------------------
+          // لو الخطأ من WebAuthn (إلغاء المستخدم) ولا من الـ API
+          const message =
+            error &&
+            typeof error === 'object' &&
+            'name' in error &&
+            typeof (error as { name: string }).name === 'string' &&
+            [
+              'NotAllowedError',
+              'InvalidStateError',
+              'NotSupportedError',
+              'SecurityError',
+              'AbortError',
+            ].includes((error as { name: string }).name)
+              ? getWebAuthnErrorMessage(
+                  error,
+                  'فشل إنشاء الحساب بالبصمة',
+                )
+              : getAuthErrorMessage(
+                  error,
+                  'فشل إنشاء الحساب. حاول مرة أخرى.',
+                )
 
           set({
             token: null,
@@ -237,66 +251,64 @@ export const useAuthStore = create<AuthState>()(
             error: message,
           })
 
-          // ----------------------------------------------------------
-          // Return Failure
-          // ----------------------------------------------------------
-
-          return {
-            success: false,
-            error: message,
-          }
+          return { success: false, error: message }
         }
       },
 
-      // ==============================================================
-      // Login
-      // ==============================================================
+      // ================================================================
+      // Login = login/start → get() → login/finish
+      // ================================================================
 
-      login: async (data: LoginRequest) => {
-        // ------------------------------------------------------------
-        // Start Loading
-        // ------------------------------------------------------------
-
-        set({
-          status: 'loading',
-          error: null,
-        })
+      login: async (data: LoginStartRequest) => {
+        set({ status: 'loading', error: null })
 
         try {
-          // ----------------------------------------------------------
-          // Call Backend
-          // ----------------------------------------------------------
-
-          const result = await login(data)
+          const email = data.email.trim().toLowerCase()
 
           // ----------------------------------------------------------
-          // Save Authentication Data
+          // 1) options من الباك (فيها allowCredentials)
           // ----------------------------------------------------------
+          const startResult = await loginStart({ email })
 
-          set({
-            ...applyAuthData(result),
+          // ----------------------------------------------------------
+          // 2) نافذة البصمة
+          // ----------------------------------------------------------
+          const credential = await startAuthentication({
+            optionsJSON: startResult.options,
           })
 
           // ----------------------------------------------------------
-          // Success
+          // 3) تحقق + JWT
           // ----------------------------------------------------------
+          const finishResult = await loginFinish({
+            email,
+            credential,
+          })
 
-          return {
-            success: true,
-          }
+          set({ ...applyAuthData(finishResult) })
+
+          return { success: true }
         } catch (error: unknown) {
-          // ----------------------------------------------------------
-          // Extract Backend Error
-          // ----------------------------------------------------------
-
-          const message = getAuthErrorMessage(
-            error,
-            'Login failed. Please try again.',
-          )
-
-          // ----------------------------------------------------------
-          // Reset Authentication State
-          // ----------------------------------------------------------
+          const message =
+            error &&
+            typeof error === 'object' &&
+            'name' in error &&
+            typeof (error as { name: string }).name === 'string' &&
+            [
+              'NotAllowedError',
+              'InvalidStateError',
+              'NotSupportedError',
+              'SecurityError',
+              'AbortError',
+            ].includes((error as { name: string }).name)
+              ? getWebAuthnErrorMessage(
+                  error,
+                  'فشل تسجيل الدخول بالبصمة',
+                )
+              : getAuthErrorMessage(
+                  error,
+                  'فشل تسجيل الدخول. حاول مرة أخرى.',
+                )
 
           set({
             token: null,
@@ -306,54 +318,18 @@ export const useAuthStore = create<AuthState>()(
             error: message,
           })
 
-          // ----------------------------------------------------------
-          // Return Failure
-          // ----------------------------------------------------------
-
-          return {
-            success: false,
-            error: message,
-          }
+          return { success: false, error: message }
         }
       },
 
-      // ==============================================================
-      // Initialize Authentication
-      // ==============================================================
+      // ================================================================
+      // Initialize — أول ما التطبيق يفتح
+      // ================================================================
 
-      /**
-       * دي أهم function عند بداية تشغيل التطبيق.
-       *
-       * السيناريو:
-       *
-       * 1. Zustand يحاول يسترجع الـ persisted state.
-       *
-       * 2. لو مفيش Token:
-       *    المستخدم غير مسجل دخول.
-       *
-       * 3. لو فيه Token:
-       *    نبعت GET /auth/me للـ Backend.
-       *
-       * 4. لو الـ Token صالح:
-       *    نحدث بيانات المستخدم.
-       *
-       * 5. لو الـ Token غير صالح:
-       *    نمسح الـ Session.
-       */
       initializeAuth: async () => {
-        // ------------------------------------------------------------
-        // Prevent Duplicate Initialization
-        // ------------------------------------------------------------
-
-        if (get().initialized) {
-          return
-        }
+        if (get().initialized) return
 
         const currentToken = get().token
-
-        // ------------------------------------------------------------
-        // No Token
-        // ------------------------------------------------------------
 
         if (!currentToken) {
           set({
@@ -361,38 +337,23 @@ export const useAuthStore = create<AuthState>()(
             initialized: true,
             error: null,
           })
-
           return
         }
 
-        // ------------------------------------------------------------
-        // Verify Token With Backend
-        // ------------------------------------------------------------
-
-        set({
-          status: 'loading',
-          error: null,
-        })
+        set({ status: 'loading', error: null })
 
         try {
           const currentUser = await getMe()
 
-          // ----------------------------------------------------------
-          // Update User
-          // ----------------------------------------------------------
-
           set({
             user: currentUser,
-            organization: currentUser.organization,
+            organization: currentUser.organization ?? get().organization,
             status: 'authenticated',
             initialized: true,
             error: null,
           })
         } catch {
-          // ----------------------------------------------------------
-          // Token Invalid / Expired / User Not Found
-          // ----------------------------------------------------------
-
+          // التوكن باطل أو منتهي
           clearAuthSession()
 
           set({
@@ -406,30 +367,13 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
-      // ==============================================================
-      // Refresh Current User
-      // ==============================================================
+      // ================================================================
+      // Refresh User
+      // ================================================================
 
-      /**
-       * إعادة جلب بيانات المستخدم من:
-       *
-       * GET /auth/me
-       *
-       * مفيدة لو بيانات المستخدم تغيرت من Backend
-       * ونحتاج أحدث نسخة.
-       */
       refreshUser: async () => {
-        const currentToken = get().token
-
-        // ------------------------------------------------------------
-        // No Token
-        // ------------------------------------------------------------
-
-        if (!currentToken) {
-          set({
-            status: 'unauthenticated',
-          })
-
+        if (!get().token) {
+          set({ status: 'unauthenticated' })
           return false
         }
 
@@ -438,20 +382,16 @@ export const useAuthStore = create<AuthState>()(
 
           set({
             user: currentUser,
-            organization: currentUser.organization,
+            organization: currentUser.organization ?? get().organization,
             status: 'authenticated',
             error: null,
           })
 
           return true
         } catch (error: unknown) {
-          // ----------------------------------------------------------
-          // Session Became Invalid
-          // ----------------------------------------------------------
-
           const message = getAuthErrorMessage(
             error,
-            'Your session is no longer valid.',
+            'انتهت صلاحية الجلسة.',
           )
 
           clearAuthSession()
@@ -468,20 +408,12 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
-      // ==============================================================
+      // ================================================================
       // Logout
-      // ==============================================================
+      // ================================================================
 
       logout: () => {
-        // ------------------------------------------------------------
-        // Clear Local Authentication Session
-        // ------------------------------------------------------------
-
         clearAuthSession()
-
-        // ------------------------------------------------------------
-        // Reset Store
-        // ------------------------------------------------------------
 
         set({
           token: null,
@@ -493,19 +425,13 @@ export const useAuthStore = create<AuthState>()(
         })
       },
 
-      // ==============================================================
-      // Clear Error
-      // ==============================================================
-
       clearError: () => {
-        set({
-          error: null,
-        })
+        set({ error: null })
       },
     }),
 
     // ==================================================================
-    // Zustand Persist Configuration
+    // Persist — نخزّن التوكن وبيانات العرض فقط
     // ==================================================================
 
     {
@@ -513,30 +439,16 @@ export const useAuthStore = create<AuthState>()(
 
       storage: createJSONStorage(() => localStorage),
 
-      // --------------------------------------------------------------
-      // Persist Only Authentication Data
-      // --------------------------------------------------------------
-
       partialize: (state) => ({
         token: state.token,
         user: state.user,
         organization: state.organization,
       }),
 
-      // --------------------------------------------------------------
-      // After Zustand Restores Data
-      // --------------------------------------------------------------
-
       onRehydrateStorage: () => {
         return (state) => {
-          if (!state) {
-            return
-          }
-
-          // الـ persisted data اتقرأت من localStorage.
-          //
-          // لسه لازم initializeAuth() يتصل بالـ Backend
-          // للتأكد إن الـ Token مازال صالحًا.
+          if (!state) return
+          // بعد ما نقرأ من localStorage لسه محتاجين /auth/me
           state.initialized = false
         }
       },
@@ -548,71 +460,26 @@ export const useAuthStore = create<AuthState>()(
 // Selectors
 // ==================================================================
 
-/**
- * هل المستخدم مسجل دخول؟
- */
-export const selectIsAuthenticated = (
-  state: AuthState,
-): boolean => {
-  return state.status === 'authenticated'
-}
+export const selectIsAuthenticated = (state: AuthState): boolean =>
+  state.status === 'authenticated'
 
-/**
- * هل Authentication لسه بيجهز؟
- */
-export const selectIsLoading = (
-  state: AuthState,
-): boolean => {
-  return state.status === 'loading'
-}
+export const selectIsLoading = (state: AuthState): boolean =>
+  state.status === 'loading'
 
-/**
- * المستخدم الحالي.
- */
-export const selectCurrentUser = (
-  state: AuthState,
-): AuthUser | null => {
-  return state.user
-}
+export const selectCurrentUser = (state: AuthState): AuthUser | null =>
+  state.user
 
-/**
- * الـ Organization الحالية.
- */
 export const selectCurrentOrganization = (
   state: AuthState,
-): AuthOrganization | null => {
-  return state.organization
-}
+): AuthOrganization | null => state.organization
 
-/**
- * User Role.
- */
-export const selectUserRole = (
-  state: AuthState,
-): string | null => {
-  return state.user?.role ?? null
-}
+export const selectUserRole = (state: AuthState): string | null =>
+  state.user?.role ?? null
 
-/**
- * Organization ID.
- */
-export const selectOrganizationId = (
-  state: AuthState,
-): string | null => {
-  return state.user?.organizationId ?? null
-}
+export const selectOrganizationId = (state: AuthState): string | null =>
+  state.user?.organizationId ?? null
 
-/**
- * هل الـ Store خلص Initialization؟
- */
-export const selectIsInitialized = (
-  state: AuthState,
-): boolean => {
-  return state.initialized
-}
-
-// ==================================================================
-// Default Export
-// ==================================================================
+export const selectIsInitialized = (state: AuthState): boolean =>
+  state.initialized
 
 export default useAuthStore

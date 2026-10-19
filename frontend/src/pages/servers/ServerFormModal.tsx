@@ -1,7 +1,7 @@
 // frontend/src/pages/servers/ServerFormModal.tsx — إضافة / تعديل سيرفر
 
 import { useEffect, useState } from 'react'
-import { Globe, Plus, Server as ServerIcon } from 'lucide-react'
+import { Globe,  Server as ServerIcon } from 'lucide-react'
 import { useToast } from '../../components/ui/Toast'
 import { Button, Field, Modal, TextInput, Toggle } from '../../components/ui/kit'
 import { parseApiError } from '../../services/apiError'
