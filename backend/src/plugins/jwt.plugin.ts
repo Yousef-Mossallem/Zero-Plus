@@ -1,8 +1,11 @@
 // backend/src/plugins/jwt.plugin.ts
 // ==================================================================
 // Zero Plus - JWT Plugin
-// مسؤول عن كل حاجة تخص المصادقة والتوكنات (الـ Dashboard فقط)
+// مسؤول عن المصادقة والتوكنات (لوحة التحكم فقط)
 // الـ Gateway له plugin منفصل: gateway-auth.plugin.ts
+//
+// التوكن بعد Passkeys يحتوي:
+//   id · email · role · organizationId · passkeyId? (اختياري)
 // ==================================================================
 
 import fp from 'fastify-plugin'
@@ -11,32 +14,46 @@ import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify'
 
 // ------------------------------------------------------------------
 // TypeScript Declaration Merging
-// عشان TypeScript يعرف شكل request.user
 // ------------------------------------------------------------------
+
 declare module '@fastify/jwt' {
   interface FastifyJWT {
-    // الشكل اللي هيتحط جوه التوكن لما نعمل sign
+    /** الشكل اللي بيتحط جوه التوكن عند sign */
     payload: {
       id: string
       email: string
       role: string
       organizationId: string
+      /** معرف صف PasskeyCredential المستخدم في هذا الدخول (اختياري) */
+      passkeyId?: string
     }
-    // الشكل اللي هيظهر في request.user بعد ما نعمل verify
+
+    /** الشكل اللي بيظهر في request.user بعد jwtVerify */
     user: {
       id: string
       email: string
       role: string
       organizationId: string
+      passkeyId?: string
     }
   }
 }
 
 declare module 'fastify' {
   interface FastifyInstance {
-    authenticate: (request: FastifyRequest, reply: FastifyReply) => Promise<void>
-    // فحص الصلاحية بعد authenticate
-    // الاستخدام: preHandler: [fastify.authenticate, fastify.requireRole(['OWNER', 'ADMIN'])]
+    /**
+     * يحمي الـ route — لازم توكن صالح
+     * الاستخدام: preHandler: [fastify.authenticate]
+     */
+    authenticate: (
+      request: FastifyRequest,
+      reply: FastifyReply
+    ) => Promise<void>
+
+    /**
+     * يفحص الدور بعد authenticate
+     * الاستخدام: preHandler: [fastify.authenticate, fastify.requireRole(['OWNER', 'ADMIN'])]
+     */
     requireRole: (
       roles: string[]
     ) => (request: FastifyRequest, reply: FastifyReply) => Promise<void>
@@ -44,8 +61,9 @@ declare module 'fastify' {
 }
 
 // ------------------------------------------------------------------
-// الـ Plugin نفسه
+// Plugin
 // ------------------------------------------------------------------
+
 const jwtPlugin: FastifyPluginAsync = async (fastify) => {
   const secret = process.env.JWT_SECRET
 
@@ -53,26 +71,25 @@ const jwtPlugin: FastifyPluginAsync = async (fastify) => {
     throw new Error('❌ JWT_SECRET is missing in environment variables')
   }
 
-  // تسجيل مكتبة JWT
   await fastify.register(fjwt, {
     secret,
     sign: {
-      expiresIn: '7d', // التوكن صالح لمدة 7 أيام (مناسب للـ MVP)
+      // مناسب للـ MVP — للإنتاج ممكن تقصّرها + refresh tokens
+      expiresIn: '7d',
     },
   })
 
   // ------------------------------------------------------------------
-  // ديكوريتر جاهز عشان تحمي أي route بسهولة
-  // الاستخدام:
-  // fastify.get('/protected', { preHandler: [fastify.authenticate] }, handler)
+  // authenticate
   // ------------------------------------------------------------------
+
   fastify.decorate(
     'authenticate',
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
         await request.jwtVerify()
-      } catch (err) {
-        // return ضروري: من غيره الـ handler ممكن يكمل بعد الرد
+      } catch {
+        // return ضروري عشان الـ handler ما يكملش بعد الرد
         return reply.status(401).send({
           success: false,
           message: 'Unauthorized - Invalid or missing token',
@@ -82,9 +99,9 @@ const jwtPlugin: FastifyPluginAsync = async (fastify) => {
   )
 
   // ------------------------------------------------------------------
-  // فحص الدور (Role)
-  // لازم يجي بعد fastify.authenticate في الـ preHandler
+  // requireRole — يُستخدم بعد authenticate
   // ------------------------------------------------------------------
+
   fastify.decorate('requireRole', (roles: string[]) => {
     return async (request: FastifyRequest, reply: FastifyReply) => {
       if (!request.user || !roles.includes(request.user.role)) {

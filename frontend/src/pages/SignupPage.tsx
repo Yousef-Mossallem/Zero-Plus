@@ -1,7 +1,7 @@
 // frontend/src/pages/SignupPage.tsx
 // ==================================================================
 // Zero Plus - Signup Page
-// Professional • Modern • Strong Visual Identity
+// WebAuthn / Passkeys — نفس التصميم، منطق جديد
 // ==================================================================
 
 import {
@@ -9,12 +9,8 @@ import {
   AlertCircle,
   ArrowRight,
   Building2,
-  CheckCircle2,
-  Circle,
-  Eye,
-  EyeOff,
+  Fingerprint,
   Loader2,
-  Lock,
   LockKeyhole,
   Mail,
   Shield,
@@ -24,7 +20,7 @@ import {
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 
-import type { SignupRequest } from '../services/authService'
+import type { RegisterStartRequest } from '../services/authService'
 import { useAuthStore } from '../store/authStore'
 
 // ==================================================================
@@ -35,55 +31,9 @@ interface FormErrors {
   organizationName?: string
   fullName?: string
   email?: string
-  password?: string
-  confirmPassword?: string
 }
 
-// ==================================================================
-// Password Requirements
-// ==================================================================
-
-const PASSWORD_RULES = [
-  {
-    id: 'length',
-    label: 'At least 8 characters',
-    test: (p: string) => p.length >= 8,
-  },
-  {
-    id: 'lowercase',
-    label: 'One lowercase letter (a-z)',
-    test: (p: string) => /[a-z]/.test(p),
-  },
-  {
-    id: 'uppercase',
-    label: 'One uppercase letter (A-Z)',
-    test: (p: string) => /[A-Z]/.test(p),
-  },
-  {
-    id: 'number',
-    label: 'One number (0-9)',
-    test: (p: string) => /[0-9]/.test(p),
-  },
-] as const
-
-function getPasswordStrength(password: string): {
-  score: number
-  label: string
-  color: string
-} {
-  let score = 0
-  if (password.length >= 8) score += 1
-  if (password.length >= 12) score += 1
-  if (/[a-z]/.test(password)) score += 1
-  if (/[A-Z]/.test(password)) score += 1
-  if (/[0-9]/.test(password)) score += 1
-  if (/[^a-zA-Z0-9]/.test(password)) score += 1
-
-  if (score <= 2) return { score, label: 'Weak', color: 'bg-rose-500' }
-  if (score <= 4) return { score, label: 'Fair', color: 'bg-amber-500' }
-  if (score <= 5) return { score, label: 'Good', color: 'bg-emerald-500' }
-  return { score, label: 'Strong', color: 'bg-cyan-400' }
-}
+type SizeProfile = 'small' | 'medium' | 'large'
 
 // ==================================================================
 // Component
@@ -102,18 +52,26 @@ export default function SignupPage() {
     organizationName: '',
     fullName: '',
     email: '',
-    password: '',
-    confirmPassword: '',
+    sizeProfile: 'medium' as SizeProfile,
   })
 
-  const [showPassword, setShowPassword] = useState(false)
-  const [showConfirm, setShowConfirm] = useState(false)
   const [formErrors, setFormErrors] = useState<FormErrors>({})
   const [touched, setTouched] = useState<Record<string, boolean>>({})
+  const [webAuthnSupported, setWebAuthnSupported] = useState(true)
 
   const isLoading = status === 'loading'
-  const passwordStrength = getPasswordStrength(form.password)
-  const showPasswordRules = form.password.length > 0 || touched.password
+
+  // ------------------------------------------------------------------
+  // هل المتصفح يدعم WebAuthn؟
+  // ------------------------------------------------------------------
+
+  useEffect(() => {
+    const ok =
+      typeof window !== 'undefined' &&
+      !!window.PublicKeyCredential &&
+      typeof window.PublicKeyCredential === 'function'
+    setWebAuthnSupported(ok)
+  }, [])
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -124,6 +82,10 @@ export default function SignupPage() {
   useEffect(() => {
     return () => clearError()
   }, [clearError])
+
+  // ------------------------------------------------------------------
+  // Form helpers
+  // ------------------------------------------------------------------
 
   const handleChange = (field: keyof typeof form, value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }))
@@ -154,25 +116,13 @@ export default function SignupPage() {
       errors.email = 'Invalid email format'
     }
 
-    if (!form.password) {
-      errors.password = 'Password is required'
-    } else if (form.password.length < 8) {
-      errors.password = 'Password must be at least 8 characters'
-    } else if (
-      !/[a-z]/.test(form.password) ||
-      !/[A-Z]/.test(form.password) ||
-      !/[0-9]/.test(form.password)
-    ) {
-      errors.password = 'Must include uppercase, lowercase and a number'
-    }
-
-    if (form.password !== form.confirmPassword) {
-      errors.confirmPassword = 'Passwords do not match'
-    }
-
     setFormErrors(errors)
     return Object.keys(errors).length === 0
   }
+
+  // ------------------------------------------------------------------
+  // Submit → Store يعمل: register/start → بصمة → register/finish
+  // ------------------------------------------------------------------
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
@@ -181,17 +131,19 @@ export default function SignupPage() {
       organizationName: true,
       fullName: true,
       email: true,
-      password: true,
-      confirmPassword: true,
     })
 
     if (!validate()) return
 
-    const payload: SignupRequest = {
+    if (!webAuthnSupported) {
+      return
+    }
+
+    const payload: RegisterStartRequest = {
       organizationName: form.organizationName.trim(),
       fullName: form.fullName.trim(),
       email: form.email.trim().toLowerCase(),
-      password: form.password,
+      sizeProfile: form.sizeProfile,
     }
 
     const result = await signup(payload)
@@ -201,7 +153,10 @@ export default function SignupPage() {
     }
   }
 
-  const newLocal = "pointer-events-none absolute -left-40 top-1/4 h-105 w-105 rounded-full bg-cyan-500/10 blur-[120px]"
+  // ------------------------------------------------------------------
+  // UI
+  // ------------------------------------------------------------------
+
   return (
     <div className="relative min-h-screen w-full overflow-hidden bg-[#05070f] text-white">
       {/* Background */}
@@ -216,7 +171,7 @@ export default function SignupPage() {
           backgroundSize: '64px 64px',
         }}
       />
-      <div className={newLocal} />
+      <div className="pointer-events-none absolute -left-40 top-1/4 h-105 w-105 rounded-full bg-cyan-500/10 blur-[120px]" />
       <div className="pointer-events-none absolute -right-40 bottom-1/4 h-95 w-95 rounded-full bg-indigo-600/15 blur-[110px]" />
       <div className="pointer-events-none absolute left-1/2 top-0 h-70 w-150 -translate-x-1/2 rounded-full bg-emerald-500/5 blur-[100px]" />
 
@@ -241,7 +196,7 @@ export default function SignupPage() {
             <div className="space-y-4">
               <div className="inline-flex items-center gap-2 rounded-full border border-cyan-500/20 bg-cyan-500/10 px-3 py-1 text-xs font-medium text-cyan-300">
                 <Zap className="h-3.5 w-3.5" />
-                Enterprise-grade protection in minutes
+                Passwordless • Fingerprint or Face ID
               </div>
               <h1 className="text-4xl font-bold leading-[1.15] tracking-tight text-white xl:text-5xl">
                 Secure your traffic
@@ -252,13 +207,15 @@ export default function SignupPage() {
               <p className="text-base leading-relaxed text-slate-400">
                 Zero Plus stands between the internet and your servers.
                 Intelligent detection, silent challenges, and real-time
-                visibility — without the CAPTCHA pain.
+                visibility — sign up with your fingerprint or face. No
+                password stored on our servers.
               </p>
             </div>
 
             <div className="flex flex-wrap gap-3">
               {[
                 { icon: Activity, label: 'Real-time Detection' },
+                { icon: Fingerprint, label: 'Passkey Auth' },
                 { icon: LockKeyhole, label: 'Silent JS Challenge' },
                 { icon: Shield, label: 'Adaptive Risk Engine' },
               ].map(({ icon: Icon, label }) => (
@@ -298,9 +255,20 @@ export default function SignupPage() {
                   Create your account
                 </h2>
                 <p className="text-sm text-slate-400">
-                  Start protecting your infrastructure in under a minute.
+                  After you submit, your device will ask for fingerprint or
+                  Face ID. We only store a public key — never your biometrics.
                 </p>
               </div>
+
+              {!webAuthnSupported && (
+                <div className="mb-6 flex items-start gap-3 rounded-xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>
+                    This browser does not support Passkeys. Use Chrome, Edge,
+                    Safari, or Firefox on localhost / HTTPS.
+                  </span>
+                </div>
+              )}
 
               {error && (
                 <div className="mb-6 flex items-start gap-3 rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">
@@ -320,7 +288,9 @@ export default function SignupPage() {
                     <input
                       type="text"
                       value={form.organizationName}
-                      onChange={(e) => handleChange('organizationName', e.target.value)}
+                      onChange={(e) =>
+                        handleChange('organizationName', e.target.value)
+                      }
                       onBlur={() => handleBlur('organizationName')}
                       placeholder="Acme Security"
                       disabled={isLoading}
@@ -339,7 +309,9 @@ export default function SignupPage() {
                     />
                   </div>
                   {touched.organizationName && formErrors.organizationName && (
-                    <p className="text-xs text-rose-400">{formErrors.organizationName}</p>
+                    <p className="text-xs text-rose-400">
+                      {formErrors.organizationName}
+                    </p>
                   )}
                 </div>
 
@@ -410,171 +382,60 @@ export default function SignupPage() {
                   )}
                 </div>
 
-                {/* Password */}
+                {/* Traffic size → AI baseline */}
                 <div className="space-y-1.5">
                   <label className="text-xs font-medium uppercase tracking-wider text-slate-400">
-                    Password
+                    Traffic Size
                   </label>
-                  <div className="relative">
-                    <Lock className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-                    <input
-                      type={showPassword ? 'text' : 'password'}
-                      value={form.password}
-                      onChange={(e) => handleChange('password', e.target.value)}
-                      onBlur={() => handleBlur('password')}
-                      placeholder="Min. 8 characters"
-                      disabled={isLoading}
-                      autoComplete="new-password"
-                      className={`
-                        w-full rounded-xl border bg-white/3 py-3 pl-11 pr-12
-                        text-sm text-white placeholder:text-slate-600
-                        outline-none transition-all duration-200
-                        focus:border-cyan-500/50 focus:bg-white/5 focus:ring-2 focus:ring-cyan-500/20
-                        disabled:opacity-50
-                        ${
-                          touched.password && formErrors.password
-                            ? 'border-rose-500/50'
-                            : 'border-white/10 hover:border-white/20'
-                        }
-                      `}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword((v) => !v)}
-                      className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 transition hover:text-slate-300"
-                      tabIndex={-1}
-                    >
-                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </button>
+                  <div className="grid grid-cols-3 gap-2">
+                    {(
+                      [
+                        { id: 'small', label: 'Small' },
+                        { id: 'medium', label: 'Medium' },
+                        { id: 'large', label: 'Large' },
+                      ] as const
+                    ).map((opt) => (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        disabled={isLoading}
+                        onClick={() => handleChange('sizeProfile', opt.id)}
+                        className={`
+                          rounded-xl border px-3 py-2.5 text-sm font-medium transition-all
+                          ${
+                            form.sizeProfile === opt.id
+                              ? 'border-cyan-500/50 bg-cyan-500/15 text-cyan-300'
+                              : 'border-white/10 bg-white/3 text-slate-400 hover:border-white/20'
+                          }
+                        `}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
                   </div>
-
-                  {/* Strength bar */}
-                  {form.password.length > 0 && (
-                    <div className="space-y-1.5 pt-1">
-                      <div className="flex gap-1">
-                        {[1, 2, 3, 4, 5, 6].map((i) => (
-                          <div
-                            key={i}
-                            className={`h-1 flex-1 rounded-full transition-all duration-300 ${
-                              i <= passwordStrength.score
-                                ? passwordStrength.color
-                                : 'bg-white/10'
-                            }`}
-                          />
-                        ))}
-                      </div>
-                      <p className="text-[11px] text-slate-500">
-                        Strength:{' '}
-                        <span className="text-slate-300">{passwordStrength.label}</span>
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Password Requirements Checklist */}
-                  <div
-                    className={`
-                      overflow-hidden transition-all duration-300 ease-out
-                      ${showPasswordRules ? 'mt-3 max-h-40 opacity-100' : 'max-h-0 opacity-0'}
-                    `}
-                  >
-                    <div className="rounded-xl border border-white/6 bg-white/2 px-3.5 py-3 space-y-2">
-                      {PASSWORD_RULES.map((rule) => {
-                        const passed = rule.test(form.password)
-                        return (
-                          <div
-                            key={rule.id}
-                            className="flex items-center gap-2.5 transition-all duration-300"
-                          >
-                            <div
-                              className={`
-                                flex h-4 w-4 shrink-0 items-center justify-center rounded-full
-                                transition-all duration-300
-                                ${
-                                  passed
-                                    ? 'bg-emerald-500/20 text-emerald-400 scale-100'
-                                    : 'bg-white/5 text-slate-600 scale-95'
-                                }
-                              `}
-                            >
-                              {passed ? (
-                                <CheckCircle2 className="h-3.5 w-3.5 animate-[fadeIn_0.25s_ease-out]" />
-                              ) : (
-                                <Circle className="h-3 w-3" strokeWidth={2} />
-                              )}
-                            </div>
-                            <span
-                              className={`
-                                text-xs transition-colors duration-300
-                                ${passed ? 'text-emerald-400/90' : 'text-slate-500'}
-                              `}
-                            >
-                              {rule.label}
-                            </span>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </div>
-
-                  {touched.password && formErrors.password && (
-                    <p className="text-xs text-rose-400">{formErrors.password}</p>
-                  )}
+                  <p className="text-[11px] text-slate-600">
+                    Seeds the AI model baseline for your organization.
+                  </p>
                 </div>
 
-                {/* Confirm Password */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium uppercase tracking-wider text-slate-400">
-                    Confirm Password
-                  </label>
-                  <div className="relative">
-                    <Lock className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-                    <input
-                      type={showConfirm ? 'text' : 'password'}
-                      value={form.confirmPassword}
-                      onChange={(e) => handleChange('confirmPassword', e.target.value)}
-                      onBlur={() => handleBlur('confirmPassword')}
-                      placeholder="Repeat your password"
-                      disabled={isLoading}
-                      autoComplete="new-password"
-                      className={`
-                        w-full rounded-xl border bg-white/3 py-3 pl-11 pr-12
-                        text-sm text-white placeholder:text-slate-600
-                        outline-none transition-all duration-200
-                        focus:border-cyan-500/50 focus:bg-white/5 focus:ring-2 focus:ring-cyan-500/20
-                        disabled:opacity-50
-                        ${
-                          touched.confirmPassword && formErrors.confirmPassword
-                            ? 'border-rose-500/50'
-                            : 'border-white/10 hover:border-white/20'
-                        }
-                      `}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowConfirm((v) => !v)}
-                      className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 transition hover:text-slate-300"
-                      tabIndex={-1}
-                    >
-                      {showConfirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </button>
+                {/* Passkey hint card */}
+                <div className="flex items-center gap-3 rounded-xl border border-cyan-500/15 bg-cyan-500/5 px-4 py-3">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-cyan-500/15 text-cyan-400">
+                    <Fingerprint className="h-4 w-4" />
                   </div>
-                  {touched.confirmPassword && formErrors.confirmPassword && (
-                    <p className="text-xs text-rose-400">{formErrors.confirmPassword}</p>
-                  )}
-                  {form.confirmPassword &&
-                    form.password === form.confirmPassword &&
-                    !formErrors.confirmPassword && (
-                      <p className="flex items-center gap-1 text-xs text-emerald-400">
-                        <CheckCircle2 className="h-3.5 w-3.5" />
-                        Passwords match
-                      </p>
-                    )}
+                  <div className="min-w-0 text-sm text-slate-300">
+                    <p className="font-medium text-cyan-200">Passkey required</p>
+                    <p className="text-xs text-slate-500">
+                      Next step: fingerprint, Face ID, or Windows Hello on this
+                      device.
+                    </p>
+                  </div>
                 </div>
 
                 {/* Submit */}
                 <button
                   type="submit"
-                  disabled={isLoading}
+                  disabled={isLoading || !webAuthnSupported}
                   className="
                     group relative mt-2 flex w-full items-center justify-center gap-2
                     overflow-hidden rounded-xl bg-linear-to-r from-cyan-500 to-blue-600
@@ -589,11 +450,12 @@ export default function SignupPage() {
                   {isLoading ? (
                     <>
                       <Loader2 className="h-4 w-4 animate-spin" />
-                      Creating account...
+                      Waiting for biometric…
                     </>
                   ) : (
                     <>
-                      Create Account
+                      <Fingerprint className="h-4 w-4" />
+                      Create account with Passkey
                       <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />
                     </>
                   )}
@@ -612,7 +474,7 @@ export default function SignupPage() {
             </div>
 
             <p className="mt-6 text-center text-[11px] text-slate-600">
-              By creating an account you agree to our Terms of Service
+              Public key only on our servers • Biometrics never leave your device
             </p>
           </div>
         </div>

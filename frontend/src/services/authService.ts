@@ -1,20 +1,36 @@
-
 // frontend/src/services/auth.service.ts
+// ==================================================================
+// Zero Plus - Authentication Service (WebAuthn / Passkeys)
+// ==================================================================
+//
+// يتوافق مع الباك:
+//   POST /auth/register/start
+//   POST /auth/register/finish
+//   POST /auth/login/start
+//   POST /auth/login/finish
+//   GET  /auth/me
+//
+// ومع الـ Store:
+//   registerStart → startRegistration (browser) → registerFinish
+//   loginStart    → startAuthentication (browser) → loginFinish
+//
+// ملاحظة:
+//   استدعاء WebAuthn نفسه (نافذة البصمة) في الـ Store عبر
+//   @simplewebauthn/browser — الملف ده مسؤول عن HTTP فقط.
+// ==================================================================
 
-// ==================================================================
-// Zero Plus - Authentication Service
-// كل عمليات Authentication الخاصة بالـ Frontend
-// ==================================================================
+import type {
+  RegistrationResponseJSON,
+  AuthenticationResponseJSON,
+  PublicKeyCredentialCreationOptionsJSON,
+  PublicKeyCredentialRequestOptionsJSON,
+} from '@simplewebauthn/browser'
 
 import api from './api'
 
 // ==================================================================
-// Types
+// Types — User / Organization / Response
 // ==================================================================
-
-// ------------------------------------------------------------------
-// User
-// ------------------------------------------------------------------
 
 export interface AuthUser {
   id: string
@@ -24,83 +40,45 @@ export interface AuthUser {
   organizationId: string
   lastLoginAt?: string | null
   createdAt?: string
+  uiPreferences?: unknown
 }
-
-// ------------------------------------------------------------------
-// Organization
-// ------------------------------------------------------------------
 
 export interface AuthOrganization {
   id: string
   name: string
   slug: string
   plan?: string
+  sizeProfile?: string
 }
 
-// ------------------------------------------------------------------
-// Login / Signup Response
-// ------------------------------------------------------------------
+export interface AuthPasskeySummary {
+  id: string
+  deviceName?: string | null
+  transports?: string[]
+  lastUsedAt?: string | null
+  createdAt?: string
+}
 
+/**
+ * الشكل اللي بيرجع بعد register/finish أو login/finish
+ * (وده اللي الـ Store بيحطه في state)
+ */
 export interface AuthResponseData {
   token: string
   user: AuthUser
   organization: AuthOrganization
+  passkey?: AuthPasskeySummary
 }
 
-// ------------------------------------------------------------------
-// API Response Wrapper
-// ------------------------------------------------------------------
-
+/**
+ * غلاف استجابة الباك الموحّد
+ */
 export interface AuthApiResponse<T> {
   success: boolean
   message?: string
   data: T
+  errors?: unknown[]
 }
-
-// ==================================================================
-// Request Types
-// ==================================================================
-
-// ------------------------------------------------------------------
-// Signup
-// ------------------------------------------------------------------
-
-export interface SignupRequest {
-  organizationName: string
-  fullName: string
-  email: string
-  password: string
-}
-
-// ------------------------------------------------------------------
-// Login
-// ------------------------------------------------------------------
-
-export interface LoginRequest {
-  email: string
-  password: string
-}
-
-// ==================================================================
-// Error Types
-// ==================================================================
-
-// الشكل المتوقع لأخطاء الـ Backend
-//
-// مثال:
-//
-// {
-//   success: false,
-//   message: "Invalid email or password"
-// }
-//
-// أو:
-//
-// {
-//   success: false,
-//   message: "Validation failed",
-//   errors: [...]
-// }
 
 export interface AuthApiError {
   success?: boolean
@@ -109,166 +87,265 @@ export interface AuthApiError {
 }
 
 // ==================================================================
-// Helpers
+// Request Types — متوافقة مع auth.schema في الباك
+// ==================================================================
+
+/** POST /auth/register/start */
+export interface RegisterStartRequest {
+  organizationName: string
+  fullName: string
+  email: string
+  sizeProfile?: 'small' | 'medium' | 'large'
+  /** اختياري تمامًا — مش للدخول */
+  password?: string
+}
+
+/** رد register/start */
+export interface RegisterStartResult {
+  options: PublicKeyCredentialCreationOptionsJSON
+  rpId: string
+}
+
+/** POST /auth/register/finish */
+export interface RegisterFinishRequest {
+  email: string
+  deviceName?: string
+  credential: RegistrationResponseJSON
+}
+
+/** POST /auth/login/start */
+export interface LoginStartRequest {
+  email: string
+}
+
+/** رد login/start */
+export interface LoginStartResult {
+  options: PublicKeyCredentialRequestOptionsJSON
+  rpId: string
+}
+
+/** POST /auth/login/finish */
+export interface LoginFinishRequest {
+  email: string
+  credential: AuthenticationResponseJSON
+}
+
+/** aliases لو الـ Store بيستخدم الأسماء دي */
+export type SignupRequest = RegisterStartRequest
+export type LoginRequest = LoginStartRequest
+
+// ==================================================================
+// Error helper
 // ==================================================================
 
 /**
- * استخراج رسالة الخطأ القادمة من Axios / Backend.
- *
- * الهدف:
- * بدل ما كل Page تعمل نفس كود التعامل مع الأخطاء،
- * يبقى عندنا مكان واحد نستخرج منه الرسالة.
+ * يستخرج رسالة مفهومة من Axios أو Error عادي
  */
 export function getAuthErrorMessage(
   error: unknown,
   fallback = 'Something went wrong. Please try again.',
 ): string {
-  // --------------------------------------------------------------
-  // Axios Error
-  // --------------------------------------------------------------
-
   if (typeof error === 'object' && error !== null) {
     const axiosError = error as {
-      response?: {
-        data?: AuthApiError
-      }
+      response?: { data?: AuthApiError; status?: number }
       message?: string
     }
 
-    // Backend message
     const backendMessage = axiosError.response?.data?.message
+    if (backendMessage) return backendMessage
 
-    if (backendMessage) {
-      return backendMessage
-    }
-
-    // Axios message
-    if (axiosError.message) {
-      return axiosError.message
-    }
+    if (axiosError.message) return axiosError.message
   }
-
-  // --------------------------------------------------------------
-  // Error عادي
-  // --------------------------------------------------------------
 
   if (error instanceof Error && error.message) {
     return error.message
   }
 
-  // --------------------------------------------------------------
-  // Fallback
-  // --------------------------------------------------------------
-
   return fallback
 }
 
 // ==================================================================
-// Authentication API
+// Token keys — لازم تطابق api.ts interceptor
+// ==================================================================
+
+export const AUTH_TOKEN_KEY = 'zp_token'
+const USER_KEY = 'zp_user'
+const ORG_KEY = 'zp_organization'
+
+export function saveToken(token: string): void {
+  localStorage.setItem(AUTH_TOKEN_KEY, token)
+}
+
+export function getToken(): string | null {
+  return localStorage.getItem(AUTH_TOKEN_KEY)
+}
+
+export function removeToken(): void {
+  localStorage.removeItem(AUTH_TOKEN_KEY)
+}
+
+export function hasToken(): boolean {
+  return Boolean(getToken())
+}
+
+// ==================================================================
+// Session helpers
+// ==================================================================
+
+export function saveAuthSession(data: AuthResponseData): void {
+  saveToken(data.token)
+  localStorage.setItem(USER_KEY, JSON.stringify(data.user))
+  localStorage.setItem(ORG_KEY, JSON.stringify(data.organization))
+}
+
+export function getStoredUser(): AuthUser | null {
+  const raw = localStorage.getItem(USER_KEY)
+  if (!raw) return null
+  try {
+    return JSON.parse(raw) as AuthUser
+  } catch {
+    localStorage.removeItem(USER_KEY)
+    return null
+  }
+}
+
+export function getStoredOrganization(): AuthOrganization | null {
+  const raw = localStorage.getItem(ORG_KEY)
+  if (!raw) return null
+  try {
+    return JSON.parse(raw) as AuthOrganization
+  } catch {
+    localStorage.removeItem(ORG_KEY)
+    return null
+  }
+}
+
+/**
+ * مسح الجلسة محليًا (Logout أو توكن باطل)
+ */
+export function clearAuthSession(): void {
+  removeToken()
+  localStorage.removeItem(USER_KEY)
+  localStorage.removeItem(ORG_KEY)
+}
+
+/**
+ * بعد أي finish ناجح: نحفظ التوكن + cache للـ UI
+ */
+function persistAfterAuth(data: AuthResponseData): AuthResponseData {
+  saveAuthSession(data)
+  return data
+}
+
+// ==================================================================
+// API — Registration (إنشاء حساب)
 // ==================================================================
 
 /**
- * إنشاء حساب جديد.
+ * الخطوة 1: إرسال بيانات الشركة والمستخدم
+ * الباك يرجع PublicKeyCredentialCreationOptionsJSON (challenge)
  *
- * Backend:
- * POST /auth/signup
- *
- * Body:
- * {
- *   organizationName,
- *   fullName,
- *   email,
- *   password
- * }
- *
- * Response:
- * {
- *   success: true,
- *   message: "Account created successfully",
- *   data: {
- *     token,
- *     user,
- *     organization
- *   }
- * }
+ * POST /auth/register/start
  */
-export async function signup(
-  data: SignupRequest,
-): Promise<AuthResponseData> {
-  const response = await api.post<AuthApiResponse<AuthResponseData>>(
-    '/auth/signup',
-    data,
+export async function registerStart(
+  data: RegisterStartRequest,
+): Promise<RegisterStartResult> {
+  const response = await api.post<AuthApiResponse<RegisterStartResult>>(
+    '/auth/register/start',
+    {
+      organizationName: data.organizationName.trim(),
+      fullName: data.fullName.trim(),
+      email: data.email.trim().toLowerCase(),
+      ...(data.sizeProfile ? { sizeProfile: data.sizeProfile } : {}),
+      ...(data.password ? { password: data.password } : {}),
+    },
   )
 
   return response.data.data
 }
 
 /**
- * تسجيل الدخول.
+ * الخطوة 3: بعد ما المستخدم خلّص navigator.credentials.create
+ * نبعِت الـ credential → الباك يتحقق ويحفظ Public Key ويصدر JWT
  *
- * Backend:
- * POST /auth/login
- *
- * Body:
- * {
- *   email,
- *   password
- * }
- *
- * Response:
- * {
- *   success: true,
- *   message: "Logged in successfully",
- *   data: {
- *     token,
- *     user,
- *     organization
- *   }
- * }
+ * POST /auth/register/finish
  */
-export async function login(
-  data: LoginRequest,
+export async function registerFinish(
+  data: RegisterFinishRequest,
 ): Promise<AuthResponseData> {
   const response = await api.post<AuthApiResponse<AuthResponseData>>(
-    '/auth/login',
-    data,
+    '/auth/register/finish',
+    {
+      email: data.email.trim().toLowerCase(),
+      ...(data.deviceName ? { deviceName: data.deviceName } : {}),
+      credential: data.credential,
+    },
+  )
+
+  return persistAfterAuth(response.data.data)
+}
+
+// ==================================================================
+// API — Login
+// ==================================================================
+
+/**
+ * الخطوة 1: بالإيميل نجيب authentication options
+ *
+ * POST /auth/login/start
+ */
+export async function loginStart(
+  data: LoginStartRequest,
+): Promise<LoginStartResult> {
+  const response = await api.post<AuthApiResponse<LoginStartResult>>(
+    '/auth/login/start',
+    {
+      email: data.email.trim().toLowerCase(),
+    },
   )
 
   return response.data.data
 }
 
 /**
- * جلب بيانات المستخدم الحالي.
+ * الخطوة 3: بعد navigator.credentials.get
+ * تحقق من التوقيع + JWT
  *
- * Backend:
+ * POST /auth/login/finish
+ */
+export async function loginFinish(
+  data: LoginFinishRequest,
+): Promise<AuthResponseData> {
+  const response = await api.post<AuthApiResponse<AuthResponseData>>(
+    '/auth/login/finish',
+    {
+      email: data.email.trim().toLowerCase(),
+      credential: data.credential,
+    },
+  )
+
+  return persistAfterAuth(response.data.data)
+}
+
+// ==================================================================
+// API — Current user
+// ==================================================================
+
+/**
  * GET /auth/me
- *
- * الـ api.ts بيضيف الـ JWT تلقائيًا في:
- *
- * Authorization: Bearer <token>
- *
- * Response:
- * {
- *   success: true,
- *   data: {
- *     id,
- *     email,
- *     fullName,
- *     role,
- *     organizationId,
- *     lastLoginAt,
- *     createdAt,
- *     organization
- *   }
- * }
+ * الـ api interceptor بيضيف Authorization: Bearer <token>
  */
-export async function getMe(): Promise<AuthUser & {
-  organization: AuthOrganization
-}> {
+export async function getMe(): Promise<
+  AuthUser & {
+    organization: AuthOrganization
+    passkeys?: AuthPasskeySummary[]
+  }
+> {
   const response = await api.get<
     AuthApiResponse<
       AuthUser & {
         organization: AuthOrganization
+        passkeys?: AuthPasskeySummary[]
       }
     >
   >('/auth/me')
@@ -277,146 +354,63 @@ export async function getMe(): Promise<AuthUser & {
 }
 
 // ==================================================================
-// Token Management
+// API — Passkeys management (اختياري للـ Profile)
 // ==================================================================
 
-// اسم الـ Token داخل localStorage.
-//
-// مهم جدًا:
-// api.ts بيستخدم نفس الاسم:
-//
-// localStorage.getItem('zp_token')
-//
-export const AUTH_TOKEN_KEY = 'zp_token'
-
-/**
- * حفظ JWT Token.
- */
-export function saveToken(token: string): void {
-  localStorage.setItem(AUTH_TOKEN_KEY, token)
-}
-
-/**
- * جلب JWT Token.
- */
-export function getToken(): string | null {
-  return localStorage.getItem(AUTH_TOKEN_KEY)
-}
-
-/**
- * حذف JWT Token.
- */
-export function removeToken(): void {
-  localStorage.removeItem(AUTH_TOKEN_KEY)
-}
-
-/**
- * معرفة هل يوجد Token حاليًا.
- *
- * ملاحظة:
- * وجود Token لا يعني بالضرورة أنه صالح.
- * التحقق الحقيقي يتم عن طريق /auth/me.
- */
-export function hasToken(): boolean {
-  return Boolean(getToken())
-}
-
-// ==================================================================
-// Auth Session Helpers
-// ==================================================================
-
-/**
- * حفظ بيانات Session كاملة بعد Login / Signup.
- *
- * الـ Token هو العنصر الأساسي للمصادقة.
- *
- * بيانات user و organization بنخزنها بشكل منفصل
- * عشان الـ UI يقدر يعرضها بسرعة بدون طلب API إضافي.
- */
-export function saveAuthSession(data: AuthResponseData): void {
-  saveToken(data.token)
-
-  localStorage.setItem(
-    'zp_user',
-    JSON.stringify(data.user),
+export async function listPasskeys(): Promise<AuthPasskeySummary[]> {
+  const response = await api.get<AuthApiResponse<AuthPasskeySummary[]>>(
+    '/auth/passkeys',
   )
+  return response.data.data
+}
 
-  localStorage.setItem(
-    'zp_organization',
-    JSON.stringify(data.organization),
+export async function addPasskeyStart(): Promise<RegisterStartResult> {
+  const response = await api.post<AuthApiResponse<RegisterStartResult>>(
+    '/auth/passkeys/register/start',
   )
+  return response.data.data
 }
 
-/**
- * جلب المستخدم المخزن محليًا.
- *
- * دي بيانات Cache للـ UI،
- * وليست بديلًا عن /auth/me.
- */
-export function getStoredUser(): AuthUser | null {
-  const rawUser = localStorage.getItem('zp_user')
-
-  if (!rawUser) {
-    return null
-  }
-
-  try {
-    return JSON.parse(rawUser) as AuthUser
-  } catch {
-    localStorage.removeItem('zp_user')
-    return null
-  }
+export async function addPasskeyFinish(data: {
+  deviceName?: string
+  credential: RegistrationResponseJSON
+}): Promise<AuthPasskeySummary> {
+  const response = await api.post<AuthApiResponse<AuthPasskeySummary>>(
+    '/auth/passkeys/register/finish',
+    data,
+  )
+  return response.data.data
 }
 
-/**
- * جلب Organization المخزنة محليًا.
- */
-export function getStoredOrganization(): AuthOrganization | null {
-  const rawOrganization = localStorage.getItem('zp_organization')
-
-  if (!rawOrganization) {
-    return null
-  }
-
-  try {
-    return JSON.parse(rawOrganization) as AuthOrganization
-  } catch {
-    localStorage.removeItem('zp_organization')
-    return null
-  }
-}
-
-/**
- * مسح الـ Session بالكامل.
- *
- * بنستخدمها عند Logout أو لما الـ Token يبقى غير صالح.
- */
-export function clearAuthSession(): void {
-  removeToken()
-
-  localStorage.removeItem('zp_user')
-  localStorage.removeItem('zp_organization')
+export async function revokePasskey(passkeyId: string): Promise<void> {
+  await api.delete('/auth/passkeys', {
+    data: { passkeyId },
+  })
 }
 
 // ==================================================================
-// Default Export
+// Default export
 // ==================================================================
 
 const authService = {
-  signup,
-  login,
+  registerStart,
+  registerFinish,
+  loginStart,
+  loginFinish,
   getMe,
+  listPasskeys,
+  addPasskeyStart,
+  addPasskeyFinish,
+  revokePasskey,
 
   saveToken,
   getToken,
   removeToken,
   hasToken,
-
   saveAuthSession,
   getStoredUser,
   getStoredOrganization,
   clearAuthSession,
-
   getAuthErrorMessage,
 }
 

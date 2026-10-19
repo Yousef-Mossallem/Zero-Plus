@@ -8,7 +8,7 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 
 // ------------------------------------------------------------------
-// Landing Pages (الصفحات العامة الجديدة) - إضافة جديدة
+// Landing Pages (الموقع العام)
 // ------------------------------------------------------------------
 
 import LandingPage from '../pages/landing/LandingPage'
@@ -17,65 +17,39 @@ import ContactPage from '../pages/landing/ContactPage'
 import SitePoliciesPage from '../pages/landing/SitePoliciesPage'
 
 // ------------------------------------------------------------------
-// Auth Pages (شغالة دلوقتي)
+// Auth Pages
 // ------------------------------------------------------------------
 
-// TODO: هتتشال الكومنت دي لما SignupPage.tsx يتعمل
 import SignupPage from '../pages/SignupPage'
-
-// TODO: هتتشال الكومنت دي لما LoginPage.tsx يتعمل
 import LoginPage from '../pages/LoginPage'
 
 // ------------------------------------------------------------------
-// Core Pages (المرحلة الجاية)
+// Core Pages (الصفحات الرئيسية الجاهزة)
 // ------------------------------------------------------------------
 
-// TODO: هتتشال الكومنت دي لما DashboardPage.tsx يتعمل
+import SecurityEventsPage from '../pages/SecurityEventsPage'
+import ReputationPage from '../pages/ReputationPage'
+import ServersPage from '../pages/ServersPage'
+import OrganizationsPage from '../pages/OrganizationsPage'
+import PoliciesPage from '../pages/PoliciesPage'
+
+// ------------------------------------------------------------------
+// Secondary Pages (لسه مش جاهزة – هتتفعل لما تتعمل)
+// ------------------------------------------------------------------
+
 // import DashboardPage from '../pages/DashboardPage'
-
-// TODO: هتتشال الكومنت دي لما SimulationPage.tsx يتعمل
 // import SimulationPage from '../pages/SimulationPage'
-
-// TODO: هتتشال الكومنت دي لما SecurityEventsPage.tsx يتعمل
-// import SecurityEventsPage from '../pages/SecurityEventsPage'
-
-// TODO: هتتشال الكومنت دي لما ReputationPage.tsx يتعمل
-// import ReputationPage from '../pages/ReputationPage'
-
-// ------------------------------------------------------------------
-// Secondary Pages (تتعمل في أي وقت فاضي، مش على الخط الحرج)
-// ------------------------------------------------------------------
-
-// TODO: هتتشال الكومنت دي لما LiveTrafficPage.tsx يتعمل
 // import LiveTrafficPage from '../pages/LiveTrafficPage'
-
-// TODO: هتتشال الكومنت دي لما ReportsPage.tsx يتعمل
 // import ReportsPage from '../pages/ReportsPage'
-
-// TODO: هتتشال الكومنت دي لما ThreatIntelligencePage.tsx يتعمل
 // import ThreatIntelligencePage from '../pages/ThreatIntelligencePage'
-
-// TODO: هتتشال الكومنت دي لما ServersPage.tsx يتعمل
-// import ServersPage from '../pages/ServersPage'
-
-// TODO: هتتشال الكومنت دي لما OrganizationsPage.tsx يتعمل
-// import OrganizationsPage from '../pages/OrganizationsPage'
-
-// TODO: هتتشال الكومنت دي لما NotificationsPage.tsx يتعمل
 // import NotificationsPage from '../pages/NotificationsPage'
-
-// TODO: هتتشال الكومنت دي لما PoliciesPage.tsx يتعمل
-// import PoliciesPage from '../pages/PoliciesPage'
-
-// TODO: هتتشال الكومنت دي لما ProfilePage.tsx يتعمل
 // import ProfilePage from '../pages/ProfilePage'
 
 // ------------------------------------------------------------------
-// Protected Route Wrapper (يحمي أي صفحة محتاجة تسجيل دخول)
+// Protected Route Wrapper
 // ------------------------------------------------------------------
 
-// TODO: هيتعمل مع DashboardPage - بيتأكد إن فيه token قبل ما يعرض الصفحة
-// import ProtectedRoute from '../components/ProtectedRoute'
+import ProtectedRoute from '../components/ProtectedRoute'
 
 // ==================================================================
 // Router Component
@@ -85,32 +59,73 @@ export default function AppRouter() {
   return (
     <Routes>
       {/* ============================================================
-          Public Routes (مفتوحة للكل، من غير تسجيل دخول)
+          Public Routes (مفتوحة للكل)
       ============================================================ */}
 
-      {/* TODO: هتتشال الكومنت دي لما SignupPage.tsx يتعمل */}
-      <Route path="/signup" element={<SignupPage />} />
-
-      {/* TODO: هتتشال الكومنت دي لما LoginPage.tsx يتعمل */}
-      <Route path="/login" element={<LoginPage />} />
-
-      {/* ============================================================
-          Landing Routes (الموقع العام) - إضافة جديدة
-          "/" هي أول صفحة بتظهر للمستخدم
-          السياسات على /legal لأن /policies محجوزة لسياسات الـ Dashboard
-      ============================================================ */}
-
+      {/* الصفحة الأولى – اللاندينج */}
       <Route path="/" element={<LandingPage />} />
       <Route path="/about" element={<AboutPage />} />
       <Route path="/contact" element={<ContactPage />} />
+      {/* /legal عشان /policies محجوزة لسياسات الـ Dashboard */}
       <Route path="/legal" element={<SitePoliciesPage />} />
+
+      <Route path="/signup" element={<SignupPage />} />
+      <Route path="/login" element={<LoginPage />} />
 
       {/* ============================================================
           Protected Routes (محتاجة تسجيل دخول)
-          كل الصفحات دي لازم تتلف بـ <ProtectedRoute> لما يتعمل
+          بعد تسجيل الدخول → صفحة السيرفرات
       ============================================================ */}
 
-      {/* TODO: هتتشال الكومنت دي لما DashboardPage.tsx يتعمل */}
+      <Route
+        path="/servers"
+        element={
+          <ProtectedRoute>
+            <ServersPage />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/security-events"
+        element={
+          <ProtectedRoute>
+            <SecurityEventsPage />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/reputation"
+        element={
+          <ProtectedRoute>
+            <ReputationPage />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/organizations"
+        element={
+          <ProtectedRoute>
+            <OrganizationsPage />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/policies"
+        element={
+          <ProtectedRoute>
+            <PoliciesPage />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* أي محاولة للدخول على /dashboard تتحوّل لصفحة السيرفرات */}
+      <Route path="/dashboard" element={<Navigate to="/servers" replace />} />
+
+      {/* الصفحات اللي لسه مش جاهزة – هتتفعل لما تتعمل */}
       {/*
       <Route
         path="/dashboard"
@@ -120,10 +135,6 @@ export default function AppRouter() {
           </ProtectedRoute>
         }
       />
-      */}
-
-      {/* TODO: هتتشال الكومنت دي لما SimulationPage.tsx يتعمل */}
-      {/*
       <Route
         path="/simulation"
         element={
@@ -132,34 +143,6 @@ export default function AppRouter() {
           </ProtectedRoute>
         }
       />
-      */}
-
-      {/* TODO: هتتشال الكومنت دي لما SecurityEventsPage.tsx يتعمل */}
-      {/*
-      <Route
-        path="/security-events"
-        element={
-          <ProtectedRoute>
-            <SecurityEventsPage />
-          </ProtectedRoute>
-        }
-      />
-      */}
-
-      {/* TODO: هتتشال الكومنت دي لما ReputationPage.tsx يتعمل */}
-      {/*
-      <Route
-        path="/reputation"
-        element={
-          <ProtectedRoute>
-            <ReputationPage />
-          </ProtectedRoute>
-        }
-      />
-      */}
-
-      {/* TODO: هتتشال الكومنت دي لما LiveTrafficPage.tsx يتعمل */}
-      {/*
       <Route
         path="/live-traffic"
         element={
@@ -168,10 +151,6 @@ export default function AppRouter() {
           </ProtectedRoute>
         }
       />
-      */}
-
-      {/* TODO: هتتشال الكومنت دي لما ReportsPage.tsx يتعمل */}
-      {/*
       <Route
         path="/reports"
         element={
@@ -180,10 +159,6 @@ export default function AppRouter() {
           </ProtectedRoute>
         }
       />
-      */}
-
-      {/* TODO: هتتشال الكومنت دي لما ThreatIntelligencePage.tsx يتعمل */}
-      {/*
       <Route
         path="/threat-intelligence"
         element={
@@ -192,34 +167,6 @@ export default function AppRouter() {
           </ProtectedRoute>
         }
       />
-      */}
-
-      {/* TODO: هتتشال الكومنت دي لما ServersPage.tsx يتعمل */}
-      {/*
-      <Route
-        path="/servers"
-        element={
-          <ProtectedRoute>
-            <ServersPage />
-          </ProtectedRoute>
-        }
-      />
-      */}
-
-      {/* TODO: هتتشال الكومنت دي لما OrganizationsPage.tsx يتعمل */}
-      {/*
-      <Route
-        path="/organizations"
-        element={
-          <ProtectedRoute>
-            <OrganizationsPage />
-          </ProtectedRoute>
-        }
-      />
-      */}
-
-      {/* TODO: هتتشال الكومنت دي لما NotificationsPage.tsx يتعمل */}
-      {/*
       <Route
         path="/notifications"
         element={
@@ -228,22 +175,6 @@ export default function AppRouter() {
           </ProtectedRoute>
         }
       />
-      */}
-
-      {/* TODO: هتتشال الكومنت دي لما PoliciesPage.tsx يتعمل */}
-      {/*
-      <Route
-        path="/policies"
-        element={
-          <ProtectedRoute>
-            <PoliciesPage />
-          </ProtectedRoute>
-        }
-      />
-      */}
-
-      {/* TODO: هتتشال الكومنت دي لما ProfilePage.tsx يتعمل */}
-      {/*
       <Route
         path="/profile"
         element={
@@ -256,10 +187,11 @@ export default function AppRouter() {
 
       {/* ============================================================
           Default Redirect
-          دلوقتي بيوجه لـ /login مؤقتاً لحد ما نعمل الصفحات
+          أي مسار غير معروف → صفحة السيرفرات
+          (ProtectedRoute بيرجّع غير المسجّل لـ /login لوحده)
       ============================================================ */}
 
-      <Route path="*" element={<Navigate to="/login" replace />} />
+      <Route path="*" element={<Navigate to="/servers" replace />} />
     </Routes>
   )
 }

@@ -16,6 +16,15 @@ import {
 } from '../store/authStore'
 
 // ==================================================================
+// وضع التطوير
+// ------------------------------------------------------------------
+// true  = تخطي صفحة تسجيل الدخول أثناء التطوير
+// false = تشغيل الحماية الأصلية زي ما هي
+// ==================================================================
+
+const BYPASS_AUTH = false
+
+// ==================================================================
 // Props
 // ==================================================================
 
@@ -49,7 +58,7 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
   // لسه بيتحقق من الـ Token
   // ----------------------------------------------------------------
 
-  if (!isInitialized || isLoading) {
+  if (!BYPASS_AUTH && (!isInitialized || isLoading)) {
       const newLocal = "pointer-events-none absolute -left-40 top-1/4 h-80 w-[320px] rounded-full bg-cyan-500/10 blur-[100px]"
     return (
       <div className="relative flex min-h-screen w-full items-center justify-center overflow-hidden bg-[#05070f]">
@@ -74,9 +83,10 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
 
   // ----------------------------------------------------------------
   // مش مسجل دخول → يتحول لصفحة Login
+  // (في وضع التطوير BYPASS_AUTH بيتخطى الخطوة دي)
   // ----------------------------------------------------------------
 
-  if (!isAuthenticated) {
+  if (!BYPASS_AUTH && !isAuthenticated) {
     return (
       <Navigate
         to="/login"
