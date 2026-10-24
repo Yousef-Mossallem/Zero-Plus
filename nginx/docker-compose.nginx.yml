@@ -1,0 +1,26 @@
+services:
+  nginx:
+    build: ./nginx
+    container_name: zeroplus-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro          # لو عندك شهادات
+    depends_on:
+      - gateway
+    networks:
+      - zeroplus
+    restart: unless-stopped
+
+  gateway:
+    # ... إعدادات الـ Gateway بتاعتك
+    expose:
+      - "3000"
+    networks:
+      - zeroplus
+
+networks:
+  zeroplus:
+    driver: bridge
