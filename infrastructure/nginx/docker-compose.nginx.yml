@@ -1,0 +1,16 @@
+services:
+  nginx:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: zero-plus-nginx:local
+    container_name: zero-plus-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./ssl/fullchain.pem:/etc/nginx/ssl/fullchain.pem:ro
+      - ./ssl/privkey.pem:/etc/nginx/ssl/privkey.pem:ro
+    extra_hosts:
+      - "gateway:host-gateway"
+    restart: unless-stopped
