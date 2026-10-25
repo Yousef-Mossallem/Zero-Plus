@@ -1,77 +1,112 @@
 // ======================================================
 // ZERO PLUS GATEWAY — Server
-// ملف تشغيل السيرفر
-// ======================================================
-//
-// المسؤوليات:
-// 1. استدعاء buildApp() من app.ts
-// 2. تشغيل السيرفر على الـ host والـ port من الـ config
-// 3. طباعة معلومات واضحة عند التشغيل
-// 4. التعامل مع أخطاء الإقلاع
-// 5. دعم Graceful Shutdown (موجود أصلًا في app.ts)
-//
+// تشغيل السيرفر + تهيئة Redis + مزامنة الحظر
 // ======================================================
 
-import { buildApp } from './app';
-import { config } from './config';
-import { getRedis } from './services/redis.client';
+import { buildApp } from './app'
+import { config } from './config'
+import { getRedis } from './services/redis.client'
+import {
+  syncAllBansFromBackend,
+  getLastSyncServerTime,
+} from './detection/ban.manager'
+
+const BAN_SYNC_INTERVAL_MS = 60_000
 
 /**
- * بيشغل الـ Gateway
+ * تشغيل الـ Gateway
+ */
+/**
+ * تشغيل الـ Gateway
  */
 export async function startServer(): Promise<void> {
   try {
-    // 1. نتأكد إن Redis شغال قبل ما نفتح البورت
-    console.log('[Server] جاري الاتصال بـ Redis...');
-    const redis = getRedis();
-    await redis.ping();
-    console.log('[Server] Redis متصل بنجاح');
+    console.log('[Server] Connecting to Redis...')
+    const redis = getRedis()
+    await redis.ping()
+    console.log('[Server] Redis OK')
 
-    // 2. نبني الـ App
-    console.log('[Server] جاري بناء التطبيق...');
-    const app = await buildApp();
+    // مزامنة الحظر من الباك ← Redis (IP + device)
+    try {
+      console.log('[Server] Syncing bans from Backend...')
+      const { written, serverTime } = await syncAllBansFromBackend()
+      console.log(
+        `[Server] Ban sync done — written=${written} serverTime=${serverTime}`,
+      )
+    } catch (err) {
+      console.warn(
+        '[Server] Ban sync failed (Gateway will still start):',
+        (err as Error).message,
+      )
+    }
 
-    // 3. نشغل السيرفر
+    console.log('[Server] Building app...')
+    const app = await buildApp()
+
+    // 1️⃣ نقوم بتعريف المتغير الخاص بالتايمر أولاً
+    let timer: NodeJS.Timeout
+
+    // 2️⃣ نضع الـ Hook هنا (قبل الـ listen) لحل المشكلة تماماً
+    app.addHook('onClose', async () => {
+      if (timer) clearInterval(timer)
+    })
+
+    // 3️⃣ تشغيل السيرفر والاستماع للطلبات
     const address = await app.listen({
       port: config.server.port,
       host: config.server.host,
-    });
-
-    // 4. طباعة معلومات التشغيل
-    printBanner(address);
+    })
+    
+    printBanner(address)
+    
+    // 4️⃣ تشغيل المزامنة الدورية بعد نجاح تشغيل السيرفر
+    timer = setInterval(() => {
+      void (async () => {
+        try {
+          const since = await getLastSyncServerTime()
+          const { written } = await syncAllBansFromBackend(
+            since ? { updatedSince: since } : undefined,
+          )
+          if (written > 0) {
+            app.log.info({ written }, 'ban sync incremental')
+          }
+        } catch (err) {
+          app.log.warn({ err }, 'ban sync interval failed')
+        }
+      })()
+    }, BAN_SYNC_INTERVAL_MS)
 
   } catch (err) {
-    console.error('[Server] فشل في تشغيل الـ Gateway:');
-    console.error(err);
-    process.exit(1);
+    console.error('[Server] Failed to start Gateway:')
+    console.error(err)
+    process.exit(1)
   }
 }
 
-/**
- * طباعة بانر جميل عند التشغيل
- */
+
 function printBanner(address: string): void {
-  const line = '─'.repeat(60);
-
-  console.log('\n' + line);
-  console.log('  ZERO PLUS GATEWAY');
-  console.log('  Adaptive Traffic Security Gateway');
-  console.log(line);
-  console.log(`  Environment   : ${config.server.nodeEnv}`);
-  console.log(`  Listening on  : ${address}`);
-  console.log(`  Redis         : ${config.redis.url}`);
-  console.log(`  Backend URL   : ${config.backend.url}`);
-  console.log(`  AI Service    : ${config.ai.url} ${config.ai.enabled ? '(enabled)' : '(disabled)'}`);
-  console.log(`  Clearance TTL : ${config.clearance.ttlSeconds}s`);
-  console.log(line);
-  console.log('  Health check  : GET /health');
-  console.log('  Ready check   : GET /ready');
+  const line = '─'.repeat(60)
+  console.log('\n' + line)
+  console.log('  ZERO PLUS GATEWAY')
+  console.log('  Adaptive Traffic Security Gateway')
+  console.log(line)
+  console.log(`  Environment   : ${config.server.nodeEnv}`)
+  console.log(`  Listening on  : ${address}`)
+  console.log(`  Redis         : ${config.redis.url}`)
+  console.log(`  Backend URL   : ${config.backend.url}`)
+  console.log(
+    `  AI Service    : ${config.ai.url} ${config.ai.enabled ? '(enabled)' : '(disabled)'}`,
+  )
+  console.log(`  Clearance TTL : ${config.clearance.ttlSeconds}s`)
+  console.log(line)
+  console.log('  Health        : GET /health')
+  console.log('  Ready         : GET /ready')
   if (config.server.isDev) {
-    console.log('  Info          : GET /_info');
+    console.log('  Debug FP      : GET /debug/fingerprint')
   }
-  console.log(line);
-  console.log('  Status: RUNNING  |  Pipeline: SKELETON MODE');
-  console.log(line + '\n');
+  console.log(line)
+  console.log('  Status: RUNNING')
+  console.log(line + '\n')
 }
 
-export default startServer;
+export default startServer

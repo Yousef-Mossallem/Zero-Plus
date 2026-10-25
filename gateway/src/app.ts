@@ -1,17 +1,7 @@
 // ======================================================
 // ZERO PLUS GATEWAY — Fastify Application
-// الملف المركزي اللي بيبني الـ App كله
-// ======================================================
-//
-// المسؤوليات:
-// 1. إنشاء instance من Fastify
-// 2. تسجيل الـ Plugins الأساسية
-// 3. تسجيل الـ Hooks (onRequest, preHandler, onResponse...)
-// 4. راوتر الزوار الرئيسي (/*)
-// 5. راوترات داخلية حقيقية محمية (/internal/*) للـ Backend
-// 6. Error Handler مركزي + Health Checks
-// 7. بصمات TLS/جهاز عبر fingerprint-authenticator
-//
+// Host → Backend → Ban → Clearance → Rate → Risk → Router
+// → JS challenge / Ban / Forward
 // ======================================================
 
 import { randomUUID } from 'node:crypto'
@@ -24,49 +14,116 @@ import cookie from '@fastify/cookie'
 import { config } from './config'
 import { getRedis, closeRedis } from './services/redis.client'
 import { probeOrigin } from './services/origin.probe'
-import type { RequestContext, Signals } from './types'
-
-// ======================================================
-// استيراد الملفات المستقبلية (شيل الكومنت أول ما الملف يبقى جاهز)
-// ======================================================
-
-// --- Core ---
-// import { calculateRisk } from './core/risk.engine'
-// import { applyPolicy } from './core/policy.engine'
-
-// --- Detection ---
-// import { routeBySuspicion } from './detection/suspicion-router'
-// import { checkBan } from './detection/ban.manager'
-// import { checkRateLimit } from './detection/rate-limiter'
-// import { getIpReputation } from './detection/ip-reputation'
+import {
+  resolvePolicyByHost,
+  lookupReputation,
+  type OrgPolicyFromBackend,
+  type GatewayServer,
+  type PolicyResolveData,
+} from './services/backend.client'
+import { calculateRisk, type RiskResult } from './core/risk.engine'
+import {
+  decidePolicy,
+  type CompanyPolicy,
+  type PolicyDecision,
+} from './core/policy.engine'
+import {
+  routeSuspicion,
+  type RouteDecision,
+} from './detection/suspicion-router'
 import {
   authenticateFromFastifyRequest,
   applyFingerprintsToSignals,
 } from './detection/fingerprint-authenticator'
-
-// --- Challenge ---
-// import { handleJsChallenge } from './challenge/js-challenge'
-// import { issueClearance, verifyClearance } from './challenge/clearance'
-
-// --- Proxy ---
+import {
+  checkBan,
+  applyBanFromDecision,
+  applyBan,
+} from './detection/ban.manager'
+import {
+  checkRateLimit,
+  applyRateLimitHeaders,
+  type RateLimitResult,
+} from './detection/rate-limiter'
+import {
+  verifyClearanceFromRequest,
+  setClearanceCookie,
+  revokeClearance,
+} from './challenge/clearance'
+import {
+  handleJsChallenge,
+  isJsChallengeResponse,
+  telemetryForAi,
+  type JsChallengeResult,
+} from './challenge/js-challenge'
 import { forwardToOrigin } from './proxy/forwardToOrigin'
+import type { RequestContext, Signals } from './types'
 
-// --- Logging ---
+// import { analyzeTraffic } from './services/ai.client'
 // import { logSecurityEvent } from './logging/event-logger'
 
-// ======================================================
-// Type augmentation
-// ======================================================
+export interface GatewayRuntimeContext extends RequestContext {
+  resolved: PolicyResolveData | null
+  server: GatewayServer | null
+  companyPolicy: Partial<CompanyPolicy> | null
+  policyDecision: PolicyDecision | null
+  routeDecision: RouteDecision | null
+  rateLimit: RateLimitResult | null
+  jsChallenge: JsChallengeResult | null
+  policyUsedFallback: boolean
+  backendReachable: boolean
+}
 
 declare module 'fastify' {
   interface FastifyRequest {
-    ctx: RequestContext
+    ctx: GatewayRuntimeContext
   }
 }
 
-// ======================================================
-// إنشاء الـ App
-// ======================================================
+function clampScore(n: number): number {
+  if (!Number.isFinite(n)) return 0
+  return Math.min(100, Math.max(0, Math.round(n)))
+}
+
+function mapBackendPolicyToCompany(p: OrgPolicyFromBackend): CompanyPolicy {
+  const challengeScore = clampScore(p.challengeMaxScore ?? 31)
+  let temporaryBanScore = clampScore(
+    Math.max(challengeScore + 1, p.rateLimitMaxScore ?? 81),
+  )
+  if (temporaryBanScore <= challengeScore) {
+    temporaryBanScore = Math.min(100, challengeScore + 20)
+  }
+  let permanentBanScore = clampScore(p.permanentBanScore ?? 95)
+  if (permanentBanScore < temporaryBanScore) {
+    permanentBanScore = Math.min(100, temporaryBanScore + 10)
+  }
+  return {
+    autoBanAfterFails: Math.max(0, Math.floor(p.autoBanAfterFails ?? 5)),
+    temporaryBanMinutes: Math.max(1, p.temporaryBanMinutes ?? 15),
+    permanentBanScore,
+    banOnMaxRequests: Boolean(p.banOnMaxRequests),
+    challengeScore,
+    temporaryBanScore,
+  }
+}
+
+function challengeCtx(
+  ctx: GatewayRuntimeContext,
+  backendPolicy: OrgPolicyFromBackend | null,
+) {
+  return {
+    organizationId: ctx.signals.orgId,
+    ip: ctx.signals.ip,
+    host: ctx.signals.host,
+    path: ctx.signals.path,
+    userAgent: ctx.signals.userAgent,
+    deviceFingerprint: ctx.signals.deviceFingerprint,
+    ja4: ctx.signals.ja4,
+    ja3: ctx.signals.ja3,
+    requestId: ctx.id,
+    policy: backendPolicy,
+  }
+}
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -88,10 +145,6 @@ export async function buildApp(): Promise<FastifyInstance> {
     genReqId: () => randomUUID(),
   })
 
-  // ======================================================
-  // 0. Content Type Parser — body خام للـ Origin
-  // ======================================================
-
   app.removeAllContentTypeParsers()
   app.addContentTypeParser(
     '*',
@@ -102,173 +155,129 @@ export async function buildApp(): Promise<FastifyInstance> {
     },
   )
 
-  // ======================================================
-  // 1. Plugins
-  // ======================================================
-
   await app.register(cookie, {
     secret: config.clearance.secret,
     hook: 'onRequest',
   })
 
-  // ======================================================
-  // 2. Decorators
-  // ======================================================
+  app.decorateRequest('ctx', null as unknown as GatewayRuntimeContext)
 
-  app.decorateRequest('ctx', null as unknown as RequestContext)
+  app.addHook('onRequest', async (request, _reply) => {
+    const pathname = request.url.split('?')[0] ?? '/'
+    if (
+      pathname === '/internal' ||
+      pathname.startsWith('/internal/') ||
+      pathname === '/health' ||
+      pathname === '/ready' ||
+      pathname === '/debug/fingerprint'
+    ) {
+      return
+    }
 
-  // ======================================================
-  // 3. Hooks
-  // ======================================================
+    const host = (request.headers.host ?? '').split(':')[0]!.toLowerCase()
 
-  app.addHook(
-    'onRequest',
-    async (request: FastifyRequest, _reply: FastifyReply) => {
-      const pathname = request.url.split('?')[0] ?? '/'
-      if (
-        pathname === '/internal' ||
-        pathname.startsWith('/internal/') ||
-        pathname === '/health' ||
-        pathname === '/ready' ||
-        pathname === '/debug/fingerprint'
-      ) {
-        return
-      }
+    let signals: Signals = {
+      ip: extractRealIp(request),
+      ja4: null,
+      ja3: null,
+      deviceFingerprint: null,
+      path: pathname,
+      method: request.method,
+      orgId: 'unknown',
+      userAgent: (request.headers['user-agent'] as string) || null,
+      requestSize: Number(request.headers['content-length']) || 0,
+      timestamp: Date.now(),
+      hasClearance: false,
+      clearanceToken: null,
+      host,
+    }
 
-      const startTime = Date.now()
+    const fp = authenticateFromFastifyRequest(request)
+    signals = applyFingerprintsToSignals(signals, fp)
 
-      // إشارات أولية (IP / path / …) — البصمات تتعبى من الـ authenticator
-      let signals: Signals = {
-        ip: extractRealIp(request),
-        ja4: null,
-        ja3: null,
-        deviceFingerprint: null,
-        path: pathname,
-        method: request.method,
-        orgId: (request.headers['x-org-id'] as string) || 'default',
-        userAgent: (request.headers['user-agent'] as string) || null,
-        requestSize: Number(request.headers['content-length']) || 0,
-        timestamp: Date.now(),
-        hasClearance: false,
-        clearanceToken: null,
-        host: (request.headers.host ?? '').split(':')[0]!.toLowerCase(),
-      }
+    const clearanceCookie = request.cookies[config.clearance.cookieName]
+    if (clearanceCookie) {
+      signals.hasClearance = true
+      signals.clearanceToken = clearanceCookie
+    }
 
-      // ---- بصمات TLS + جهاز (آمن: يتجاهل التزوير من غير Edge) ----
-      const fp = authenticateFromFastifyRequest(request, {
-        // خليه false إلا لو عارف إن كل الترافيك من شبكة داخلية موثوقة
-        trustEdgeHeader: false,
-      })
-      signals = applyFingerprintsToSignals(signals, fp)
-
-      if (fp.notes.length > 0) {
-        request.log.debug(
-          { notes: fp.notes, trustedEdge: fp.tls.fromTrustedEdge },
-          'fingerprint-auth',
-        )
-      }
-
-      const clearanceCookie = request.cookies[config.clearance.cookieName]
-      if (clearanceCookie) {
-        signals.hasClearance = true
-        signals.clearanceToken = clearanceCookie
-      }
-
-      const ctx: RequestContext = {
-        id: request.id,
-        signals,
-        reputation: null,
-        riskResult: null,
-        decision: null,
-        startTime,
-      }
-
-      request.ctx = ctx
-    },
-  )
-
-  app.addHook('onResponse', async (request, reply) => {
-    const ctx = request.ctx as RequestContext | null
-    if (!ctx) return
-
-    const processingTime = Date.now() - ctx.startTime
-
-    if (config.logging.logAllRequests) {
-      request.log.info({
-        requestId: ctx.id,
-        ip: ctx.signals.ip,
-        path: ctx.signals.path,
-        ja4: ctx.signals.ja4,
-        deviceFingerprint: ctx.signals.deviceFingerprint,
-        statusCode: reply.statusCode,
-        processingTimeMs: processingTime,
-      })
+    request.ctx = {
+      id: request.id,
+      signals,
+      reputation: null,
+      riskResult: null,
+      decision: null,
+      startTime: Date.now(),
+      resolved: null,
+      server: null,
+      companyPolicy: null,
+      policyDecision: null,
+      routeDecision: null,
+      rateLimit: null,
+      jsChallenge: null,
+      policyUsedFallback: true,
+      backendReachable: false,
     }
   })
 
-  // ======================================================
-  // 4. Error Handler
-  // ======================================================
+  app.addHook('onResponse', async (request, reply) => {
+    const ctx = request.ctx as GatewayRuntimeContext | null
+    if (!ctx?.startTime || !config.logging.logAllRequests) return
+    request.log.info({
+      requestId: ctx.id,
+      host: ctx.signals.host,
+      orgId: ctx.signals.orgId,
+      path: ctx.signals.path,
+      risk: (ctx.riskResult as RiskResult | null)?.score,
+      route: ctx.routeDecision?.route,
+      action: ctx.policyDecision?.action,
+      rl: ctx.rateLimit?.level,
+      js: ctx.jsChallenge?.phase,
+      statusCode: reply.statusCode,
+      ms: Date.now() - ctx.startTime,
+    })
+  })
 
   app.setErrorHandler((error: unknown, request, reply) => {
-    const err = error as Error & {
-      validation?: boolean
-      statusCode?: number
-      message?: string
-    }
-
-    request.log.error({
-      err,
-      requestId: request.id,
-      url: request.url,
-    })
-
+    const err = error as Error & { validation?: boolean; statusCode?: number }
+    request.log.error({ err, requestId: request.id, url: request.url })
     if (err.validation) {
       return reply.status(400).send({
         success: false,
         error: 'Validation Error',
-        message: err.message || 'Validation failed',
+        message: err.message,
       })
     }
-
     const statusCode = err.statusCode || 500
     return reply.status(statusCode).send({
       success: false,
-      error: statusCode >= 500 ? 'Internal Server Error' : err.message || 'Error',
+      error: statusCode >= 500 ? 'Internal Server Error' : err.message,
       requestId: request.id,
     })
   })
 
-  // ======================================================
-  // 5. Health & Ready
-  // ======================================================
-
-  app.get('/health', async (_request, reply) => {
+  app.get('/health', async (_req, reply) => {
     try {
-      const redis = getRedis()
-      await redis.ping()
+      await getRedis().ping()
       return {
         status: 'ok',
         service: 'zero-plus-gateway',
-        timestamp: new Date().toISOString(),
-        uptime: process.uptime(),
         redis: 'connected',
+        uptime: process.uptime(),
       }
-    } catch (err) {
+    } catch (e) {
       reply.status(503)
       return {
         status: 'degraded',
-        service: 'zero-plus-gateway',
         redis: 'disconnected',
-        error: (err as Error).message,
+        error: (e as Error).message,
       }
     }
   })
 
-  app.get('/ready', async (_request, reply) => {
+  app.get('/ready', async (_req, reply) => {
     try {
-      const redis = getRedis()
-      await redis.ping()
+      await getRedis().ping()
       return { ready: true }
     } catch {
       reply.status(503)
@@ -276,174 +285,443 @@ export async function buildApp(): Promise<FastifyInstance> {
     }
   })
 
-  // ======================================================
-  // 5b. Debug fingerprint (تطوير فقط — احذفه أو احميه في الإنتاج)
-  // ======================================================
-
   if (config.server.isDev) {
     app.get('/debug/fingerprint', async (request, reply) => {
-      const fp = authenticateFromFastifyRequest(request, {
-        trustEdgeHeader: false,
-      })
       return reply.send({
         success: true,
-        data: fp,
-        tip: 'جرّب مع/من غير X-Edge-Server و X-JA4 — شوف notes',
+        data: authenticateFromFastifyRequest(request),
       })
     })
   }
-
-  // ======================================================
-  // 6. Internal Routes
-  // ======================================================
 
   await app.register(
     async (internal) => {
       internal.addHook('onRequest', async (request, reply) => {
         const key = request.headers['x-gateway-key'] as string | undefined
-
         if (!key) {
-          return reply.status(401).send({
-            success: false,
-            message: 'Missing X-Gateway-Key header',
-          })
+          return reply
+            .status(401)
+            .send({ success: false, message: 'Missing X-Gateway-Key' })
         }
-
         if (key !== config.backend.internalSecret) {
-          return reply.status(403).send({
-            success: false,
-            message: 'Invalid Gateway key',
-          })
+          return reply
+            .status(403)
+            .send({ success: false, message: 'Invalid Gateway key' })
         }
       })
 
-      internal.post<{
-        Body: {
-          url: string
-          orgId: string
-          serverId?: string
-          timeoutMs?: number
-        }
-      }>('/probe', async (request, reply) => {
+      internal.post('/probe', async (request, reply) => {
         const body = parseJsonBody<{
           url: string
           orgId: string
           serverId?: string
           timeoutMs?: number
         }>(request.body)
-
-        const { url, orgId, serverId, timeoutMs } =
-          body ?? ({} as Partial<NonNullable<typeof body>>)
-
-        if (!url || !orgId) {
+        if (!body?.url || !body?.orgId) {
           return reply.status(400).send({
             success: false,
-            code: 'VALIDATION_ERROR',
             message: 'url and orgId are required',
           })
         }
-
         try {
-          const result = await probeOrigin({
-            url,
-            orgId,
-            serverId,
-            timeoutMs,
-          })
-
-          return {
-            success: true,
-            data: result,
-          }
+          return { success: true, data: await probeOrigin(body) }
         } catch (err) {
-          request.log.error(err)
           return reply.status(500).send({
             success: false,
-            code: 'PROBE_FAILED',
             message: (err as Error).message,
           })
         }
       })
 
-      internal.get('/status', async () => {
-        return {
-          success: true,
-          data: {
-            service: 'zero-plus-gateway',
-            env: config.server.nodeEnv,
-            uptime: process.uptime(),
-            timestamp: new Date().toISOString(),
-          },
-        }
-      })
+      internal.get('/status', async () => ({
+        success: true,
+        data: {
+          service: 'zero-plus-gateway',
+          uptime: process.uptime(),
+        },
+      }))
     },
     { prefix: '/internal' },
   )
 
   // ======================================================
-  // 7. Main Visitor Route
-  // ======================================================
+  app.all('/*', async (request, reply) => {
+    const ctx = request.ctx as GatewayRuntimeContext
+    const host = ctx.signals.host
 
-  app.all('/*', async (request: FastifyRequest, reply: FastifyReply) => {
-    const ctx = request.ctx as RequestContext
-
-    // Pipeline لاحقًا: ban → clearance → rate → risk → policy …
-
-    const result = await forwardToOrigin(request, reply, ctx)
-
-    request.log.debug(
-      {
+    if (!host) {
+      return reply.status(400).send({
+        success: false,
+        error: 'Missing Host',
         requestId: ctx.id,
-        ja4: ctx.signals.ja4,
-        ja3: ctx.signals.ja3,
+      })
+    }
+
+    let companyPolicy: Partial<CompanyPolicy> | null = null
+    let backendPolicy: OrgPolicyFromBackend | null = null
+
+    try {
+      const resolved = await resolvePolicyByHost(host)
+      ctx.resolved = resolved
+      ctx.backendReachable = true
+      ctx.signals.orgId = resolved.organizationId
+      backendPolicy = resolved.policy
+
+      ctx.server = {
+        id: resolved.server.id,
+        domain: resolved.server.domain,
+        organizationId: resolved.organizationId,
+        originIp: resolved.server.originIp,
+        originPort: resolved.server.originPort,
+        sslEnabled: true,
+        status: resolved.server.status,
+        mode: resolved.server.mode,
+        dnsVerified: true,
+        gatewayReachable: true,
+        originReachable: true,
+        maxRequestsPerSecond: resolved.server.maxRequestsPerSecond,
+        updatedAt: new Date().toISOString(),
+      }
+
+      companyPolicy = mapBackendPolicyToCompany(resolved.policy)
+      ctx.companyPolicy = companyPolicy
+      ctx.policyUsedFallback = false
+
+      if (resolved.server.status === 'MAINTENANCE') {
+        return reply.status(503).send({
+          success: false,
+          error: 'Origin under maintenance',
+          requestId: ctx.id,
+        })
+      }
+    } catch (err) {
+      request.log.warn({ err, host }, 'resolvePolicyByHost failed')
+      return reply.status(502).send({
+        success: false,
+        error: 'Unable to resolve protected host',
+        host,
+        requestId: ctx.id,
+      })
+    }
+
+    const orgId = ctx.signals.orgId
+    const monitorOnly = ctx.server?.mode === 'MONITOR_ONLY'
+
+    // ----- رد POST على تحدي JS (قبل ban الثقيل أحيانًا بعد resolve) -----
+    if (isJsChallengeResponse(request)) {
+      const js = await handleJsChallenge(
+        request,
+        reply,
+        challengeCtx(ctx, backendPolicy),
+      )
+      ctx.jsChallenge = js
+      // TODO: analyzeTraffic(telemetryForAi(js.telemetry)) + event-logger
+      request.log.info(
+        {
+          phase: js.phase,
+          passed: js.passed,
+          suspicion: js.telemetry.localSuspicionScore,
+          hints: js.telemetry.suspicionHints,
+        },
+        'js challenge response',
+      )
+
+      if (js.passed) {
+        setClearanceCookie(reply, {
+          organizationId: orgId,
+          ip: ctx.signals.ip,
+          deviceFingerprint: ctx.signals.deviceFingerprint,
+          policy: backendPolicy,
+        })
+        return forwardToOrigin(request, reply, ctx).then(() => reply)
+      }
+
+      if (!monitorOnly && js.telemetry.localSuspicionScore >= 0.75) {
+        await applyBan({
+          organizationId: orgId,
+          ip: ctx.signals.ip,
+          deviceFingerprint: ctx.signals.deviceFingerprint,
+          banMinutes: companyPolicy?.temporaryBanMinutes ?? 120,
+          reason: 'js_challenge_failed',
+          source: 'gateway',
+        })
+      }
+
+      return reply.status(403).send({
+        success: false,
+        error: 'Challenge failed',
+        reasons: js.telemetry.failReasons,
+        requestId: ctx.id,
+      })
+    }
+
+    // ----- Ban -----
+    const ban = await checkBan({
+      organizationId: orgId,
+      ip: ctx.signals.ip,
+      deviceFingerprint: ctx.signals.deviceFingerprint,
+    })
+    if (ban.banned && !monitorOnly) {
+      return reply.status(403).send({
+        success: false,
+        error: 'Access Denied',
+        reason: 'banned',
+        matchedBy: ban.matchedBy,
+        requestId: ctx.id,
+      })
+    }
+
+    // ----- Clearance fast path -----
+    if (ctx.signals.hasClearance && ctx.signals.clearanceToken) {
+      const cleared = verifyClearanceFromRequest(request, {
+        organizationId: orgId,
+        ip: ctx.signals.ip,
         deviceFingerprint: ctx.signals.deviceFingerprint,
-        statusCode: result.statusCode,
-        originHealthy: result.originHealthy,
-        responseTimeMs: result.responseTimeMs,
-        error: result.error,
+        bindIp: false,
+        bindDevice: true,
+      })
+      if (cleared.valid) {
+        await forwardToOrigin(request, reply, ctx)
+        return reply
+      }
+      revokeClearance(reply)
+    }
+
+    // ----- Reputation -----
+    let priorHistory = false
+    let badIp = false
+    try {
+      const rep = await lookupReputation({
+        organizationId: orgId,
+        ipAddress: ctx.signals.ip,
+        deviceFingerprint: ctx.signals.deviceFingerprint ?? undefined,
+        ja3Fingerprint: ctx.signals.ja3 ?? undefined,
+        ja4Fingerprint: ctx.signals.ja4 ?? undefined,
+      })
+      if (rep.effective.isCurrentlyBanned && !monitorOnly) {
+        await applyBan({
+          organizationId: orgId,
+          ip: ctx.signals.ip,
+          deviceFingerprint: ctx.signals.deviceFingerprint,
+          permanent: rep.effective.banStatus === 'PERMANENT',
+          banMinutes: rep.effective.minutesLeftOnBan ?? 120,
+          reason: 'backend_reputation_ban',
+          source: 'backend_sync',
+        })
+        return reply.status(403).send({
+          success: false,
+          error: 'Access Denied',
+          reason: 'reputation_banned',
+          requestId: ctx.id,
+        })
+      }
+      priorHistory =
+        rep.effective.score >= 5 || rep.effective.failedChecksCount > 0
+      badIp =
+        rep.effective.isKnownBotnet ||
+        rep.effective.reputationRiskPoints >= 10
+      ctx.reputation = {
+        ip: ctx.signals.ip,
+        score: rep.effective.score,
+        bannedUntil: rep.effective.bannedUntil
+          ? Date.parse(rep.effective.bannedUntil)
+          : null,
+        isPermanent: rep.effective.banStatus === 'PERMANENT',
+        points: rep.effective.reputationRiskPoints,
+      }
+    } catch (err) {
+      request.log.debug({ err }, 'reputation lookup skipped')
+    }
+
+    // ----- Rate limit -----
+    const rl = await checkRateLimit({
+      organizationId: orgId,
+      ip: ctx.signals.ip,
+      deviceFingerprint: ctx.signals.deviceFingerprint,
+      policy: backendPolicy,
+    })
+    ctx.rateLimit = rl
+    applyRateLimitHeaders(reply, rl)
+
+    if (rl.shouldBanOnHard && !monitorOnly) {
+      await applyBan({
+        organizationId: orgId,
+        ip: ctx.signals.ip,
+        deviceFingerprint: ctx.signals.deviceFingerprint,
+        banMinutes: companyPolicy?.temporaryBanMinutes ?? 120,
+        reason: 'hard_rate_limit',
+        source: 'gateway',
+      })
+      return reply.status(403).send({
+        success: false,
+        error: 'Access Denied',
+        reason: 'hard_rate_limit',
+        requestId: ctx.id,
+      })
+    }
+    if (rl.hardExceeded && !monitorOnly) {
+      return reply.status(429).send({
+        success: false,
+        error: 'Too Many Requests',
+        reason: 'hard_rate_limit',
+        requestId: ctx.id,
+      })
+    }
+
+    // ----- AI (لاحقًا: ابعت edge + JS telemetry) -----
+    let aiAnomalyScore: number | null = null
+
+    const risk = calculateRisk({
+      badIp,
+      highRequestRate: rl.highRequestRate,
+      aiAnomalyScore,
+      suspiciousFingerprint: false,
+      priorHistory,
+    })
+    ctx.riskResult = risk as unknown as RequestContext['riskResult']
+
+    const routeDecision = routeSuspicion({
+      riskScore: risk.score,
+      isBlacklisted: ban.banned,
+      policy: companyPolicy,
+    })
+    ctx.routeDecision = routeDecision
+
+    const policyDecision = decidePolicy(
+      {
+        riskScore: risk.score,
+        failedChallenges: 0,
+        maxRequestsExceeded: rl.maxRequestsExceeded,
       },
-      'Forwarded to origin',
+      companyPolicy,
+    )
+    ctx.policyDecision = policyDecision
+
+    request.log.info(
+      {
+        host,
+        orgId,
+        risk: risk.score,
+        route: routeDecision.route,
+        policy: policyDecision.action,
+        rl: rl.level,
+        ja4: ctx.signals.ja4,
+      },
+      'pipeline decision',
     )
 
+    if (monitorOnly) {
+      await forwardToOrigin(request, reply, ctx)
+      return reply
+    }
+
+    if (
+      policyDecision.action === 'permanent_ban' ||
+      policyDecision.action === 'temporary_ban' ||
+      routeDecision.route === 'ban'
+    ) {
+      const banDecision = routeDecision.ban ?? policyDecision
+      await applyBanFromDecision({
+        organizationId: orgId,
+        ip: ctx.signals.ip,
+        deviceFingerprint: ctx.signals.deviceFingerprint,
+        decision: {
+          action: banDecision.action,
+          banMinutes: banDecision.banMinutes,
+          reason: routeDecision.reason || policyDecision.reason,
+        },
+      })
+      return reply.status(403).send({
+        success: false,
+        error: 'Access Denied',
+        reason: routeDecision.reason || policyDecision.reason,
+        requestId: ctx.id,
+      })
+    }
+
+    // ----- إصدار تحدي JS -----
+    const runSilentJs = async () => {
+      const js = await handleJsChallenge(
+        request,
+        reply,
+        challengeCtx(ctx, backendPolicy),
+      )
+      ctx.jsChallenge = js
+      // TODO: AI ← telemetryForAi(js.telemetry) + edge signals
+      if (js.responseSent) return reply
+      if (js.phase === 'disabled' || js.passed) {
+        setClearanceCookie(reply, {
+          organizationId: orgId,
+          ip: ctx.signals.ip,
+          deviceFingerprint: ctx.signals.deviceFingerprint,
+          policy: backendPolicy,
+        })
+        await forwardToOrigin(request, reply, ctx)
+        return reply
+      }
+      return reply.status(403).send({
+        success: false,
+        error: 'Challenge failed',
+        requestId: ctx.id,
+      })
+    }
+
+    switch (routeDecision.route) {
+      case 'advanced_fingerprint_check':
+        // TODO: advanced-fingerprint-challenge.ts
+        // مؤقتًا: نفس JS أقوى مسارًا (لسه مش البديل النهائي)
+        return runSilentJs()
+
+      case 'rate_limit_with_challenge':
+        if (rl.softExceeded || risk.score > 30) {
+          reply.header('Retry-After', String(rl.windows.softSec))
+          return runSilentJs()
+        }
+        break
+
+      case 'silent_js_challenge':
+        return runSilentJs()
+
+      default:
+        break
+    }
+
+    if (policyDecision.action === 'rate_limit') {
+      reply.header('Retry-After', '30')
+      return reply.status(429).send({
+        success: false,
+        error: 'Too Many Requests',
+        reason: policyDecision.reason,
+        requestId: ctx.id,
+      })
+    }
+
+    await forwardToOrigin(request, reply, ctx)
     return reply
   })
 
-  // ======================================================
-  // 8. Graceful Shutdown
-  // ======================================================
-
-  const shutdownSignals: NodeJS.Signals[] = ['SIGINT', 'SIGTERM']
-  shutdownSignals.forEach((signal) => {
-    process.once(signal, async () => {
-      app.log.info(`Received ${signal}, shutting down gracefully...`)
+  for (const sig of ['SIGINT', 'SIGTERM'] as const) {
+    process.once(sig, async () => {
       try {
         await app.close()
         await closeRedis()
-        app.log.info('Gateway shut down complete')
         process.exit(0)
-      } catch (err) {
-        app.log.error(err)
+      } catch {
         process.exit(1)
       }
     })
-  })
+  }
 
   return app
 }
 
-// ======================================================
-// Helpers
-// ======================================================
-
 function extractRealIp(request: FastifyRequest): string {
   const realIp = request.headers[config.security.realIpHeaderName] as string
   if (realIp) return realIp.split(',')[0]!.trim()
-
   const forwarded = request.headers[
     config.security.forwardedForHeaderName
   ] as string
   if (forwarded) return forwarded.split(',')[0]!.trim()
-
   return request.ip || '0.0.0.0'
 }
 
