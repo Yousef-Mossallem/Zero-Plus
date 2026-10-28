@@ -1,7 +1,7 @@
 // frontend/src/components/EventsTable.tsx
 // ==================================================================
 // Zero Plus - Events Table
-// جدول عرض الأحداث الأمنية (قابل لإعادة الاستخدام في Dashboard/LiveTraffic لاحقًا)
+// جدول عرض Security Events (قابل لإعادة الاستخدام في Dashboard/LiveTraffic Noحقًا)
 // - الترتيب بالضغط على عنوان العمود (بيستدعي onSort والصفحة هي اللي تبعت للباك)
 // - حالة تحميل (Skeleton) وحالة فاضي
 // - الضغط على الصف بيفتح التفاصيل
@@ -11,8 +11,15 @@ import { ArrowDown, ArrowUp, ArrowUpDown, ChevronRight, ShieldQuestion } from 'l
 
 import RiskGauge from './RiskGauge'
 import { Badge, DecisionBadge, EmptyState, Skeleton } from './ui/kit'
-import { cn, formatDateTime, timeAgo, truncate } from '../utils/format'
+import { cn, formatDateTime, timeAgo } from '../utils/format'
 import type { EventSortBy, SecurityEvent } from '../services/eventsService'
+
+function truncate(value: string | null | undefined, max = 40): string {
+  if (!value) return '—'
+  const s = String(value)
+  if (s.length <= max) return s
+  return s.slice(0, Math.max(0, max - 1)) + '…'
+}
 
 interface EventsTableProps {
   events: SecurityEvent[]

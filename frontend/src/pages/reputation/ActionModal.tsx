@@ -167,7 +167,7 @@ export function ActionModal({
         </>
       )}
 
-      {/* ---------------- Reason (كل الأنواع) ---------------- */}
+      {/* ---------------- Reason (All types) ---------------- */}
       <Field
         label={kind === 'ban' ? 'Reason' : 'Reason (optional)'}
         error={errors.reason}

@@ -1,44 +1,7 @@
-// frontend/src/pages/policies/blocks.tsx — Section و ToggleRow
+// frontend/src/pages/policies/blocks.tsx
+import { Toggle } from '../../components/ui/kit'
+export { Section } from '../../components/ui/Section'
 
-import { type ReactNode } from 'react'
-import { Gauge } from 'lucide-react'
-import { Card, Toggle } from '../../components/ui/kit'
-
-
-// ==================================================================
-// Small building blocks
-// ==================================================================
-
-export function Section({
-  icon: Icon,
-  title,
-  description,
-  delay,
-  children,
-}: {
-  icon: typeof Gauge
-  title: string
-  description: string
-  delay: number
-  children: ReactNode
-}) {
-  return (
-    <Card delay={delay} className="p-6">
-      <div className="mb-5 flex items-start gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-cyan-500/10 text-cyan-400">
-          <Icon className="h-5 w-5" />
-        </div>
-        <div>
-          <h2 className="text-base font-semibold text-white">{title}</h2>
-          <p className="text-sm text-slate-500">{description}</p>
-        </div>
-      </div>
-      <div className="space-y-5">{children}</div>
-    </Card>
-  )
-}
-
-/** صف إعداد Boolean: عنوان + شرح + Toggle */
 export function ToggleRow({
   label,
   hint,

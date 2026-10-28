@@ -7,6 +7,7 @@
 // متوافق مع:
 //   - Zustand persist تحت المفتاح: zero-plus-auth
 //   - auth.service (مفتاح zp_token كـ fallback)
+//   - كود قديم بيحفظ التوكن في: accessToken
 //   - WebAuthn routes: /auth/register/* و /auth/login/*
 //
 // مهم:
@@ -20,10 +21,11 @@ import axios, { type InternalAxiosRequestConfig } from 'axios'
 // Environment
 // ------------------------------------------------------------------
 
-const API_URL = import.meta.env.VITE_API_URL
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000'
 
-if (!API_URL) {
-  throw new Error('❌ VITE_API_URL is missing in environment variables')
+if (!import.meta.env.VITE_API_URL) {
+  // تحذير فقط في وضع التطوير — fallback شغال
+  console.warn('⚠️ VITE_API_URL is missing, falling back to http://localhost:3000')
 }
 
 // ------------------------------------------------------------------
@@ -38,6 +40,9 @@ const AUTH_STORAGE_KEY = 'zero-plus-auth'
  * (saveToken / saveAuthSession)
  */
 const LEGACY_TOKEN_KEY = 'zp_token'
+
+/** مفتاح احتياطي لكود قديم بيستخدم accessToken */
+const ACCESS_TOKEN_KEY = 'accessToken'
 
 // ------------------------------------------------------------------
 // Session expired event
@@ -56,8 +61,10 @@ export const SESSION_EXPIRED_EVENT = 'zp:session-expired'
 /**
  * 1) من Zustand persist: { state: { token, user, organization } }
  * 2) fallback: zp_token
+ * 3) fallback: accessToken
  */
 function getStoredToken(): string | null {
+  // 1) Zustand persist
   try {
     const raw = localStorage.getItem(AUTH_STORAGE_KEY)
 
@@ -75,30 +82,41 @@ function getStoredToken(): string | null {
     // JSON تالف — نكمل على الـ fallback
   }
 
+  // 2) zp_token
   try {
-    return localStorage.getItem(LEGACY_TOKEN_KEY)
+    const legacy = localStorage.getItem(LEGACY_TOKEN_KEY)
+    if (legacy) return legacy
+  } catch {
+    // ignore
+  }
+
+  // 3) accessToken
+  try {
+    return localStorage.getItem(ACCESS_TOKEN_KEY)
   } catch {
     return null
   }
 }
 
 // ------------------------------------------------------------------
-// Clear auth storage (الاتنين عشان متفضلش بقايا)
+// Clear auth storage (كل المفاتيح عشان متفضلش بقايا)
 // ------------------------------------------------------------------
 
 function clearStoredAuth(): void {
-  try {
-    localStorage.removeItem(AUTH_STORAGE_KEY)
-  } catch {
-    // ignore
-  }
+  const keys = [
+    AUTH_STORAGE_KEY,
+    LEGACY_TOKEN_KEY,
+    ACCESS_TOKEN_KEY,
+    'zp_user',
+    'zp_organization',
+  ]
 
-  try {
-    localStorage.removeItem(LEGACY_TOKEN_KEY)
-    localStorage.removeItem('zp_user')
-    localStorage.removeItem('zp_organization')
-  } catch {
-    // ignore
+  for (const key of keys) {
+    try {
+      localStorage.removeItem(key)
+    } catch {
+      // ignore
+    }
   }
 }
 
@@ -137,6 +155,8 @@ export const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  // للسماح بإرسال الـ Cookies إذا لزم الأمر
+  withCredentials: true,
   // WebAuthn finish ممكن ياخد لحظة على أجهزة بطيئة
   timeout: 20000,
 })

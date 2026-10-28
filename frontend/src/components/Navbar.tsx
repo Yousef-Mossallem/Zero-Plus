@@ -9,7 +9,6 @@ import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard,
   Activity,
-  FlaskConical,
   ShieldAlert,
   FileText,
   Fingerprint,
@@ -26,7 +25,7 @@ import {
   X,
 } from 'lucide-react'
 
-// import Logo from './Logo'
+import Logo from './logo'
 import {
   useAuthStore,
   selectCurrentUser,
@@ -62,7 +61,7 @@ const NAV_GROUPS: NavGroup[] = [
       { label: 'Security Events', path: '/security-events', icon: ShieldAlert },
       { label: 'Reputation', path: '/reputation', icon: Fingerprint },
       { label: 'Threat Intel', path: '/threat-intelligence', icon: Radar },
-      { label: 'Simulation Lab', path: '/simulation', icon: FlaskConical },
+      // Simulation temporarily disabled
     ],
   },
   {
@@ -117,7 +116,7 @@ export default function Navbar() {
           ${collapsed ? 'justify-center px-2' : 'gap-3 px-5'}
         `}
       >
-        {/* <Logo className="h-8 w-8 shrink-0" /> */}
+        <Logo className="h-8 w-8 shrink-0" />
         {!collapsed && (
           <div className="min-w-0">
             <p className="truncate text-sm font-bold tracking-tight text-white">
@@ -131,7 +130,7 @@ export default function Navbar() {
       </div>
 
       {/* Groups */}
-      <nav className="flex-1 overflow-y-auto px-3 py-4 scrollbar-thin">
+      <nav className="flex-1 overflow-y-auto px-3 py-4 zp-scrollbar-thin">
         <div className="space-y-6">
           {NAV_GROUPS.map((group) => (
             <div key={group.title}>
@@ -150,31 +149,17 @@ export default function Navbar() {
                         onClick={onNavigate}
                         title={collapsed ? item.label : undefined}
                         className={({ isActive }) =>
-                          `
-                          group relative flex items-center gap-3 rounded-xl px-3 py-2.5
-                          text-sm font-medium transition-all duration-200
-                          ${
+                          [
+                            'group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200',
                             isActive
-                              ? 'bg-cyan-500/10 text-cyan-300 shadow-[inset_0_0_0_1px_rgba(34,211,238,0.2)]'
-                              : 'text-slate-400 hover:bg-white/4 hover:text-slate-200'
-                          }
-                          ${collapsed ? 'justify-center' : ''}
-                        `
+                              ? 'zp-nav-active text-cyan-300'
+                              : 'text-slate-400 hover:bg-white/4 hover:text-slate-200',
+                            collapsed ? 'justify-center' : '',
+                          ].join(' ')
                         }
                       >
-                        {({ isActive }) => (
-                          <>
-                            {isActive && (
-                              <span className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-cyan-400" />
-                            )}
-                            <Icon
-                              className={`h-4.5 w-4.5 shrink-0 ${
-                                isActive ? 'text-cyan-400' : 'text-slate-500 group-hover:text-slate-300'
-                              }`}
-                            />
-                            {!collapsed && <span className="truncate">{item.label}</span>}
-                          </>
-                        )}
+                        <Icon className="h-4.5 w-4.5 shrink-0 text-slate-500 group-hover:text-slate-300 group-[.active]:text-cyan-400" />
+                        {!collapsed && <span className="truncate">{item.label}</span>}
                       </NavLink>
                     </li>
                   )
@@ -229,7 +214,7 @@ export default function Navbar() {
       {/* ============================================================ */}
       <aside
         className={`
-          fixed left-0 top-0 z-40 hidden h-screen
+          fixed left-0 top-0 z-50 hidden h-screen
           border-r border-white/6 bg-[#070b14]/95 backdrop-blur-xl
           transition-all duration-300 ease-out
           lg:flex lg:flex-col
@@ -243,15 +228,20 @@ export default function Navbar() {
           type="button"
           onClick={() => setCollapsed((v) => !v)}
           className="
-            absolute -right-3 top-20 z-50 flex h-6 w-6 items-center justify-center
-            rounded-full border border-white/10 bg-[#0c1220] text-slate-400
-            shadow-lg transition hover:border-cyan-500/30 hover:text-cyan-300
+            group absolute -right-3.5 top-20 z-50 flex h-7 w-7 items-center justify-center
+            rounded-full border border-cyan-400/25 bg-[#0a1220]/95 text-cyan-300/80
+            shadow-[0_0_16px_rgba(34,211,238,0.2)] backdrop-blur-md
+            transition-all duration-300
+            hover:border-cyan-300/50 hover:text-cyan-200 hover:shadow-[0_0_24px_rgba(34,211,238,0.4)]
+            hover:scale-105
           "
+          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
+          <span className="absolute inset-0 rounded-full bg-gradient-to-br from-cyan-400/10 to-transparent opacity-0 transition group-hover:opacity-100" />
           {collapsed ? (
-            <ChevronRight className="h-3.5 w-3.5" />
+            <ChevronRight className="relative h-3.5 w-3.5" />
           ) : (
-            <ChevronLeft className="h-3.5 w-3.5" />
+            <ChevronLeft className="relative h-3.5 w-3.5" />
           )}
         </button>
       </aside>
@@ -264,7 +254,7 @@ export default function Navbar() {
       {/* ============================================================ */}
       <div className="fixed left-0 right-0 top-0 z-40 flex h-14 items-center justify-between border-b border-white/6 bg-[#070b14]/95 px-4 backdrop-blur-xl lg:hidden">
         <div className="flex items-center gap-2.5">
-          {/* <Logo className="h-7 w-7" /> */}
+          <Logo className="h-7 w-7" />
           <span className="text-sm font-bold text-white">
             Zero<span className="text-cyan-400">Plus</span>
           </span>
@@ -289,7 +279,7 @@ export default function Navbar() {
           <aside className="absolute left-0 top-0 flex h-full w-70 flex-col border-r border-white/6 bg-[#070b14] shadow-2xl">
             <div className="flex h-14 items-center justify-between border-b border-white/6 px-4">
               <div className="flex items-center gap-2.5">
-                {/* <Logo className="h-7 w-7" /> */}
+                <Logo className="h-7 w-7" />
                 <span className="text-sm font-bold text-white">
                   Zero<span className="text-cyan-400">Plus</span>
                 </span>

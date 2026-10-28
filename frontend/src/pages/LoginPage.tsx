@@ -7,9 +7,9 @@
 // التدفق:
 //   1) المستخدم يكتب الإيميل
 //   2) login({ email }) → login/start → نافذة البصمة → login/finish
-//   3) نجاح → /dashboard
+//   3) Success → /dashboard
 //
-// ملاحظة: مفيش باسورد في الدخول الأساسي.
+// مNoحظة: مفيش باسورد في الدخول الأساسي.
 // ==================================================================
 
 import { useState, useEffect, type FormEvent } from 'react'
@@ -41,7 +41,7 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 /**
  * هل المتصفح يدعم WebAuthn؟
- * لو لأ، مش هنقدر نعمل login أصلًا.
+ * لو لأ، مش هنقدر Yesل login أصلًا.
  */
 function isPasskeySupported(): boolean {
   return (
@@ -86,7 +86,7 @@ export default function LoginPage() {
     }
   }, [isAuthenticated, navigate])
 
-  // مسح الخطأ العام عند الخروج من الصفحة
+  // Clear الError العام عند الخروج من الصفحة
   useEffect(() => {
     return () => clearError()
   }, [clearError])
@@ -113,7 +113,7 @@ export default function LoginPage() {
   const handleEmailChange = (value: string) => {
     setEmail(value)
 
-    // لو كان فيه خطأ تحقق، نمسحه أول ما المستخدم يبدأ يكتب
+    // لو كان فيه Error تحقق، نClearه أول ما المستخدم يبدأ يكتب
     if (emailError) setEmailError(undefined)
     if (error) clearError()
   }

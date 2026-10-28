@@ -1,7 +1,7 @@
 // frontend/src/pages/SecurityEventsPage.tsx
 // ==================================================================
 // Zero Plus - Security Events Page
-// سجل كل حدث أمني وتفاصيله (مربوط بـ backend/modules/events)
+// سجل كل حدث Security وتفاصيله (مربوط بـ backend/modules/events)
 // ==================================================================
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -10,16 +10,17 @@ import { Activity, Ban, Gauge, Radio, RefreshCw, Search, ShieldAlert, ShieldChec
 import EventsTable from '../components/EventsTable'
 import { useToast } from '../components/ui/Toast'
 import { Badge, Button, Card, ErrorState, Field, PageHeader, PageShell, PaginationBar, SelectInput, StatCard, TextInput, Toggle } from '../components/ui/kit'
+import { Section } from '../components/ui/Section'
 import { useDebounce } from '../hooks/useDebounce'
 import { parseApiError } from '../services/apiError'
 import { getEvents, type EventSortBy, type EventsQuery, type HttpMethod, type SecurityEvent } from '../services/eventsService'
 import { listServers, type Server } from '../services/serversService'
 import type { Decision, IpType } from '../services/types'
-import { formatNumber, localInputToIso } from '../utils/format'
+import { formatNumber } from '../utils/format'
 import { EventDrawer } from './events/EventDrawer'
 
 // ==================================================================
-// المتغيرات والأنواع الناقصة (كانت مفقودة وتم إضافتها هنا)
+// المتغيرات والأنواع
 // ==================================================================
 
 const AUTO_REFRESH_MS = 10_000
@@ -62,6 +63,12 @@ function parseRisk(value: string): number | undefined {
   if (!value.trim()) return undefined
   const num = Number(value)
   return isNaN(num) || num < 0 || num > 100 ? undefined : num
+}
+
+function localInputToIso(value: string): string | undefined {
+  if (!value.trim()) return undefined
+  const date = new Date(value)
+  return isNaN(date.getTime()) ? undefined : date.toISOString()
 }
 
 // ==================================================================
@@ -174,8 +181,7 @@ export default function SecurityEventsPage() {
         if (id === requestId.current) setLoading(false)
       }
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [query, toast],
+    [query, toast, events.length],
   )
 
   useEffect(() => {
@@ -254,7 +260,7 @@ export default function SecurityEventsPage() {
         subtitle="Every request the Gateway inspected, with the decision and the reasons behind it."
         actions={
           <>
-            <label className="flex items-center gap-2.5 rounded-xl border border-white/10 bg-white/3 px-3.5 py-2 text-sm text-slate-300">
+            <label className="flex items-center gap-2.5 rounded-xl border border-white/10 bg-white/5 px-3.5 py-2 text-sm text-slate-300">
               <Radio className={`h-4 w-4 ${live ? 'text-emerald-400' : 'text-slate-500'}`} />
               Live
               <Toggle checked={live} onChange={setLive} label="Auto refresh every 10 seconds" />
@@ -288,7 +294,7 @@ export default function SecurityEventsPage() {
         />
         <StatCard
           label="Blocked"
-          value={formatNumber(counts.block)}
+          value={counts.block !== null ? formatNumber(counts.block) : undefined}
           icon={Ban}
           tone="rose"
           loading={counts.block === null}
@@ -296,7 +302,7 @@ export default function SecurityEventsPage() {
         />
         <StatCard
           label="Challenged"
-          value={formatNumber(counts.challenge)}
+          value={counts.challenge !== null ? formatNumber(counts.challenge) : undefined}
           icon={ShieldCheck}
           tone="indigo"
           loading={counts.challenge === null}
@@ -362,7 +368,7 @@ export default function SecurityEventsPage() {
 
         {/* فلاتر متقدمة */}
         {showAdvanced && (
-          <div className="zp-anim-fade-in mt-5 grid grid-cols-1 gap-4 border-t border-white/6 pt-5 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="zp-anim-fade-in mt-5 grid grid-cols-1 gap-4 border-t border-white/10 pt-5 sm:grid-cols-2 lg:grid-cols-4">
             <Field label="Method">
               <SelectInput value={filters.method} onChange={(e) => updateFilter('method', e.target.value)}>
                 <option value="">Any</option>
@@ -428,6 +434,7 @@ export default function SecurityEventsPage() {
                 onChange={(e) => updateFilter('startDate', e.target.value)}
               />
             </Field>
+
             <Field label="To">
               <TextInput
                 type="datetime-local"

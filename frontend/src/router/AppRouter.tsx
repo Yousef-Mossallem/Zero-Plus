@@ -34,16 +34,16 @@ import OrganizationsPage from '../pages/OrganizationsPage'
 import PoliciesPage from '../pages/PoliciesPage'
 
 // ------------------------------------------------------------------
-// Secondary Pages (لسه مش جاهزة – هتتفعل لما تتعمل)
+// Secondary Pages (جاهزة الآن – Simulation مستبعدة مؤقتًا)
 // ------------------------------------------------------------------
 
-// import DashboardPage from '../pages/DashboardPage'
-// import SimulationPage from '../pages/SimulationPage'
-// import LiveTrafficPage from '../pages/LiveTrafficPage'
-// import ReportsPage from '../pages/ReportsPage'
-// import ThreatIntelligencePage from '../pages/ThreatIntelligencePage'
-// import NotificationsPage from '../pages/NotificationsPage'
-// import ProfilePage from '../pages/ProfilePage'
+import DashboardPage from '../pages/DashboardPage'
+import LiveTrafficPage from '../pages/LiveTrafficPage'
+import ReportsPage from '../pages/ReportsPage'
+import ThreatIntelligencePage from '../pages/ThreatIntelligencePage'
+import NotificationsPage from '../pages/NotificationsPage'
+import ProfilePage from '../pages/ProfilePage'
+// import SimulationPage from '../pages/SimulationPage' // مستبعدة مؤقتًا
 
 // ------------------------------------------------------------------
 // Protected Route Wrapper
@@ -63,7 +63,7 @@ export default function AppRouter() {
       ============================================================ */}
 
       {/* الصفحة الأولى – اللاندينج */}
-      <Route path="/" element={<LandingPage />} />
+      <Route path="/" element={<Navigate to="/dashboard" replace />} />  {/* TEMP: skip landing/login */}
       <Route path="/about" element={<AboutPage />} />
       <Route path="/contact" element={<ContactPage />} />
       {/* /legal عشان /policies محجوزة لسياسات الـ Dashboard */}
@@ -122,24 +122,12 @@ export default function AppRouter() {
         }
       />
 
-      {/* أي محاولة للدخول على /dashboard تتحوّل لصفحة السيرفرات */}
-      <Route path="/dashboard" element={<Navigate to="/servers" replace />} />
-
-      {/* الصفحات اللي لسه مش جاهزة – هتتفعل لما تتعمل */}
-      {/*
+      {/* الصفحات الرئيسية الجاهزة */}
       <Route
         path="/dashboard"
         element={
           <ProtectedRoute>
             <DashboardPage />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/simulation"
-        element={
-          <ProtectedRoute>
-            <SimulationPage />
           </ProtectedRoute>
         }
       />
@@ -183,7 +171,7 @@ export default function AppRouter() {
           </ProtectedRoute>
         }
       />
-      */}
+      {/* Simulation مستبعدة مؤقتًا حسب الطلب */}
 
       {/* ============================================================
           Default Redirect
@@ -191,7 +179,7 @@ export default function AppRouter() {
           (ProtectedRoute بيرجّع غير المسجّل لـ /login لوحده)
       ============================================================ */}
 
-      <Route path="*" element={<Navigate to="/servers" replace />} />
+      <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>
   )
 }

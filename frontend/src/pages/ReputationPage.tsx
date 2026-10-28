@@ -7,8 +7,8 @@
 //   الإجراءات (OWNER / ADMIN / ANALYST فقط):
 //       POST /:id/ban • /:id/unban • /:id/allowlist • /:id/reset
 //
-// ملاحظات:
-//   - الـ VIEWER بيشوف كل حاجة لكن أزرار الإجراءات مخفية (الباك أصلاً هيرفض بـ 403)
+// مNoحظات:
+//   - الـ VIEWER بيشوف كل حاجة لكن أزرار الإجراءات مخفية (الباك أصNoً هيرفض بـ 403)
 //   - بعد أي إجراء بنحدّث الصف من رد الباك مباشرة (من غير إعادة تحميل الجدول)
 //   - الدرجة من 1 لـ 10 (scoreBand: CLEAN → CRITICAL) وده تصنيف الباك مش حسابنا
 // ==================================================================
@@ -130,7 +130,7 @@ export default function ReputationPage() {
     resetPage()
   }
 
-  /** تحديث الصف في الجدول والـ Drawer من رد الباك (من غير request إضافي) */
+  /** Refresh الصف في الجدول والـ Drawer من رد الباك (من غير request إضافي) */
   const applyEntry = (updated: ReputationEntry) => {
     setEntries((prev) => prev.map((e) => (e.id === updated.id ? updated : e)))
     setSelected((prev) => (prev && prev.id === updated.id ? updated : prev))
@@ -142,7 +142,7 @@ export default function ReputationPage() {
     try {
       const res = await fn()
       applyEntry(res.entry)
-      // changed === false → الحالة المطلوبة كانت موجودة، فنعرضها كمعلومة مش نجاح
+      // changed === false → الحالة المطلوبة كانت موجودة، فنعرضها كInfo مش Success
       if (res.changed === false) toast.info(res.message)
       else toast.success(res.message)
       void loadStats()
