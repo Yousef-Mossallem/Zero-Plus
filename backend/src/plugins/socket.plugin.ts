@@ -30,6 +30,8 @@ export const SocketEvents = {
   TRAFFIC_UPDATE: 'traffic:update',
   SERVER_STATUS: 'server:status',
   REPUTATION_UPDATE: 'reputation:update',
+  /** تقارير Gemini: created / GENERATING / READY / FAILED / deleted */
+  REPORT_STATUS: 'report:status',
   // client → server (optional light commands)
   PING: 'ping',
   SUBSCRIBE_TRAFFIC: 'subscribe:traffic',
@@ -199,7 +201,7 @@ const socketPlugin: FastifyPluginAsync = async (fastify: FastifyInstance) => {
   })
 
   // ------------------------------------------------------------------
-  // Decorators for other modules (notifications, events, servers, …)
+  // Decorators for other modules (notifications, events, servers, reports, …)
   // ------------------------------------------------------------------
 
   fastify.decorate('io', io)

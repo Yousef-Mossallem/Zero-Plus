@@ -4,6 +4,8 @@
 // السيرفر يخزّن Public Key فقط — Private Key ما بيسيبش جهاز المستخدم
 // Prisma 6.x / 7.x compatible
 // Collective Immunity: معلّق مؤقتًا
+// Origin Probe: حقول السعة + تاريخ القياسات (ServerProbeRun)
+// Reports: نوع التقرير + ربط بسيرفر + بيانات استهلاك Gemini
 // ==================================================================
 
 generator client {
@@ -81,6 +83,7 @@ enum NotificationType {
   SERVER_CAPACITY_WARNING
   SERVER_RECOVERY
   POLICY_CHANGED
+  REPORT_READY
   SYSTEM
 }
 
@@ -89,6 +92,12 @@ enum ReportStatus {
   GENERATING
   READY
   FAILED
+}
+
+enum ReportType {
+  PERIODIC
+  INCIDENT
+  ON_DEMAND
 }
 
 enum ChallengeType {
@@ -138,7 +147,6 @@ model Organization {
   slug        String   @unique
   plan        String   @default("free")
   isActive    Boolean  @default(true)
-
   // نقطة بداية موديل الـ AI
   sizeProfile String   @default("medium") // small | medium | large
 
@@ -160,17 +168,14 @@ model Organization {
 
 model User {
   id             String    @id @default(uuid())
-
   // للإظهار والتواصل — مش وسيلة الدخول
   email          String    @unique
   fullName       String
   role           UserRole  @default(OWNER)
   isActive       Boolean   @default(true)
   lastLoginAt    DateTime?
-
   // احتياطي اختياري فقط (مش للدخول الأساسي)
   passwordHash   String?
-
   uiPreferences  Json?
 
   organizationId String
@@ -194,25 +199,18 @@ model User {
 
 model PasskeyCredential {
   id            String    @id @default(uuid())
-
   // معرّف الـ credential من WebAuthn (unique عالميًا)
   credentialId  String    @unique
-
   // المفتاح العام فقط (Bytes) — عديم الفائدة بدون الـ private key
   publicKey     Bytes
-
   // لحماية من replay (WebAuthn signature counter)
   counter       Int       @default(0)
-
   // usb / nfc / ble / internal (platform authenticator = بصمة/وجه)
   transports    String[]
-
   // اسم للعرض: "iPhone Face ID" / "Windows Hello" / "Android Fingerprint"
   deviceName    String?
-
   // AAGUID للـ authenticator (اختياري)
   aaguid        String?
-
   lastUsedAt    DateTime?
   isRevoked     Boolean   @default(false)
 
@@ -238,7 +236,16 @@ model Server {
   status               ServerStatus @default(PENDING)
   mode                 ServerMode   @default(PROTECT)
 
-  maxRequestsPerSecond Int?
+  // ----- سعة من Origin Probe -----
+  maxRequestsPerSecond  Int? // median / sustained RPS من آخر قياس ناجح
+  safeRequestsPerSecond Int? // رقم التسعير الآمن (مثلاً 80% من max)
+  p95ResponseTimeMs     Int? // latency وقت الهدوء
+  loadLatencyP99Ms      Int? // p99 تحت الحمل
+  probeErrorRate        Float?
+  probeConfidence       String? // high | medium | low
+  probeRecommendation   String? // excellent | good | fair | poor | down
+  lastProbeAt           DateTime?
+
   cpuCores             Int?
   ramMb                Int?
   avgResponseTimeMs    Int?
@@ -258,12 +265,38 @@ model Server {
   securityEvents SecurityEvent[]
   simulationRuns SimulationRun[]
   challengeLogs  ChallengeLog[]
+  probeRuns      ServerProbeRun[]
+  reports        Report[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([organizationId])
   @@index([status])
+  @@index([lastProbeAt])
+}
+
+// ==================================================================
+// ORIGIN PROBE HISTORY
+// كل تشغيل لـ /internal/probe يتسجل هنا (steps + runs في details)
+// ==================================================================
+
+model ServerProbeRun {
+  id             String   @id @default(uuid())
+  maxRps         Int?
+  safeRps        Int?
+  p95Ms          Int?
+  p99LoadMs      Int?
+  errorRate      Float?
+  confidence     String? // high | medium | low
+  recommendation String? // excellent | good | fair | poor | down
+  details        Json? // { steps, runs, saturated, redirected, ... }
+  createdAt      DateTime @default(now())
+
+  serverId String
+  server   Server @relation(fields: [serverId], references: [id], onDelete: Cascade)
+
+  @@index([serverId, createdAt])
 }
 
 // ==================================================================
@@ -273,17 +306,14 @@ model Server {
 
 model ReputationEntry {
   id                  String    @id @default(uuid())
-
   ipAddress           String
-  deviceFingerprint   String?   // بصمة متصفح الزائر (مش Passkey)
+  deviceFingerprint   String? // بصمة متصفح الزائر (مش Passkey)
   ja3Fingerprint      String?
   ja4Fingerprint      String?
-
   countryCode         String?
   asn                 Int?
   asOrg               String?
   ipType              IpType    @default(UNKNOWN)
-
   score               Int       @default(1)
   banStatus           BanStatus @default(NONE)
   bannedUntil         DateTime?
@@ -291,7 +321,6 @@ model ReputationEntry {
   banReason           String?
   isManualBan         Boolean   @default(false)
   isAllowlisted       Boolean   @default(false)
-
   failedChecksCount   Int       @default(0)
   jsFailCount         Int       @default(0)
   advancedFailCount   Int       @default(0)
@@ -299,7 +328,6 @@ model ReputationEntry {
   successfulChecks    Int       @default(0)
   totalRequests       Int       @default(0)
   lastFailedAt        DateTime?
-
   lastPath            String?
   lastUserAgent       String?
   avgRequestRate      Float?
@@ -332,15 +360,13 @@ model ReputationEntry {
 // ==================================================================
 
 model SecurityEvent {
-  id               String   @id @default(uuid())
-
+  id               String          @id @default(uuid())
   ipAddress        String
   path             String
   method           String
   userAgent        String?
   referer          String?
   requestId        String?
-
   riskScore        Int
   anomalyScore     Float?
   confidence       Float?
@@ -349,24 +375,22 @@ model SecurityEvent {
   reasonSummary    String?
   reasonDetails    Json?
   processingTimeMs Int?
-
-  surgeDetected    Boolean  @default(false)
-  pathSensitive    Boolean  @default(false)
+  surgeDetected    Boolean         @default(false)
+  pathSensitive    Boolean         @default(false)
   recommendation   String?
-
   countryCode      String?
   asn              Int?
   ipType           IpType?
-  isChallenged     Boolean  @default(false)
+  isChallenged     Boolean         @default(false)
   challengeType    ChallengeType?
   challengePassed  Boolean?
 
-  serverId           String
-  server             Server @relation(fields: [serverId], references: [id], onDelete: Cascade)
-  organizationId     String
-  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  reputationEntryId  String?
-  reputationEntry    ReputationEntry? @relation(fields: [reputationEntryId], references: [id])
+  serverId          String
+  server            Server           @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  organizationId    String
+  organization      Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  reputationEntryId String?
+  reputationEntry   ReputationEntry? @relation(fields: [reputationEntryId], references: [id])
 
   reports Report[]
 
@@ -397,11 +421,11 @@ model ChallengeLog {
   reputationEntryId String
   reputationEntry   ReputationEntry @relation(fields: [reputationEntryId], references: [id], onDelete: Cascade)
   serverId          String?
-  server            Server?       @relation(fields: [serverId], references: [id], onDelete: SetNull)
+  server            Server?         @relation(fields: [serverId], references: [id], onDelete: SetNull)
   organizationId    String
-  organization      Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization      Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
-  createdAt         DateTime      @default(now())
+  createdAt DateTime @default(now())
 
   @@index([reputationEntryId])
   @@index([organizationId])
@@ -414,32 +438,26 @@ model ChallengeLog {
 // ==================================================================
 
 model Policy {
-  id                    String  @id @default(uuid())
-
-  allowMaxScore         Int     @default(30)
-  rateLimitMaxScore     Int     @default(60)
-  challengeMaxScore     Int     @default(80)
-
-  enableJsChallenge     Boolean @default(true)
-  challengeAllVisitors  Boolean @default(true)
-  passTokenTtlMinutes   Int     @default(60)
-
-  rateLimitRequests     Int     @default(30)
-  rateLimitWindowSec    Int     @default(60)
-
-  maxRequestsPerIp      Int     @default(300)
-  maxRequestsWindowSec  Int     @default(60)
-  banOnMaxRequests      Boolean @default(true)
-  maxServerRps          Int?
-  capacityWarnPercent   Int     @default(80)
-
-  autoBanAfterFails     Int     @default(2)
-  temporaryBanMinutes   Int     @default(120)
-  advancedBanMinutes    Int     @default(1440)
-  permanentBanScore     Int     @default(9)
-
-  enableAiAnomaly       Boolean @default(true)
-  enableSurgeDetection  Boolean @default(true)
+  id                   String  @id @default(uuid())
+  allowMaxScore        Int     @default(30)
+  rateLimitMaxScore    Int     @default(60)
+  challengeMaxScore    Int     @default(80)
+  enableJsChallenge    Boolean @default(true)
+  challengeAllVisitors Boolean @default(true)
+  passTokenTtlMinutes  Int     @default(60)
+  rateLimitRequests    Int     @default(30)
+  rateLimitWindowSec   Int     @default(60)
+  maxRequestsPerIp     Int     @default(300)
+  maxRequestsWindowSec Int     @default(60)
+  banOnMaxRequests     Boolean @default(true)
+  maxServerRps         Int?
+  capacityWarnPercent  Int     @default(80)
+  autoBanAfterFails    Int     @default(2)
+  temporaryBanMinutes  Int     @default(120)
+  advancedBanMinutes   Int     @default(1440)
+  permanentBanScore    Int     @default(9)
+  enableAiAnomaly      Boolean @default(true)
+  enableSurgeDetection Boolean @default(true)
 
   organizationId String       @unique
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -453,13 +471,13 @@ model Policy {
 // ==================================================================
 
 model Notification {
-  id          String           @id @default(uuid())
-  type        NotificationType
-  title       String
-  message     String
-  severity    Int              @default(1)
-  isRead      Boolean          @default(false)
-  metadata    Json?
+  id       String           @id @default(uuid())
+  type     NotificationType
+  title    String
+  message  String
+  severity Int              @default(1)
+  isRead   Boolean          @default(false)
+  metadata Json?
 
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -472,21 +490,28 @@ model Notification {
 }
 
 // ==================================================================
-// REPORTS
+// REPORTS (Gemini)
 // ==================================================================
 
 model Report {
-  id            String       @id @default(uuid())
-  title         String
-  status        ReportStatus @default(PENDING)
-  periodStart   DateTime
-  periodEnd     DateTime
-  content       String?
-  summary       String?
-  errorMessage  String?
-  eventCount    Int          @default(0)
-  blockedCount  Int          @default(0)
-  metadata      Json?
+  id           String       @id @default(uuid())
+  title        String
+  type         ReportType   @default(ON_DEMAND)
+  status       ReportStatus @default(PENDING)
+  periodStart  DateTime
+  periodEnd    DateTime
+  content      String?
+  summary      String?
+  errorMessage String?
+  eventCount   Int          @default(0)
+  blockedCount Int          @default(0)
+  tokensUsed   Int?
+  modelUsed    String?
+  metadata     Json?
+
+  // تقرير لسيرفر محدد (null = كل الشركة)
+  serverId String?
+  server   Server? @relation(fields: [serverId], references: [id], onDelete: SetNull)
 
   securityEventId String?
   securityEvent   SecurityEvent? @relation(fields: [securityEventId], references: [id], onDelete: SetNull)
@@ -500,6 +525,9 @@ model Report {
   @@index([organizationId])
   @@index([status])
   @@index([securityEventId])
+  @@index([serverId])
+  @@index([organizationId, createdAt])
+  @@index([organizationId, type])
 }
 
 // ==================================================================
@@ -507,19 +535,19 @@ model Report {
 // ==================================================================
 
 model SimulationRun {
-  id               String            @id @default(uuid())
+  id               String           @id @default(uuid())
   pattern          SimulationPattern
-  status           SimulationStatus  @default(RUNNING)
+  status           SimulationStatus @default(RUNNING)
   targetRps        Int
   durationSec      Int?
-  totalSent        Int               @default(0)
-  totalAllowed     Int               @default(0)
-  totalRateLimited Int               @default(0)
-  totalChallenged  Int               @default(0)
-  totalBlocked     Int               @default(0)
+  totalSent        Int              @default(0)
+  totalAllowed     Int              @default(0)
+  totalRateLimited Int              @default(0)
+  totalChallenged  Int              @default(0)
+  totalBlocked     Int              @default(0)
 
   serverId       String
-  server         Server @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  server         Server       @relation(fields: [serverId], references: [id], onDelete: Cascade)
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 

@@ -8,18 +8,17 @@
 // 2. إضافة الهيدر X-Gateway-Key تلقائيًا
 // 3. التعامل مع الأخطاء الموحدة
 // 4. دعم الـ Pagination (cursor)
-// 5. دعم مزامنة السيرفرات + السياسات + السمعة + الحظر
+// 5. مزامنة السيرفرات + السياسات + السمعة + الحظر
+// 6. إرسال نتائج Origin Probe الكاملة + Security Events
 //
-// ملاحظات مهمة:
-// - الـ Backend بيستنى الهيدر: X-Gateway-Key
-// - القيمة لازم تبقى نفس GATEWAY_SECRET اللي في .env بتاع الـ Backend
-// - في الـ Gateway بنقراها من config.backend.internalSecret
-//   (لازم تحط نفس القيمة في الاتنين)
-//
+// ملاحظات:
+// - الهيدر: X-Gateway-Key = config.backend.internalSecret
+// - لازم يطابق GATEWAY_SECRET في .env بتاع الـ Backend
 // ======================================================
 
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import { config } from '../config';
+import type { OriginProbeResult } from './origin.probe';
 
 // ======================================================
 // الأنواع المشتركة
@@ -42,7 +41,13 @@ export type BackendResponse<T> = BackendSuccess<T> | BackendError;
 
 // -------------------- Servers --------------------
 
-export type ServerStatus = 'PENDING' | 'ONLINE' | 'DEGRADED' | 'OFFLINE' | 'MAINTENANCE';
+export type ServerStatus =
+  | 'PENDING'
+  | 'ONLINE'
+  | 'DEGRADED'
+  | 'OFFLINE'
+  | 'MAINTENANCE';
+
 export type ServerMode = 'PROTECT' | 'MONITOR_ONLY';
 
 export interface GatewayServer {
@@ -67,11 +72,34 @@ export interface ServersListData {
   serverTime: string;
 }
 
+/**
+ * تقرير صحة موسّع — يشمل نتائج الـ Origin Probe
+ * ملاحظة: الـ Backend لازم يقبل الحقول الجديدة (أو يتجاهل الزيادة لو لسه مش محدّث)
+ */
 export interface ServerHealthPayload {
   originReachable?: boolean;
+  /** لا تُرسل من الـ Probe — تثبتها DNS verify أو الترافيك الحقيقي */
   gatewayReachable?: boolean;
   avgResponseTimeMs?: number;
+  p95ResponseTimeMs?: number;
+  loadLatencyP99Ms?: number;
   currentLoadPercent?: number;
+  maxRequestsPerSecond?: number;
+  safeRequestsPerSecond?: number;
+  probeErrorRate?: number;
+  probeConfidence?: 'high' | 'medium' | 'low';
+  probeRecommendation?: 'excellent' | 'good' | 'fair' | 'poor' | 'down';
+  probeDetails?: {
+    steps: Array<{
+      connections: number;
+      rps: number;
+      p99Ms: number;
+      errorRate: number;
+    }>;
+    runs: Array<{ rps: number }>;
+    saturated?: boolean;
+    redirected?: boolean;
+  };
   lastError?: string;
 }
 
@@ -236,6 +264,95 @@ export interface BansSyncData {
   serverTime: string;
 }
 
+// -------------------- Events --------------------
+
+export type EventDecision =
+  | 'ALLOW'
+  | 'MONITOR'
+  | 'RATE_LIMIT'
+  | 'CHALLENGE'
+  | 'BLOCK';
+
+export type HttpMethod =
+  | 'GET'
+  | 'POST'
+  | 'PUT'
+  | 'PATCH'
+  | 'DELETE'
+  | 'OPTIONS'
+  | 'HEAD';
+
+export type IpTypeValue =
+  | 'RESIDENTIAL'
+  | 'MOBILE'
+  | 'DATACENTER'
+  | 'VPN_PROXY'
+  | 'TOR'
+  | 'UNKNOWN';
+
+export type ChallengeTypeValue =
+  | 'JS_SILENT'
+  | 'TLS_FINGERPRINT'
+  | 'RATE_LIMIT_SOFT'
+  | 'CAPTCHA_FALLBACK';
+
+export type DetectionStageValue =
+  | 'BAN_LIST'
+  | 'PASS_TOKEN'
+  | 'IP_LOOKUP'
+  | 'JS_CHALLENGE'
+  | 'HISTORY_MATCH'
+  | 'DEEP_COMPARISON'
+  | 'TLS_FINGERPRINT'
+  | 'AI_ANOMALY'
+  | 'HARD_LIMIT'
+  | 'POLICY'
+  | 'SURGE_DETECTED'
+  | 'CLEARANCE_REVOKED';
+
+export interface GatewaySecurityEvent {
+  organizationId: string;
+  serverId: string;
+  ipAddress: string;
+  path: string;
+  method: HttpMethod;
+  riskScore: number;
+  decision: EventDecision;
+  decidedAtStage?: DetectionStageValue;
+  userAgent?: string;
+  referer?: string;
+  requestId?: string;
+  anomalyScore?: number;
+  confidence?: number;
+  reasonSummary?: string;
+  reasonDetails?: Record<string, unknown>;
+  processingTimeMs?: number;
+  surgeDetected?: boolean;
+  pathSensitive?: boolean;
+  recommendation?: string;
+  countryCode?: string;
+  asn?: number;
+  ipType?: IpTypeValue;
+  isChallenged?: boolean;
+  challengeType?: ChallengeTypeValue;
+  challengePassed?: boolean;
+  reputationEntryId?: string;
+}
+
+export interface EventCreated {
+  id: string;
+  createdAt: string;
+}
+
+export interface EventsBatchResult {
+  success: boolean;
+  summary: { total: number; succeeded: number; failed: number };
+  results: Array<
+    | { index: number; ok: true; id: string }
+    | { index: number; ok: false; code: number; message: string }
+  >;
+}
+
 // ======================================================
 // إنشاء الـ Axios Instance
 // ======================================================
@@ -251,15 +368,13 @@ function createClient(): AxiosInstance {
     },
   });
 
-  // Interceptor للأخطاء
   client.interceptors.response.use(
     (response) => response,
     (error: AxiosError<BackendError>) => {
       if (error.response) {
         const data = error.response.data;
         const message =
-          data?.message ||
-          `Backend error ${error.response.status}`;
+          data?.message || `Backend error ${error.response.status}`;
         const code = data?.code || `HTTP_${error.response.status}`;
 
         const err = new Error(`[Backend] ${code}: ${message}`) as Error & {
@@ -292,9 +407,6 @@ const api = createClient();
 // Servers API
 // ======================================================
 
-/**
- * مزامنة كل السيرفرات (مع دعم Pagination)
- */
 export async function fetchServers(params?: {
   limit?: number;
   cursor?: string;
@@ -307,9 +419,6 @@ export async function fetchServers(params?: {
   return response.data.data;
 }
 
-/**
- * بيجيب كل السيرفرات مرة واحدة (بيلف على الـ cursor لوحده)
- */
 export async function fetchAllServers(
   updatedSince?: string
 ): Promise<{ servers: GatewayServer[]; serverTime: string }> {
@@ -331,9 +440,6 @@ export async function fetchAllServers(
   return { servers: all, serverTime };
 }
 
-/**
- * جلب سيرفر واحد من الـ Host
- */
 export async function resolveServerByHost(
   host: string
 ): Promise<GatewayServer> {
@@ -345,7 +451,7 @@ export async function resolveServerByHost(
 }
 
 /**
- * تبليغ صحة السيرفر (بعد Origin Probe)
+ * تبليغ صحة السيرفر (بعد Origin Probe أو health دوري)
  */
 export async function reportServerHealth(
   serverId: string,
@@ -359,13 +465,84 @@ export async function reportServerHealth(
 }
 
 // ======================================================
-// Policies API
+// Origin Probe → Backend
 // ======================================================
 
 /**
- * الراوت الأساسي: سيرفر + شركة + Policy في رد واحد
- * (مستحسن تستخدمه مع Redis cache)
+ * يرسل نتيجة الـ Origin Probe الكاملة إلى reportServerHealth
+ * - لا يضبط gatewayReachable (ده من DNS verify / ترافيك حقيقي)
+ * - يرسل RPS + latency + step history + confidence
  */
+export async function sendOriginProbeResult(
+  r: OriginProbeResult
+): Promise<void> {
+  if (!r.serverId) return;
+
+  const steps =
+    r.load?.stepHistory?.map((s) => ({
+      connections: s.connections,
+      rps: s.rps,
+      p99Ms: s.p99,
+      errorRate: s.errRate,
+    })) ?? [];
+
+  const runs =
+    r.runs?.map((run) => ({ rps: run.sustainedRps })) ??
+    (r.load ? [{ rps: r.load.sustainedRps }] : []);
+
+  // saturated = آخر مرحلة في الـ step history مش healthy
+  const saturated =
+    r.load?.stepHistory?.length
+      ? r.load.stepHistory[r.load.stepHistory.length - 1]?.healthy === false
+      : undefined;
+
+  const note =
+    r.summary.notes?.length > 0 ? r.summary.notes.join(' | ') : undefined;
+
+  const lastErrorRaw = r.health.error ?? note ?? undefined;
+  const lastError =
+    typeof lastErrorRaw === 'string'
+      ? lastErrorRaw.slice(0, 500)
+      : undefined;
+
+  await reportServerHealth(r.serverId, {
+    originReachable: r.health.alive,
+    // ❌ لا نرسل gatewayReachable من هنا
+
+    avgResponseTimeMs: r.latency?.avgResponseTimeMs,
+    p95ResponseTimeMs: r.latency?.p95ResponseTimeMs,
+    loadLatencyP99Ms: r.load?.latency?.p99,
+
+    // السعة: sustained من الـ summary / load — للتسعير
+    maxRequestsPerSecond:
+      r.summary.estimatedMaxRps ?? r.load?.sustainedRps ?? undefined,
+    safeRequestsPerSecond: r.summary.safeRps ?? undefined,
+
+    probeErrorRate: r.load?.errorRate,
+    probeConfidence: r.summary.confidence,
+    probeRecommendation: r.summary.recommendation,
+
+    probeDetails: r.load
+      ? {
+          steps,
+          runs,
+          saturated,
+          redirected: r.health.redirected === true,
+        }
+      : {
+          steps: [],
+          runs,
+          redirected: r.health.redirected === true,
+        },
+
+    lastError,
+  });
+}
+
+// ======================================================
+// Policies API
+// ======================================================
+
 export async function resolvePolicyByHost(
   host: string
 ): Promise<PolicyResolveData> {
@@ -376,9 +553,6 @@ export async function resolvePolicyByHost(
   return response.data.data;
 }
 
-/**
- * نفس النتيجة من serverId
- */
 export async function resolvePolicyByServerId(
   serverId: string
 ): Promise<PolicyResolveData> {
@@ -388,9 +562,6 @@ export async function resolvePolicyByServerId(
   return response.data.data;
 }
 
-/**
- * الـ Policy فقط من organizationId
- */
 export async function getPolicyByOrg(
   organizationId: string
 ): Promise<OrgPolicyFromBackend> {
@@ -400,9 +571,6 @@ export async function getPolicyByOrg(
   return response.data.data;
 }
 
-/**
- * فحص نسخة الـ Policy (خفيف)
- */
 export async function getPolicyVersion(
   organizationId: string
 ): Promise<PolicyVersionData> {
@@ -416,9 +584,6 @@ export async function getPolicyVersion(
 // Reputation API
 // ======================================================
 
-/**
- * الاستعلام عن السمعة قبل اتخاذ القرار
- */
 export async function lookupReputation(params: {
   organizationId: string;
   ipAddress: string;
@@ -433,9 +598,6 @@ export async function lookupReputation(params: {
   return response.data.data;
 }
 
-/**
- * تسجيل أدلة تقرير واحد
- */
 export async function applyReputation(
   payload: ReputationApplyPayload
 ): Promise<ReputationApplyResult> {
@@ -446,9 +608,6 @@ export async function applyReputation(
   return response.data.data;
 }
 
-/**
- * دفعة تقارير (مستحسن مع BullMQ)
- */
 export async function applyReputationBatch(
   reports: ReputationApplyPayload[]
 ): Promise<ReputationBatchResult> {
@@ -459,9 +618,6 @@ export async function applyReputationBatch(
   return response.data.data;
 }
 
-/**
- * مزامنة الحظر لـ Redis
- */
 export async function syncBans(params?: {
   limit?: number;
   cursor?: string;
@@ -475,9 +631,6 @@ export async function syncBans(params?: {
   return response.data.data;
 }
 
-/**
- * بيجيب كل الحظر مرة واحدة (بيلف على الـ cursor)
- */
 export async function syncAllBans(params?: {
   updatedSince?: string;
   organizationId?: string;
@@ -502,67 +655,37 @@ export async function syncAllBans(params?: {
 }
 
 // ======================================================
-// Origin Probe Result (من الملف السابق)
+// Security Events API
 // ======================================================
 
-/**
- * إرسال نتيجة الـ Origin Probe
- * (الراوت ده افترضناه /internal/origin-probe أو تقدر تغيره حسب الـ Backend)
- * لو الـ Backend بيستخدم reportServerHealth بس، استخدم reportServerHealth مباشرة.
- */
-export async function sendOriginProbeResult(payload: {
-  orgId: string;
-  serverId?: string;
-  originUrl: string;
-  probedAt: string;
-  health: {
-    alive: boolean;
-    statusCode: number | null;
-    responseTimeMs: number | null;
-    error: string | null;
-  };
-  latency: {
-    avgResponseTimeMs: number;
-    minResponseTimeMs: number;
-    maxResponseTimeMs: number;
-    p95ResponseTimeMs: number;
-  } | null;
-  load: {
-    estimatedRps: number;
-    avgResponseTimeMs: number;
-    successfulRequests: number;
-    failedRequests: number;
-  } | null;
-  summary: {
-    isHealthy: boolean;
-    avgLatencyMs: number | null;
-    estimatedMaxRps: number | null;
-    recommendation: string;
-  };
-}): Promise<void> {
-  // لو عندك راوت مخصص للـ probe استخدمه،
-  // وإلا حوّل النتيجة لـ reportServerHealth
-  if (payload.serverId) {
-    await reportServerHealth(payload.serverId, {
-      originReachable: payload.health.alive,
-      gatewayReachable: true,
-      avgResponseTimeMs: payload.summary.avgLatencyMs ?? undefined,
-      currentLoadPercent: undefined,
-      lastError: payload.health.error ?? undefined,
-    });
-  }
+export async function sendSecurityEvent(
+  event: GatewaySecurityEvent
+): Promise<EventCreated> {
+  const response = await api.post<BackendSuccess<EventCreated>>(
+    '/internal/gateway/events',
+    event
+  );
+  return response.data.data;
+}
+
+/** مجموعة أحداث (حتى 100). الرد قد يكون 207 */
+export async function sendSecurityEventsBatch(
+  events: GatewaySecurityEvent[]
+): Promise<EventsBatchResult> {
+  const response = await api.post<EventsBatchResult>(
+    '/internal/gateway/events/batch',
+    { events },
+    { validateStatus: (s) => s === 200 || s === 207 }
+  );
+  return response.data;
 }
 
 // ======================================================
 // Utility
 // ======================================================
 
-/**
- * اختبار سريع إن الـ Backend بيستقبل المفتاح صح
- */
 export async function pingBackend(): Promise<boolean> {
   try {
-    // نجرب راوت خفيف
     await api.get('/internal/gateway/servers', {
       params: { limit: 1 },
       timeout: 3000,
@@ -574,12 +697,17 @@ export async function pingBackend(): Promise<boolean> {
   }
 }
 
+// ======================================================
+// Default export
+// ======================================================
+
 export default {
   // Servers
   fetchServers,
   fetchAllServers,
   resolveServerByHost,
   reportServerHealth,
+  sendOriginProbeResult,
 
   // Policies
   resolvePolicyByHost,
@@ -594,8 +722,9 @@ export default {
   syncBans,
   syncAllBans,
 
-  // Probe
-  sendOriginProbeResult,
+  // Events
+  sendSecurityEvent,
+  sendSecurityEventsBatch,
 
   // Utility
   pingBackend,
