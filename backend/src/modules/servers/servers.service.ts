@@ -6,16 +6,9 @@
 //   - إنشاء/عرض/تعديل/حذف السيرفرات المحمية (معزولة بالـ organizationId)
 //   - ربط السيرفر بخدمة الـ DNS: تعليمات + فحص الملكية (TXT) + فحص التوجيه (CNAME/A)
 //   - وضع الصيانة وحساب حالة السيرفر (status) من الصحة الفعلية
-//   - خدمة الـ Gateway: مزامنة السيرفرات + resolve بالـ Host + استقبال تقارير الصحة
-//   - بث Socket.IO للداشبورد عند تغيّر الحالة (server:status)
-//
-// قواعد أساسية:
-//   1) organizationId للـ Dashboard بييجي من JWT فقط (الـ Routes مسؤولة)
-//   2) كل الأخطاء المتوقعة = ServerServiceError (statusCode + code) والـ Routes بتحوّلها لـ HTTP
-//   3) أي تغيير في الدومين أو الـ Origin بيصفّر التحقق ويرجّع السيرفر لـ PENDING
-//   4) status بيحسبه النظام، المستخدم ما يعدّلوش (إلا الصيانة)
-//   5) إثبات ملكية الدومين (TXT) شرط قبل فحص التوجيه
-//   6) لازم الـ Gateway ما يمرّرش ترافيك إلا لسيرفر dnsVerified=true
+//   - خدمة الـ Gateway: مزامنة + resolve + استقبال تقارير الصحة/الـ Probe
+//   - تشغيل Origin Probe (light/full) + تاريخ القياسات
+//   - بث Socket.IO للداشبورد عند تغيّر الحالة أو نتائج الـ Probe
 // ==================================================================
 
 import { randomUUID } from "node:crypto";
@@ -61,6 +54,21 @@ const DEGRADED_RESPONSE_MS = envInt("SERVER_DEGRADED_RESPONSE_MS", 2000);
 const VERIFY_COOLDOWN_MS = envInt("DNS_VERIFY_COOLDOWN_SEC", 10) * 1000;
 const DNS_TIMEOUT_MS = envInt("DNS_TIMEOUT_MS", 3000);
 const DEFAULT_CAPACITY_WARN_PERCENT = 80;
+
+/** full probe فقط بعد إثبات الملكية (إلا لو PROBE_REQUIRE_OWNERSHIP=false) */
+const PROBE_REQUIRE_OWNERSHIP = process.env.PROBE_REQUIRE_OWNERSHIP !== "false";
+/** تبريد بين قياسات يدوية (ثواني → ms) */
+const PROBE_COOLDOWN_MS = envInt("PROBE_COOLDOWN_SEC", 600) * 1000;
+
+/** عنوان الـ Gateway الداخلي: localhost في التطوير، gateway داخل Docker */
+function gatewayInternalUrl(): string {
+  return (
+    process.env.GATEWAY_INTERNAL_URL ??
+    (process.env.NODE_ENV === "production"
+      ? "http://gateway:3000"
+      : "http://localhost:3000")
+  );
+}
 
 // ==================================================================
 // Types & Errors
@@ -128,7 +136,7 @@ export interface HealthReportResult {
   previousStatus: ServerStatus;
 }
 
-/** Payload خفيف للـ Dashboard */
+/** Payload خفيف للـ Dashboard عبر Socket */
 export interface ServerRealtimePayload {
   id: string;
   organizationId: string;
@@ -140,10 +148,22 @@ export interface ServerRealtimePayload {
   originReachable: boolean;
   avgResponseTimeMs: number | null;
   currentLoadPercent: number | null;
+  maxRequestsPerSecond: number | null;
+  safeRequestsPerSecond: number | null;
+  p95ResponseTimeMs: number | null;
+  probeRecommendation: string | null;
+  probeConfidence: string | null;
+  lastProbeAt: string | null;
   previousStatus?: ServerStatus;
   action: "created" | "updated" | "status_changed" | "deleted" | "verified";
   updatedAt: string;
 }
+
+type Broadcaster = (
+  organizationId: string,
+  event: string,
+  payload: unknown,
+) => void;
 
 // ==================================================================
 // Helpers
@@ -199,25 +219,34 @@ function toGatewayPayload(s: Server): GatewayServerPayload {
     gatewayReachable: s.gatewayReachable,
     originReachable: s.originReachable,
     maxRequestsPerSecond: s.maxRequestsPerSecond,
+    safeRequestsPerSecond: s.safeRequestsPerSecond ?? null,
     updatedAt: s.updatedAt.toISOString(),
   };
 }
 
+type RealtimeSource = Pick<
+  Server,
+  | "id"
+  | "organizationId"
+  | "domain"
+  | "status"
+  | "mode"
+  | "dnsVerified"
+  | "gatewayReachable"
+  | "originReachable"
+  | "avgResponseTimeMs"
+  | "currentLoadPercent"
+  | "maxRequestsPerSecond"
+  | "safeRequestsPerSecond"
+  | "p95ResponseTimeMs"
+  | "probeRecommendation"
+  | "probeConfidence"
+  | "lastProbeAt"
+  | "updatedAt"
+>;
+
 function toRealtimePayload(
-  s: Pick<
-    Server,
-    | "id"
-    | "organizationId"
-    | "domain"
-    | "status"
-    | "mode"
-    | "dnsVerified"
-    | "gatewayReachable"
-    | "originReachable"
-    | "avgResponseTimeMs"
-    | "currentLoadPercent"
-    | "updatedAt"
-  >,
+  s: RealtimeSource,
   action: ServerRealtimePayload["action"],
   previousStatus?: ServerStatus,
 ): ServerRealtimePayload {
@@ -232,6 +261,12 @@ function toRealtimePayload(
     originReachable: s.originReachable,
     avgResponseTimeMs: s.avgResponseTimeMs,
     currentLoadPercent: s.currentLoadPercent,
+    maxRequestsPerSecond: s.maxRequestsPerSecond,
+    safeRequestsPerSecond: s.safeRequestsPerSecond,
+    p95ResponseTimeMs: s.p95ResponseTimeMs,
+    probeRecommendation: s.probeRecommendation,
+    probeConfidence: s.probeConfidence,
+    lastProbeAt: s.lastProbeAt ? s.lastProbeAt.toISOString() : null,
     ...(previousStatus !== undefined ? { previousStatus } : {}),
     action,
     updatedAt:
@@ -298,8 +333,13 @@ export class ServersService {
 
   private emitServerStatus(payload: ServerRealtimePayload) {
     try {
-      if (typeof this.fastify.broadcastToOrg === "function") {
-        this.fastify.broadcastToOrg(
+      const broadcast = (
+        this.fastify as unknown as { broadcastToOrg?: Broadcaster }
+      ).broadcastToOrg;
+
+      if (typeof broadcast === "function") {
+        broadcast.call(
+          this.fastify,
           payload.organizationId,
           SocketEvents.SERVER_STATUS,
           payload,
@@ -317,12 +357,29 @@ export class ServersService {
     return new NotificationsService(this.fastify);
   }
 
+  /** الإشعار ما يفشلش العملية الأساسية */
+  private async safeNotify(
+    input: Parameters<NotificationsService["create"]>[0],
+  ) {
+    try {
+      await this.notifications().create(input);
+    } catch (err) {
+      this.fastify.log.warn({ err }, "Failed to create notification");
+    }
+  }
+
   // ================================================================
-  // Private helpers
+  // Origin Probe helpers
   // ================================================================
-  private async probeGateway(server: Server): Promise<void> {
-    const gatewayUrl =
-      process.env.GATEWAY_INTERNAL_URL ?? "http://gateway:3000";
+
+  /**
+   * ينادي الـ Gateway لبدء قياس غير متزامن (يتوقع 202)
+   * light = health+latency | full = step test كامل
+   */
+  private async probeGateway(
+    server: Server,
+    mode: "light" | "full" = "full",
+  ): Promise<void> {
     const secret = process.env.GATEWAY_SECRET;
 
     if (!secret) {
@@ -330,24 +387,70 @@ export class ServersService {
       return;
     }
 
-    const res = await fetch(`${gatewayUrl}/internal/probe`, {
+    const scheme = server.sslEnabled ? "https" : "http";
+
+    const res = await fetch(`${gatewayInternalUrl()}/internal/probe`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "X-Gateway-Key": secret,
       },
       body: JSON.stringify({
-        url: `http://${server.originIp}:${server.originPort}`,
+        url: `${scheme}://${server.originIp}:${server.originPort}`,
         orgId: server.organizationId,
         serverId: server.id,
+        mode,
       }),
-      signal: AbortSignal.timeout(120_000),
+      signal: AbortSignal.timeout(10_000),
     });
 
-    if (!res.ok) {
+    if (res.status === 409) return; // قياس شغال بالفعل
+    if (res.status !== 202) {
       throw new Error(`Gateway probe responded ${res.status}`);
     }
   }
+
+  private probeModeFor(
+    server: Pick<Server, "dnsVerified">,
+  ): "light" | "full" {
+    return !PROBE_REQUIRE_OWNERSHIP || server.dnsVerified ? "full" : "light";
+  }
+
+  /**
+   * طلب قياس يدوي من الداشبورد (بعد الملكية + cooldown)
+   */
+  async requestProbe(
+    organizationId: string,
+    serverId: string,
+  ): Promise<void> {
+    const server = await this.findOwned(organizationId, serverId);
+
+    if (PROBE_REQUIRE_OWNERSHIP && !server.dnsVerified) {
+      throw new ServerServiceError(
+        "لازم تثبت ملكية الدومين الأول قبل قياس السعة",
+        409,
+        "OWNERSHIP_REQUIRED",
+      );
+    }
+
+    const last = server.lastProbeAt?.getTime() ?? 0;
+    const waitSec = Math.ceil((last + PROBE_COOLDOWN_MS - Date.now()) / 1000);
+    if (waitSec > 0) {
+      throw new ServerServiceError(
+        `انتظر ${waitSec} ثانية قبل إعادة القياس`,
+        429,
+        "PROBE_TOO_FREQUENT",
+        { retryAfterSec: waitSec },
+      );
+    }
+
+    await this.probeGateway(server, "full");
+  }
+
+  // ================================================================
+  // Private helpers
+  // ================================================================
+
   private assertOriginIsNotGateway(originIp: string) {
     if (readDnsConfig().gatewayIps.includes(originIp)) {
       throw new ServerServiceError(
@@ -369,6 +472,7 @@ export class ServersService {
   // ================================================================
   // Dashboard: CRUD
   // ================================================================
+
   async createServer(
     organizationId: string,
     input: CreateServerInput,
@@ -405,9 +509,8 @@ export class ServersService {
           ...(input.mode !== undefined && { mode: input.mode }),
         },
       });
-      // داخل createServer، بعد prisma.server.create وقبل الـ return
 
-      this.probeGateway(server).catch((err) => {
+      this.probeGateway(server, this.probeModeFor(server)).catch((err) => {
         this.fastify.log.warn(
           { err, serverId: server.id },
           "Gateway probe failed to start",
@@ -561,6 +664,14 @@ export class ServersService {
       data.originReachable = false;
       data.avgResponseTimeMs = null;
       data.currentLoadPercent = null;
+      data.maxRequestsPerSecond = null;
+      data.safeRequestsPerSecond = null;
+      data.p95ResponseTimeMs = null;
+      data.loadLatencyP99Ms = null;
+      data.probeErrorRate = null;
+      data.probeConfidence = null;
+      data.probeRecommendation = null;
+      data.lastProbeAt = null;
       resets.push("originReachability");
     }
 
@@ -577,6 +688,12 @@ export class ServersService {
       this.emitServerStatus(
         toRealtimePayload(server, "updated", current.status),
       );
+
+      if (originChanged || changed.has("sslEnabled")) {
+        this.probeGateway(server, this.probeModeFor(server)).catch((err) =>
+          this.fastify.log.warn({ err, serverId }, "Re-probe failed to start"),
+        );
+      }
 
       return {
         server,
@@ -615,16 +732,15 @@ export class ServersService {
     const deletedEvents = server._count.securityEvents;
 
     try {
-      await this.fastify.prisma.$transaction([
-        this.fastify.prisma.server.delete({ where: { id: serverId } }),
-      ]);
+      await this.fastify.prisma.server.delete({ where: { id: serverId } });
     } catch (error) {
       if (isPrismaError(error, "P2025")) throw serverNotFound();
       throw error;
     }
 
     verifyCooldown.delete(serverId);
-    await this.notifications().create({
+
+    await this.safeNotify({
       organizationId,
       type: "SYSTEM",
       title: "تم حذف سيرفر محمي",
@@ -636,21 +752,8 @@ export class ServersService {
         deletedEvents,
       },
     });
-    this.emitServerStatus({
-      id: serverId,
-      organizationId,
-      domain: server.domain,
-      status: server.status,
-      mode: server.mode,
-      dnsVerified: server.dnsVerified,
-      gatewayReachable: server.gatewayReachable,
-      originReachable: server.originReachable,
-      avgResponseTimeMs: server.avgResponseTimeMs,
-      currentLoadPercent: server.currentLoadPercent,
-      previousStatus: server.status,
-      action: "deleted",
-      updatedAt: new Date().toISOString(),
-    });
+
+    this.emitServerStatus(toRealtimePayload(server, "deleted", server.status));
 
     return { id: serverId, domain: server.domain, deletedEvents };
   }
@@ -775,6 +878,13 @@ export class ServersService {
       this.emitServerStatus(
         toRealtimePayload(updated, "verified", server.status),
       );
+
+      // أول ما الملكية تتثبت → full probe
+      if (patch.dnsVerified === true) {
+        this.probeGateway(updated, "full").catch((err) =>
+          this.fastify.log.warn({ err, serverId }, "Full probe failed to start"),
+        );
+      }
     }
 
     return {
@@ -932,8 +1042,7 @@ export class ServersService {
   }
 
   /**
-   * تقرير صحة من الـ Gateway.
-   * Socket: بيتبعت فقط لما status يتغيّر (مش كل health ping).
+   * تقرير صحة / نتائج Probe من الـ Gateway
    */
   async reportHealth(
     serverId: string,
@@ -967,16 +1076,53 @@ export class ServersService {
           status: nextStatus,
           ...(report.originReachable !== undefined && { originReachable }),
           ...(report.gatewayReachable !== undefined && { gatewayReachable }),
-          ...(report.avgResponseTimeMs !== undefined && {
-            avgResponseTimeMs,
-          }),
+          ...(report.avgResponseTimeMs !== undefined && { avgResponseTimeMs }),
           ...(report.currentLoadPercent !== undefined && {
             currentLoadPercent,
+          }),
+          ...(report.p95ResponseTimeMs !== undefined && {
+            p95ResponseTimeMs: report.p95ResponseTimeMs,
+          }),
+          ...(report.loadLatencyP99Ms !== undefined && {
+            loadLatencyP99Ms: report.loadLatencyP99Ms,
+          }),
+          ...(report.maxRequestsPerSecond !== undefined && {
+            maxRequestsPerSecond: report.maxRequestsPerSecond,
+          }),
+          ...(report.safeRequestsPerSecond !== undefined && {
+            safeRequestsPerSecond: report.safeRequestsPerSecond,
+          }),
+          ...(report.probeErrorRate !== undefined && {
+            probeErrorRate: report.probeErrorRate,
+          }),
+          ...(report.probeConfidence !== undefined && {
+            probeConfidence: report.probeConfidence,
+          }),
+          ...(report.probeRecommendation !== undefined && {
+            probeRecommendation: report.probeRecommendation,
+            lastProbeAt: new Date(),
           }),
         },
       });
 
-      const base = { organizationId: server.organizationId };
+      if (report.probeRecommendation !== undefined) {
+        await tx.serverProbeRun.create({
+          data: {
+            serverId,
+            maxRps: report.maxRequestsPerSecond ?? null,
+            safeRps: report.safeRequestsPerSecond ?? null,
+            p95Ms: report.p95ResponseTimeMs ?? null,
+            p99LoadMs: report.loadLatencyP99Ms ?? null,
+            errorRate: report.probeErrorRate ?? null,
+            confidence: report.probeConfidence ?? null,
+            recommendation: report.probeRecommendation,
+            details: report.probeDetails as Prisma.InputJsonValue | undefined,
+          },
+        });
+      }
+
+      // تنبيه السعة: نحسبه جوه الـ transaction ونبعته بعدها
+      let capacityWarning: { load: number; warnAt: number } | null = null;
 
       if (report.currentLoadPercent !== undefined) {
         const policy = await tx.policy.findUnique({
@@ -988,6 +1134,9 @@ export class ServersService {
         const wasBelow =
           server.currentLoadPercent === null ||
           server.currentLoadPercent < warnAt;
+        if (wasBelow && report.currentLoadPercent >= warnAt) {
+          capacityWarning = { load: report.currentLoadPercent, warnAt };
+        }
       }
 
       return {
@@ -996,25 +1145,25 @@ export class ServersService {
         previousStatus: server.status,
         updated,
         statusChanged: nextStatus !== server.status,
+        capacityWarning,
       };
     });
 
-    // بث فقط عند تغيّر الحالة — مش على كل health report
-    if (result.statusChanged) {
+    if (result.statusChanged || report.probeRecommendation !== undefined) {
       this.emitServerStatus(
         toRealtimePayload(
           result.updated,
-          "status_changed",
+          result.statusChanged ? "status_changed" : "updated",
           result.previousStatus,
         ),
       );
     }
-    const n = this.notifications();
+
     const domain = result.updated.domain;
     const organizationId = result.updated.organizationId;
 
     if (result.status === "OFFLINE" && result.previousStatus !== "OFFLINE") {
-      await n.create({
+      await this.safeNotify({
         organizationId,
         type: "SYSTEM",
         title: "السيرفر لا يستجيب",
@@ -1032,7 +1181,7 @@ export class ServersService {
       result.previousStatus === "OFFLINE" &&
       (result.status === "ONLINE" || result.status === "DEGRADED")
     ) {
-      await n.create({
+      await this.safeNotify({
         organizationId,
         type: "SERVER_RECOVERY",
         title: "السيرفر رجع يعمل",
@@ -1041,6 +1190,25 @@ export class ServersService {
         metadata: { serverId, domain, status: result.status },
       });
     }
+
+    if (result.capacityWarning) {
+      await this.safeNotify({
+        organizationId,
+        type: "SERVER_CAPACITY_WARNING",
+        title: "السيرفر قرّب يوصل لحد السعة",
+        message: `حمل السيرفر ${domain} وصل ${Math.round(
+          result.capacityWarning.load,
+        )}% (حد التنبيه ${result.capacityWarning.warnAt}%).`,
+        severity: 3,
+        metadata: {
+          serverId,
+          domain,
+          currentLoadPercent: result.capacityWarning.load,
+          warnAt: result.capacityWarning.warnAt,
+        },
+      });
+    }
+
     return {
       id: result.id,
       status: result.status,

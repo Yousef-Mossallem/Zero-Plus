@@ -12,6 +12,7 @@ import type {
   GetEventsQuery,
 } from './events.schema.js'
 import { SocketEvents } from '../../plugins/socket.plugin.js'
+import type { GatewayEventInput } from './events.internal.routes.js'
 
 // ------------------------------------------------------------------
 // Errors
@@ -35,11 +36,7 @@ class EventServiceError extends Error {
  * قرارات تستحق ظهور فوري أوضح في الـ Live feed.
  * باقي الأحداث برضو بتتبعت، بس الفرونت يقدر يفلتر.
  */
-const HIGHLIGHT_DECISIONS = new Set([
-  'BLOCK',
-  'CHALLENGE',
-  'RATE_LIMIT',
-])
+const HIGHLIGHT_DECISIONS = new Set(['BLOCK', 'CHALLENGE', 'RATE_LIMIT', 'MONITOR'])
 
 /**
  * Payload خفيف للـ Socket — مش الصف كامل من DB.
@@ -398,6 +395,8 @@ export async function getEvents(
 // GET EVENT BY ID
 // ------------------------------------------------------------------
 
+
+
 export async function getEventById(
   fastify: FastifyInstance,
   organizationId: string,
@@ -429,6 +428,85 @@ export async function getEventById(
       },
     },
   })
+
+  return event
+}
+// ------------------------------------------------------------------
+// CREATE EVENT (من الـ Gateway) — بيدعم كل حقول السكيما
+// ------------------------------------------------------------------
+
+export async function createGatewayEvent(
+  fastify: FastifyInstance,
+  data: GatewayEventInput,
+) {
+  const { organizationId } = data
+
+  const server = await fastify.prisma.server.findFirst({
+    where: { id: data.serverId, organizationId },
+    select: { id: true },
+  })
+
+  if (!server) {
+    throw new EventServiceError(
+      'السيرفر غير موجود أو لا ينتمي إلى هذه المؤسسة',
+      404,
+    )
+  }
+
+  if (data.reputationEntryId) {
+    const entry = await fastify.prisma.reputationEntry.findFirst({
+      where: { id: data.reputationEntryId, organizationId },
+      select: { id: true },
+    })
+
+    if (!entry) {
+      throw new EventServiceError(
+        'Reputation Entry غير موجود أو لا ينتمي إلى هذه المؤسسة',
+        404,
+      )
+    }
+  }
+
+  const event = await fastify.prisma.securityEvent.create({
+    data: {
+      organizationId,
+      serverId: data.serverId,
+
+      ipAddress: data.ipAddress,
+      path: data.path,
+      method: data.method,
+      userAgent: data.userAgent ?? null,
+      referer: data.referer ?? null,
+      requestId: data.requestId ?? null,
+
+      riskScore: data.riskScore,
+      anomalyScore: data.anomalyScore ?? null,
+      confidence: data.confidence ?? null,
+      decision: data.decision,
+      decidedAtStage: data.decidedAtStage ?? null,
+      reasonSummary: data.reasonSummary ?? null,
+      reasonDetails: data.reasonDetails
+        ? (data.reasonDetails as Prisma.InputJsonObject)
+        : Prisma.JsonNull,
+      processingTimeMs: data.processingTimeMs ?? null,
+
+      surgeDetected: data.surgeDetected ?? false,
+      pathSensitive: data.pathSensitive ?? false,
+      recommendation: data.recommendation ?? null,
+
+      countryCode: data.countryCode ?? null,
+      asn: data.asn ?? null,
+      ipType: data.ipType ?? null,
+
+      isChallenged: data.isChallenged ?? false,
+      challengeType: data.challengeType ?? null,
+      challengePassed: data.challengePassed ?? null,
+
+      reputationEntryId: data.reputationEntryId ?? null,
+    },
+  })
+
+  emitSecurityEvent(fastify, organizationId, toRealtimePayload(event))
 
   return event
 }

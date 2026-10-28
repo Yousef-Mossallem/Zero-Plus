@@ -38,14 +38,17 @@ import reputationRoutes, {
 import { organizationRoutes } from './modules/organizations/organizations.routes.js'
 
 import eventRoutes from './modules/events/events.routes.js'
-// import internalEventRoutes from './modules/events/events.internal.routes.js'
+import internalEventRoutes from './modules/events/events.internal.routes.js'
 
 // اسم التصدير في الملف: notificationsRoutes (بالـ s)
 import {
   notificationsRoutes,
 } from './modules/notifications/notifications.routes.js'
 
-// import { reportRoutes } from './modules/reports/reports.routes.js'
+import { reportRoutes } from './modules/reports/reports.routes.js'
+
+import { dashboardRoutes } from './modules/dashboard/dashboard.routes.js'
+
 // import { simulationRoutes } from './modules/simulation/simulation.routes.js'
 
 // ------------------------------------------------------------------
@@ -128,6 +131,12 @@ export async function buildApp() {
     )
   }
 
+  if (!process.env.GEMINI_API_KEY) {
+    app.log.warn(
+      'GEMINI_API_KEY مش مضبوط: تقارير Gemini والـ Chat هيفشلوا لحد ما يتضاف المفتاح',
+    )
+  }
+
   // ================================================================
   // 3. Error Handlers
   // ================================================================
@@ -201,11 +210,18 @@ export async function buildApp() {
 
   // Events
   await app.register(eventRoutes, { prefix: '/events' })
+  await app.register(internalEventRoutes, {
+    prefix: '/internal/gateway/events',
+  })
 
   // Notifications (Dashboard JWT + Socket من الـ service)
   await app.register(notificationsRoutes, { prefix: '/notifications' })
 
-  // await app.register(reportRoutes, { prefix: '/reports' })
+  // Reports (Gemini)
+  await app.register(reportRoutes, { prefix: '/reports' })
+
+  await app.register(dashboardRoutes, { prefix: '/dashboard' })
+
   // await app.register(simulationRoutes, { prefix: '/simulation' })
 
   return app
