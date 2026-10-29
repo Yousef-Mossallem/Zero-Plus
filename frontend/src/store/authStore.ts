@@ -43,6 +43,8 @@ import {
   type LoginStartRequest,
 } from '../services/authService'
 
+import { connectSocket, disconnectSocket } from '../services/socket'
+
 // ==================================================================
 // Types
 // ==================================================================
@@ -72,6 +74,12 @@ export interface AuthState {
   organization: AuthOrganization | null
 
   status: AuthStatus
+
+  /**
+   * مرآة لـ status === 'authenticated' — موجودة للتوافق مع أي كود قديم
+   * كان بيقرأ isAuthenticated مباشرة من الـ store.
+   */
+  isAuthenticated: boolean
 
   /**
    * هل خلصنا محاولة استعادة الجلسة من localStorage + /auth/me؟
@@ -116,6 +124,12 @@ export interface AuthState {
   logout: () => void
 
   clearError: () => void
+
+  /**
+   * فحص صلاحية — مثال:
+   *   hasRole(['ADMIN', 'OWNER'])
+   */
+  hasRole: (roles: string[]) => boolean
 }
 
 // ==================================================================
@@ -128,12 +142,16 @@ export interface AuthState {
  */
 function applyAuthData(
   data: AuthResponseData,
-): Pick<AuthState, 'token' | 'user' | 'organization' | 'status' | 'error'> {
+): Pick<
+  AuthState,
+  'token' | 'user' | 'organization' | 'status' | 'isAuthenticated' | 'error'
+> {
   return {
     token: data.token,
     user: data.user,
     organization: data.organization,
     status: 'authenticated',
+    isAuthenticated: true,
     error: null,
   }
 }
@@ -168,6 +186,23 @@ function getWebAuthnErrorMessage(error: unknown, fallback: string): string {
   return fallback
 }
 
+const WEBAUTHN_ERROR_NAMES = [
+  'NotAllowedError',
+  'InvalidStateError',
+  'NotSupportedError',
+  'SecurityError',
+  'AbortError',
+] as const
+
+function isWebAuthnError(
+  error: unknown,
+): error is Error & { name: (typeof WEBAUTHN_ERROR_NAMES)[number] } {
+  return (
+    error instanceof Error &&
+    (WEBAUTHN_ERROR_NAMES as readonly string[]).includes(error.name)
+  )
+}
+
 // ==================================================================
 // Store
 // ==================================================================
@@ -183,6 +218,7 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       organization: null,
       status: 'idle',
+      isAuthenticated: false,
       initialized: false,
       error: null,
 
@@ -191,63 +227,44 @@ export const useAuthStore = create<AuthState>()(
       // ================================================================
 
       signup: async (data: RegisterStartRequest) => {
-        set({ status: 'loading', error: null })
+        set({ status: 'loading', isAuthenticated: false, error: null })
 
         try {
-          // ----------------------------------------------------------
           // 1) الباك يجهّز challenge + options
-          // ----------------------------------------------------------
           const startResult = await registerStart(data)
-          // متوقع: { options, rpId }
 
-          // ----------------------------------------------------------
           // 2) المتصفح يطلب البصمة / الوجه
-          //    startRegistration من @simplewebauthn/browser
-          // ----------------------------------------------------------
           const credential = await startRegistration({
             optionsJSON: startResult.options,
           })
 
-          // ----------------------------------------------------------
           // 3) نبعِت الـ credential للباك عشان يتحقق ويحفظ Public Key
-          // ----------------------------------------------------------
           const finishResult = await registerFinish({
             email: data.email.trim().toLowerCase(),
-            deviceName: undefined, // ممكن الفرونت يخمّن اسم الجهاز لاحقًا
+            deviceName: undefined,
             credential,
           })
 
           set({ ...applyAuthData(finishResult) })
 
+          // افتح السوكت بعد ما بقى في توكن
+          connectSocket(finishResult.token)
+
           return { success: true }
         } catch (error: unknown) {
-          // لو الخطأ من WebAuthn (إلغاء المستخدم) ولا من الـ API
-          const message =
-            error &&
-            typeof error === 'object' &&
-            'name' in error &&
-            typeof (error as { name: string }).name === 'string' &&
-            [
-              'NotAllowedError',
-              'InvalidStateError',
-              'NotSupportedError',
-              'SecurityError',
-              'AbortError',
-            ].includes((error as { name: string }).name)
-              ? getWebAuthnErrorMessage(
-                  error,
-                  'فشل إنشاء الحساب بالبصمة',
-                )
-              : getAuthErrorMessage(
-                  error,
-                  'فشل إنشاء الحساب. حاول مرة أخرى.',
-                )
+          const message = isWebAuthnError(error)
+            ? getWebAuthnErrorMessage(error, 'فشل إنشاء الحساب بالبصمة')
+            : getAuthErrorMessage(
+                error,
+                'فشل إنشاء الحساب. حاول مرة أخرى.',
+              )
 
           set({
             token: null,
             user: null,
             organization: null,
             status: 'unauthenticated',
+            isAuthenticated: false,
             error: message,
           })
 
@@ -260,61 +277,42 @@ export const useAuthStore = create<AuthState>()(
       // ================================================================
 
       login: async (data: LoginStartRequest) => {
-        set({ status: 'loading', error: null })
+        set({ status: 'loading', isAuthenticated: false, error: null })
 
         try {
           const email = data.email.trim().toLowerCase()
 
-          // ----------------------------------------------------------
           // 1) options من الباك (فيها allowCredentials)
-          // ----------------------------------------------------------
           const startResult = await loginStart({ email })
 
-          // ----------------------------------------------------------
           // 2) نافذة البصمة
-          // ----------------------------------------------------------
           const credential = await startAuthentication({
             optionsJSON: startResult.options,
           })
 
-          // ----------------------------------------------------------
           // 3) تحقق + JWT
-          // ----------------------------------------------------------
-          const finishResult = await loginFinish({
-            email,
-            credential,
-          })
+          const finishResult = await loginFinish({ email, credential })
 
           set({ ...applyAuthData(finishResult) })
 
+          // افتح السوكت بعد ما بقى في توكن
+          connectSocket(finishResult.token)
+
           return { success: true }
         } catch (error: unknown) {
-          const message =
-            error &&
-            typeof error === 'object' &&
-            'name' in error &&
-            typeof (error as { name: string }).name === 'string' &&
-            [
-              'NotAllowedError',
-              'InvalidStateError',
-              'NotSupportedError',
-              'SecurityError',
-              'AbortError',
-            ].includes((error as { name: string }).name)
-              ? getWebAuthnErrorMessage(
-                  error,
-                  'فشل تسجيل الدخول بالبصمة',
-                )
-              : getAuthErrorMessage(
-                  error,
-                  'فشل تسجيل الدخول. حاول مرة أخرى.',
-                )
+          const message = isWebAuthnError(error)
+            ? getWebAuthnErrorMessage(error, 'فشل تسجيل الدخول بالبصمة')
+            : getAuthErrorMessage(
+                error,
+                'فشل تسجيل الدخول. حاول مرة أخرى.',
+              )
 
           set({
             token: null,
             user: null,
             organization: null,
             status: 'unauthenticated',
+            isAuthenticated: false,
             error: message,
           })
 
@@ -334,13 +332,14 @@ export const useAuthStore = create<AuthState>()(
         if (!currentToken) {
           set({
             status: 'unauthenticated',
+            isAuthenticated: false,
             initialized: true,
             error: null,
           })
           return
         }
 
-        set({ status: 'loading', error: null })
+        set({ status: 'loading', isAuthenticated: false, error: null })
 
         try {
           const currentUser = await getMe()
@@ -349,18 +348,24 @@ export const useAuthStore = create<AuthState>()(
             user: currentUser,
             organization: currentUser.organization ?? get().organization,
             status: 'authenticated',
+            isAuthenticated: true,
             initialized: true,
             error: null,
           })
+
+          // السوكت محتاج توكن — نوصّله بالتوكن المخزّن
+          connectSocket(currentToken)
         } catch {
           // التوكن باطل أو منتهي
           clearAuthSession()
+          disconnectSocket()
 
           set({
             token: null,
             user: null,
             organization: null,
             status: 'unauthenticated',
+            isAuthenticated: false,
             initialized: true,
             error: null,
           })
@@ -373,7 +378,7 @@ export const useAuthStore = create<AuthState>()(
 
       refreshUser: async () => {
         if (!get().token) {
-          set({ status: 'unauthenticated' })
+          set({ status: 'unauthenticated', isAuthenticated: false })
           return false
         }
 
@@ -384,6 +389,7 @@ export const useAuthStore = create<AuthState>()(
             user: currentUser,
             organization: currentUser.organization ?? get().organization,
             status: 'authenticated',
+            isAuthenticated: true,
             error: null,
           })
 
@@ -395,12 +401,14 @@ export const useAuthStore = create<AuthState>()(
           )
 
           clearAuthSession()
+          disconnectSocket()
 
           set({
             token: null,
             user: null,
             organization: null,
             status: 'unauthenticated',
+            isAuthenticated: false,
             error: message,
           })
 
@@ -414,12 +422,14 @@ export const useAuthStore = create<AuthState>()(
 
       logout: () => {
         clearAuthSession()
+        disconnectSocket()
 
         set({
           token: null,
           user: null,
           organization: null,
           status: 'unauthenticated',
+          isAuthenticated: false,
           initialized: true,
           error: null,
         })
@@ -427,6 +437,15 @@ export const useAuthStore = create<AuthState>()(
 
       clearError: () => {
         set({ error: null })
+      },
+
+      // ================================================================
+      // hasRole — فحص صلاحية
+      // ================================================================
+
+      hasRole: (roles) => {
+        const { user } = get()
+        return user ? roles.includes(user.role) : false
       },
     }),
 
@@ -450,6 +469,7 @@ export const useAuthStore = create<AuthState>()(
           if (!state) return
           // بعد ما نقرأ من localStorage لسه محتاجين /auth/me
           state.initialized = false
+          state.isAuthenticated = state.status === 'authenticated'
         }
       },
     },
@@ -481,5 +501,11 @@ export const selectOrganizationId = (state: AuthState): string | null =>
 
 export const selectIsInitialized = (state: AuthState): boolean =>
   state.initialized
+
+/** selector جاهز لفحص صلاحية من غير ما تستدعي hasRole جوه component */
+export const makeSelectHasRole =
+  (roles: string[]) =>
+  (state: AuthState): boolean =>
+    state.user ? roles.includes(state.user.role) : false
 
 export default useAuthStore

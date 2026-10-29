@@ -1,17 +1,17 @@
 // frontend/src/pages/ServersPage.tsx
 // ==================================================================
 // Zero Plus - Servers Page
-// إدارة السيرفرات المحمية (مربوطة بـ backend/modules/servers)
+// إدارة Servers المحمية (مربوطة بـ backend/modules/servers)
 //
 //   GET    /servers                 → قائمة + pagination + summary
-//   POST   /servers                 → إضافة سيرفر (بيرجع تعليمات الـ DNS)
-//   PATCH  /servers/:id             → تعديل (تغيير الدومين بيصفّر التحقق)
+//   POST   /servers                 → Add server (بيرجع تعليمات الـ DNS)
+//   PATCH  /servers/:id             → Edit (تغيير الدومين بيصفّر التحقق)
 //   GET    /servers/:id/dns         → تعليمات الـ DNS + حالة التحقق
 //   POST   /servers/:id/verify      → تحقق (ownership | routing | all)
-//   POST   /servers/:id/maintenance → تشغيل/إيقاف وضع الصيانة
-//   DELETE /servers/:id?confirmDomain= → حذف (لازم تكتب الدومين للتأكيد)
+//   POST   /servers/:id/maintenance → تشغيل/إيقاف وضع الMaintenance
+//   DELETE /servers/:id?confirmDomain= → Delete (Noزم تكتب الدومين للConfirm)
 //
-// الصلاحيات: الإضافة/التعديل/الحذف/التحقق = OWNER أو ADMIN بس
+// الصNoحيات: الAdd/الEdit/الDelete/التحقق = OWNER أو ADMIN بس
 // باقي الأدوار بتشاهد وتشوف تعليمات الـ DNS
 // ==================================================================
 
@@ -175,7 +175,7 @@ export default function ServersPage() {
     }
   }
 
-  /** بعد إضافة/تعديل: نحدّث القائمة، ولو فيه تعليمات DNS نفتحها فورًا */
+  /** بعد Add/Edit: نحدّث Menu، ولو فيه تعليمات DNS نفتحها فورًا */
   const handleSaved = (server: Server, dns?: DnsInstructions) => {
     void load()
     if (dns) setDnsState({ server, dns })

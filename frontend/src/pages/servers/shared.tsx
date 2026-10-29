@@ -21,7 +21,7 @@ export const STATUS_META: Record<ServerStatus, { tone: Tone; label: string }> = 
   MAINTENANCE: { tone: 'indigo', label: 'Maintenance' },
 }
 
-/** نفس بلوك الباك: بنرفض الحاجات الواضحة قبل الإرسال، والباقي الباك بيحكم عليه */
+/** نفس بلوك الباك: بنرفض الحاجات الواضحة قبل الSend، والباقي الباك بيحكم عليه */
 export function validateServerForm(form: ServerForm): Record<string, string> {
   const errors: Record<string, string> = {}
   const domain = form.domain.trim().toLowerCase()

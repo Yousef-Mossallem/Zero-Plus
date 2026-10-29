@@ -1,12 +1,12 @@
 // frontend/src/components/ProtectedRoute.tsx
 // ==================================================================
 // Zero Plus - Protected Route
-// بيحمي أي صفحة محتاجة تسجيل دخول
+// بيحمي أي Page محتاجة تسجيل دخandل
 // ==================================================================
 
 import { useEffect } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
-import { Loader2, Shield } from 'lucide-react'
+import LoadingScreen from './LoadingScreen'
 
 import {
   useAuthStore,
@@ -16,13 +16,13 @@ import {
 } from '../store/authStore'
 
 // ==================================================================
-// وضع التطوير
+// andضع التطandير
 // ------------------------------------------------------------------
-// true  = تخطي صفحة تسجيل الدخول أثناء التطوير
+// true  = تخطي Page تسجيل الدخandل أثناء التطandير
 // false = تشغيل الحماية الأصلية زي ما هي
 // ==================================================================
 
-const BYPASS_AUTH = false
+const BYPASS_AUTH = true  // TEMP: avoid blank while backend/login not ready
 
 // ==================================================================
 // Props
@@ -45,7 +45,7 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
   const initializeAuth = useAuthStore((s) => s.initializeAuth)
 
   // ----------------------------------------------------------------
-  // تأكد إن الـ Session اتحقق منها مرة على الأقل
+  // تأكد إن الـ Session اتحقق منها مرة على الLess
   // ----------------------------------------------------------------
 
   useEffect(() => {
@@ -59,31 +59,17 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
   // ----------------------------------------------------------------
 
   if (!BYPASS_AUTH && (!isInitialized || isLoading)) {
-      const newLocal = "pointer-events-none absolute -left-40 top-1/4 h-80 w-[320px] rounded-full bg-cyan-500/10 blur-[100px]"
     return (
-      <div className="relative flex min-h-screen w-full items-center justify-center overflow-hidden bg-[#05070f]">
-        {/* Background */}
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,var(--tw-gradient-stops))] from-[#0b1224] via-[#05070f] to-[#02040a]" />
-        <div className={newLocal} />
-        <div className="pointer-events-none absolute -right-40 bottom-1/4 h-70 w-70 rounded-full bg-indigo-600/10 blur-[90px]" />
-
-        <div className="relative z-10 flex flex-col items-center gap-5">
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-linear-to-br from-cyan-400 to-blue-600 shadow-lg shadow-cyan-500/25">
-            <Shield className="h-7 w-7 text-white" strokeWidth={2.2} />
-          </div>
-
-          <div className="flex flex-col items-center gap-3">
-            <Loader2 className="h-5 w-5 animate-spin text-cyan-400" />
-            <p className="text-sm text-slate-400">Verifying session...</p>
-          </div>
-        </div>
-      </div>
+      <LoadingScreen
+        message="Verifying session…"
+        subMessage="Securing your workspace"
+      />
     )
   }
 
   // ----------------------------------------------------------------
-  // مش مسجل دخول → يتحول لصفحة Login
-  // (في وضع التطوير BYPASS_AUTH بيتخطى الخطوة دي)
+  // مش مسجل دخandل → يتحandل لPage Login
+  // (في andضع التطandير BYPASS_AUTH بيتخطى الخطandة دي)
   // ----------------------------------------------------------------
 
   if (!BYPASS_AUTH && !isAuthenticated) {
@@ -97,7 +83,7 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
   }
 
   // ----------------------------------------------------------------
-  // مسجل دخول → يعرض الصفحة المطلوبة
+  // مسجل دخandل → يShowing الصفحة المطلandبة
   // ----------------------------------------------------------------
 
   return <>{children}</>

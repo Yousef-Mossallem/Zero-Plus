@@ -1,4 +1,4 @@
-// frontend/src/pages/servers/ServerFormModal.tsx — إضافة / تعديل سيرفر
+// frontend/src/pages/servers/ServerFormModal.tsx — Add / Edit سيرفر
 
 import { useEffect, useState } from 'react'
 import { Globe,  Server as ServerIcon } from 'lucide-react'
@@ -21,7 +21,7 @@ export function ServerFormModal({
   onSaved,
 }: {
   open: boolean
-  /** null = إضافة جديدة، غير كده = تعديل */
+  /** null = Add جديدة، غير كده = Edit */
   server: Server | null
   onClose: () => void
   onSaved: (server: Server, dns?: DnsInstructions) => void
@@ -31,7 +31,7 @@ export function ServerFormModal({
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState(false)
 
-  // نملى الفورم من السيرفر لما نفتح للتعديل، ونفضيه للإضافة
+  // نملى الفورم من السيرفر لما نفتح للEdit، ونفضيه للAdd
   useEffect(() => {
     if (!open) return
     setErrors({})
@@ -70,7 +70,7 @@ export function ServerFormModal({
       }
 
       if (server) {
-        // تعديل: بنبعت الحقول اللي اتغيرت بس
+        // Edit: بنبعت الحقول اللي اتغيرت بس
         const patch: Partial<typeof input> = {}
         if (input.domain !== server.domain) patch.domain = input.domain
         if (input.originIp !== server.originIp) patch.originIp = input.originIp
@@ -86,7 +86,7 @@ export function ServerFormModal({
 
         const res = await updateServer(server.id, patch)
         toast.success(res.message)
-        // الباك بيقول لو التعديل صفّر التحقق، فنبلّغ المستخدم
+        // الباك بيقول لو الEdit صفّر التحقق، فنبلّغ المستخدم
         if (res.resets.includes('dnsVerification')) {
           toast.warning('DNS verification was reset', 'Add the new TXT record and verify again.')
         }

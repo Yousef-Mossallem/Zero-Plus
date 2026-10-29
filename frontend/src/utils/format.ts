@@ -1,57 +1,93 @@
-// frontend/src/utils/format.ts
+// src/utils/format.ts
 // ==================================================================
-// Zero Plus - Formatting Helpers
-// دوال صغيرة لتنسيق التواريخ والأرقام (مكان واحد بدل التكرار في كل صفحة)
+// دوال مساعدة لتنسيق البيانات والتواريخ والكلاسات
+// (مصممة لتعمل بدون مكتبات خارجية وتتوافق مع tsconfig الصارم)
 // ==================================================================
 
-/** دمج class names (بيتجاهل القيم الفاضية) */
-export function cn(...parts: Array<string | false | null | undefined>): string {
-  return parts.filter(Boolean).join(' ')
+/**
+ * دمج كلاسات Tailwind بشكل آمن (بديل لـ clsx)
+ */
+export function cn(...inputs: (string | undefined | null | false)[]): string {
+  return inputs.filter(Boolean).join(' ');
 }
 
-/** تاريخ + وقت بصيغة مقروءة، أو '—' لو مفيش قيمة */
-export function formatDateTime(iso: string | null | undefined): string {
-  if (!iso) return '—'
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return '—'
-  return d.toLocaleString('en-GB', {
-    day: '2-digit',
-    month: 'short',
+/**
+ * تنسيق التاريخ إلى صيغة "منذ X وقت"
+ */
+export function timeAgo(dateString: string): string {
+  const date = new Date(dateString);
+  const now = new Date();
+  const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+
+  if (seconds < 60) return 'الآن';
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `منذ ${minutes} دقيقة`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `منذ ${hours} ساعة`;
+  const days = Math.floor(hours / 24);
+  return `منذ ${days} يوم`;
+}
+
+/**
+ * تنسيق التاريخ والوقت بشكل كامل
+ */
+export function formatDate(date: string | Date): string {
+  const d = typeof date === 'string' ? new Date(date) : date;
+  return d.toLocaleString('ar-EG', {
     year: 'numeric',
+    month: 'short',
+    day: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
-    second: '2-digit',
-  })
+  });
 }
 
-/** "منذ كذا" بشكل مختصر: 5s / 3m / 2h / 4d */
-export function timeAgo(iso: string | null | undefined): string {
-  if (!iso) return '—'
-  const diff = Date.now() - new Date(iso).getTime()
-  if (Number.isNaN(diff)) return '—'
-  const s = Math.max(0, Math.floor(diff / 1000))
-  if (s < 60) return `${s}s ago`
-  const m = Math.floor(s / 60)
-  if (m < 60) return `${m}m ago`
-  const h = Math.floor(m / 60)
-  if (h < 24) return `${h}h ago`
-  return `${Math.floor(h / 24)}d ago`
+/**
+ * تنسيق التاريخ والوقت (صيغة بديلة)
+ */
+export function formatDateTime(date: string | Date): string {
+  return formatDate(date);
 }
 
-/** رقم بفواصل آلاف: 12345 → 12,345 */
-export function formatNumber(n: number | null | undefined): string {
-  if (n === null || n === undefined || Number.isNaN(n)) return '—'
-  return n.toLocaleString('en-US')
+/**
+ * تنسيق الوقت النسبي (صيغة بديلة لـ timeAgo)
+ */
+export function formatRelativeTime(date: string | Date): string {
+  return timeAgo(typeof date === 'string' ? date : date.toISOString());
 }
 
-/** قص نص طويل */
-export function truncate(text: string, max = 40): string {
-  return text.length > max ? `${text.slice(0, max - 1)}…` : text
+/**
+ * تنسيق الأرقام الكبيرة (مثل 1.2K, 3.5M)
+ */
+export function formatNumber(num: number | null | undefined): string {
+  if (num === null || num === undefined) return '—';
+  if (num >= 1_000_000) return `${(num / 1_000_000).toFixed(1)}M`;
+  if (num >= 1_000) return `${(num / 1_000).toFixed(1)}K`;
+  return num.toLocaleString('en-US');
 }
 
-/** تحويل قيمة datetime-local (بتوقيت المستخدم) لـ ISO UTC بصيغة الباك (…Z) */
-export function localInputToIso(value: string): string | undefined {
-  if (!value) return undefined
-  const d = new Date(value)
-  return Number.isNaN(d.getTime()) ? undefined : d.toISOString()
+/**
+ * تنسيق النسب المئوية
+ */
+export function formatPercent(num: number | null | undefined): string {
+  if (num === null || num === undefined) return '—';
+  return `${num.toFixed(1)}%`;
+}
+
+/**
+ * تنسيق الوقت بالميلي ثانية
+ */
+export function formatMs(ms: number | null | undefined): string {
+  if (ms === null || ms === undefined) return '—';
+  if (ms < 1000) return `${Math.round(ms)} ms`;
+  return `${(ms / 1000).toFixed(2)} s`;
+}
+/**
+ * قص النص مع إضافة … لو أطول من الحد
+ */
+export function truncate(value: string | null | undefined, max = 40): string {
+  if (!value) return '—'
+  const s = String(value)
+  if (s.length <= max) return s
+  return s.slice(0, Math.max(0, max - 1)) + '…'
 }

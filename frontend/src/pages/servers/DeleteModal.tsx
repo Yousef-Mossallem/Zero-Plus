@@ -1,4 +1,4 @@
-// frontend/src/pages/servers/DeleteModal.tsx — حذف سيرفر بتأكيد الدومين
+// frontend/src/pages/servers/DeleteModal.tsx — Delete سيرفر بConfirm الدومين
 
 import { useEffect, useState } from 'react'
 import { Trash2 } from 'lucide-react'
@@ -9,7 +9,7 @@ import { deleteServer, type Server } from '../../services/serversService'
 
 
 // ==================================================================
-// Delete modal (لازم يكتب الدومين)
+// Delete modal (Noزم يكتب الدومين)
 // ==================================================================
 
 export function DeleteModal({

@@ -1,335 +1,44 @@
-@import "tailwindcss";
-
 /* -------------------------------------------------------------------------- */
-/* Zero Plus — Global Theme                                                   */
-/* Tailwind CSS v4                                                            */
-/* Theme tokens are defined using @theme.                                     */
+/* Landing Pages — Animations                                                 */
 /* -------------------------------------------------------------------------- */
 
-@theme {
-  /* -------------------------------------------------------------------------- */
-  /* Zero Plus Colors                                                           */
-  /* -------------------------------------------------------------------------- */
-
-  --color-zp-navy: #0A0F1D;
-  --color-zp-slate: #0F172A;
-  --color-zp-deep: #0B132B;
-  --color-zp-teal: #04201A;
-  --color-zp-emerald: #064E3B;
-
-  --color-zp-mint: #00F5A0;
-  --color-zp-cyan: #38BDF8;
-
-  --color-zp-safe: #10B981;
-  --color-zp-amber: #F59E0B;
-  --color-zp-rose: #F43F5E;
-
-  /* -------------------------------------------------------------------------- */
-  /* Zero Plus Shadows                                                          */
-  /* -------------------------------------------------------------------------- */
-
-  --shadow-zp-glow-mint: 0 0 25px -5px rgba(0, 245, 160, 0.35);
-  --shadow-zp-glow-cyan: 0 0 25px -5px rgba(56, 189, 248, 0.35);
-
-  /* -------------------------------------------------------------------------- */
-  /* Zero Plus Border Radius                                                    */
-  /* -------------------------------------------------------------------------- */
-
-  --radius-zp-sm: 0.375rem;
-  --radius-zp-md: 0.625rem;
-  --radius-zp-lg: 0.875rem;
-  --radius-zp-xl: 1.125rem;
-
-  /* -------------------------------------------------------------------------- */
-  /* Zero Plus Font                                                             */
-  /* -------------------------------------------------------------------------- */
-
-  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-}
-
-/* -------------------------------------------------------------------------- */
-/* CSS Variables                                                              */
-/* -------------------------------------------------------------------------- */
-
-:root {
-  --zp-navy: #0A0F1D;
-  --zp-slate: #0F172A;
-  --zp-deep: #0B132B;
-  --zp-teal: #04201A;
-  --zp-emerald: #064E3B;
-
-  --zp-mint: #00F5A0;
-  --zp-cyan: #38BDF8;
-
-  --zp-safe: #10B981;
-  --zp-amber: #F59E0B;
-  --zp-rose: #F43F5E;
-
-  --zp-text-primary: #E2E8F0;
-  --zp-text-secondary: #94A3B8;
-  --zp-border: rgba(255, 255, 255, 0.08);
-}
-
-/* -------------------------------------------------------------------------- */
-/* Base                                                                       */
-/* -------------------------------------------------------------------------- */
-
-html {
-  min-height: 100%;
-  background: var(--zp-navy);
-}
-
-body {
-  min-width: 320px;
-  min-height: 100vh;
-  margin: 0;
-
-  background-color: var(--zp-navy);
-
-  background-image:
-    radial-gradient(
-      at 15% 15%,
-      rgba(6, 78, 59, 0.35) 0px,
-      transparent 50%
-    ),
-    radial-gradient(
-      at 85% 20%,
-      rgba(11, 19, 43, 0.8) 0px,
-      transparent 50%
-    ),
-    radial-gradient(
-      at 50% 80%,
-      rgba(0, 245, 160, 0.08) 0px,
-      transparent 60%
-    );
-
-  background-attachment: fixed;
-
-  color: var(--zp-text-primary);
-
-  font-family:
-    Inter,
-    ui-sans-serif,
-    system-ui,
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    sans-serif;
-
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-/* -------------------------------------------------------------------------- */
-/* React Root                                                                 */
-/* -------------------------------------------------------------------------- */
-
-#root {
-  min-height: 100vh;
-}
-
-/* -------------------------------------------------------------------------- */
-/* Selection                                                                  */
-/* -------------------------------------------------------------------------- */
-
-::selection {
-  background: rgba(0, 245, 160, 0.25);
-  color: #FFFFFF;
-}
-
-/* -------------------------------------------------------------------------- */
-/* Scrollbar                                                                  */
-/* -------------------------------------------------------------------------- */
-
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-::-webkit-scrollbar-track {
-  background: var(--zp-navy);
-}
-
-::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.25);
-  border-radius: 999px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 245, 160, 0.45);
-}
-
-/* -------------------------------------------------------------------------- */
-/* Zero Plus Glass Surface                                                    */
-/* -------------------------------------------------------------------------- */
-
-.zp-glass {
-  background:
-    linear-gradient(
-      135deg,
-      rgba(15, 23, 42, 0.80) 0%,
-      rgba(6, 78, 59, 0.20) 100%
-    );
-
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-
-  border: 1px solid var(--zp-border);
-}
-
-/* -------------------------------------------------------------------------- */
-/* Zero Plus Glass — Strong                                                   */
-/* -------------------------------------------------------------------------- */
-
-.zp-glass-strong {
-  background:
-    linear-gradient(
-      135deg,
-      rgba(15, 23, 42, 0.94) 0%,
-      rgba(6, 78, 59, 0.28) 100%
-    );
-
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
-
-  border: 1px solid rgba(255, 255, 255, 0.10);
-}
-
-/* -------------------------------------------------------------------------- */
-/* Zero Plus Glow Utilities                                                   */
-/* -------------------------------------------------------------------------- */
-
-.zp-glow-mint {
-  box-shadow:
-    0 0 25px -5px rgba(0, 245, 160, 0.35);
-}
-
-.zp-glow-cyan {
-  box-shadow:
-    0 0 25px -5px rgba(56, 189, 248, 0.35);
-}
-
-/* -------------------------------------------------------------------------- */
-/* Smooth UI                                                                  */
-/* -------------------------------------------------------------------------- */
-
-button,
-a,
-input,
-textarea,
-select {
-  transition:
-    color 150ms ease,
-    background-color 150ms ease,
-    border-color 150ms ease,
-    box-shadow 150ms ease,
-    opacity 150ms ease,
-    transform 150ms ease;
-}
-
-/* -------------------------------------------------------------------------- */
-/* Focus Accessibility                                                        */
-/* -------------------------------------------------------------------------- */
-
-:focus-visible {
-  outline: 2px solid var(--zp-mint);
-  outline-offset: 2px;
-}
-
-/* -------------------------------------------------------------------------- */
-/* Disable unwanted image dragging                                            */
-/* -------------------------------------------------------------------------- */
-
-img,
-svg {
-  user-select: none;
-}
-
-/* -------------------------------------------------------------------------- */
-/* Reduced Motion                                                             */
-/* -------------------------------------------------------------------------- */
-
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    scroll-behavior: auto !important;
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-  }
-}
-
-/* -------------------------------------------------------------------------- */
-/* Zero Plus — Animations (additive: used by the dashboard pages)             */
-/* -------------------------------------------------------------------------- */
-
-@keyframes zp-fade-up {
-  from { opacity: 0; transform: translateY(14px); }
+@keyframes zp-fade-in-up {
+  from { opacity: 0; transform: translateY(24px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 
-@keyframes zp-fade-in {
-  from { opacity: 0; }
-  to   { opacity: 1; }
-}
-
-@keyframes zp-scale-in {
-  from { opacity: 0; transform: scale(0.96) translateY(8px); }
-  to   { opacity: 1; transform: scale(1) translateY(0); }
-}
-
-@keyframes zp-slide-in-right {
-  from { transform: translateX(100%); }
-  to   { transform: translateX(0); }
-}
-
-@keyframes zp-toast-in {
-  from { opacity: 0; transform: translateX(24px) scale(0.96); }
+@keyframes zp-fade-in-left {
+  from { opacity: 0; transform: translateX(-40px) scale(0.95); }
   to   { opacity: 1; transform: translateX(0) scale(1); }
 }
 
-@keyframes zp-toast-out {
-  from { opacity: 1; transform: translateX(0) scale(1); }
-  to   { opacity: 0; transform: translateX(24px) scale(0.96); }
+@keyframes zp-fade-in-right {
+  from { opacity: 0; transform: translateX(30px); }
+  to   { opacity: 1; transform: translateX(0); }
 }
 
-@keyframes zp-progress {
-  from { transform: scaleX(1); }
-  to   { transform: scaleX(0); }
+@keyframes zp-float-particle {
+  0%, 100% { transform: translateY(0) scale(1); opacity: 0.2; }
+  50%      { transform: translateY(-30px) scale(1.5); opacity: 0.8; }
 }
 
-@keyframes zp-shimmer {
-  0%   { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
+@keyframes zp-orb-1 {
+  0%, 100% { transform: scale(1); opacity: 0.1; }
+  50%      { transform: scale(1.15); opacity: 0.18; }
 }
 
-@keyframes zp-pulse-ring {
-  0%   { box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.45); }
-  100% { box-shadow: 0 0 0 10px rgba(56, 189, 248, 0); }
+@keyframes zp-orb-2 {
+  0%, 100% { transform: scale(1); opacity: 0.15; }
+  50%      { transform: scale(1.2); opacity: 0.22; }
 }
 
-@keyframes zp-bar-grow {
-  from { transform: scaleX(0); }
-  to   { transform: scaleX(1); }
+@keyframes zp-orb-3 {
+  0%, 100% { transform: translateY(0); opacity: 0.05; }
+  50%      { transform: translateY(40px); opacity: 0.12; }
 }
 
-.zp-anim-fade-up    { animation: zp-fade-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) both; }
-.zp-anim-fade-in    { animation: zp-fade-in 0.25s ease-out both; }
-.zp-anim-scale-in   { animation: zp-scale-in 0.22s cubic-bezier(0.16, 1, 0.3, 1) both; }
-.zp-anim-drawer     { animation: zp-slide-in-right 0.3s cubic-bezier(0.16, 1, 0.3, 1) both; }
-.zp-anim-toast-in   { animation: zp-toast-in 0.35s cubic-bezier(0.16, 1, 0.3, 1) both; }
-.zp-anim-toast-out  { animation: zp-toast-out 0.25s ease-in both; }
-.zp-anim-bar        { transform-origin: left; animation: zp-bar-grow 0.8s cubic-bezier(0.16, 1, 0.3, 1) both; }
-.zp-anim-pulse-ring { animation: zp-pulse-ring 1.6s ease-out infinite; }
-
-.zp-skeleton {
-  background: linear-gradient(
-    90deg,
-    rgba(255, 255, 255, 0.04) 25%,
-    rgba(255, 255, 255, 0.09) 50%,
-    rgba(255, 255, 255, 0.04) 75%
-  );
-  background-size: 200% 100%;
-  animation: zp-shimmer 1.6s linear infinite;
+@keyframes zp-gradient-shift {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
 }

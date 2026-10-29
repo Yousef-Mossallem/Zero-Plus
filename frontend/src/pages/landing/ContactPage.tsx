@@ -1,9 +1,8 @@
 // frontend/src/pages/landing/ContactPage.tsx
 // ==================================================================
-// Zero Plus - Contact Page (تواصل معنا "/contact")
-// بيانات التواصل + فورم برسائل: الاسم • الإيميل • الموضوع • الرسالة
+// Zero Plus - Contact Page ("/contact")
+// Contact info + Form: Name • Email • Subject • Message
 // ==================================================================
-
 import { useState, type FormEvent } from 'react'
 import {
   Mail,
@@ -15,86 +14,61 @@ import {
   AlertCircle,
   CheckCircle2,
 } from 'lucide-react'
-
 import LandingLayout from './LandingLayout'
 import { GradientText, PageHero, cardClass } from './LandingShared'
 
 // ==================================================================
 // Types & Config
 // ==================================================================
-
 interface ContactForm {
   name: string
   email: string
   subject: string
   message: string
 }
-
 type FormErrors = Partial<Record<keyof ContactForm, string>>
 
-// القيم الابتدائية للفورم
 const EMPTY_FORM: ContactForm = { name: '', email: '', subject: '', message: '' }
 
-// بيانات التواصل (Placeholders - غيّرها ببياناتك الحقيقية)
 const CONTACT_INFO = [
-  { icon: Mail, label: 'البريد الإلكتروني', value: 'example@example.com', ltr: true },
-  { icon: Phone, label: 'الهاتف', value: '+20 000 000 0000', ltr: true },
-  { icon: MapPin, label: 'العنوان', value: 'القاهرة، مصر', ltr: false },
-  { icon: Clock, label: 'مواعيد الرد', value: 'خلال يوم عمل واحد', ltr: false },
+  { icon: Mail, label: 'Email', value: 'example@example.com' },
+  { icon: Phone, label: 'Phone', value: '+20 000 000 0000' },
+  { icon: MapPin, label: 'Address', value: 'Cairo, Egypt' },
+  { icon: Clock, label: 'Response time', value: 'Within one business day' },
 ]
 
-// ستايل الحقل: نفس ستايل حقول صفحة Login، مع لون أحمر عند وجود خطأ
-const inputClass = (hasError: boolean) => `
-  w-full rounded-xl border bg-white/3 px-4 py-3 text-base sm:text-sm text-white
-  placeholder:text-slate-600 outline-none transition-all duration-200
-  focus:border-cyan-500/50 focus:bg-white/5 focus:ring-2 focus:ring-cyan-500/20
-  disabled:opacity-50
-  ${hasError ? 'border-rose-500/50' : 'border-white/10 hover:border-white/20'}
-`
+const inputClass = (hasError: boolean) =>
+  `w-full rounded-xl border bg-white/3 px-4 py-3 text-base sm:text-sm text-white placeholder:text-slate-600 outline-none transition-all duration-200 focus:border-cyan-500/50 focus:bg-white/5 focus:ring-2 focus:ring-cyan-500/20 disabled:opacity-50 ${
+    hasError ? 'border-rose-500/50' : 'border-white/10 hover:border-white/20'
+  }`
 
 // ==================================================================
 // Component
 // ==================================================================
-
 export default function ContactPage() {
-  // ----------------------------------------------------------------
-  // State
-  // ----------------------------------------------------------------
-
   const [form, setForm] = useState<ContactForm>(EMPTY_FORM)
   const [errors, setErrors] = useState<FormErrors>({})
   const [sending, setSending] = useState(false)
   const [sent, setSent] = useState(false)
 
-  // ----------------------------------------------------------------
-  // Handlers
-  // ----------------------------------------------------------------
-
-  // تحديث حقل + مسح رسالة الخطأ الخاصة بيه أول ما المستخدم يكتب
   const handleChange = (field: keyof ContactForm, value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }))
     if (errors[field]) setErrors((prev) => ({ ...prev, [field]: undefined }))
     if (sent) setSent(false)
   }
 
-  // التحقق من البيانات قبل الإرسال
   const validate = (): boolean => {
     const next: FormErrors = {}
-
-    if (!form.name.trim()) next.name = 'الاسم مطلوب'
-
+    if (!form.name.trim()) next.name = 'Name is required'
     if (!form.email.trim()) {
-      next.email = 'البريد الإلكتروني مطلوب'
+      next.email = 'Email is required'
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
-      next.email = 'صيغة البريد الإلكتروني غير صحيحة'
+      next.email = 'Invalid email format'
     }
-
-    if (!form.subject.trim()) next.subject = 'الموضوع مطلوب'
-
+    if (!form.subject.trim()) next.subject = 'Subject is required'
     if (form.message.trim().length < 10) {
-      next.message = 'اكتب رسالة لا تقل عن 10 أحرف'
+      next.message = 'Write a message of at least 10 characters'
     }
-
     setErrors(next)
     return Object.keys(next).length === 0
   }
@@ -102,48 +76,35 @@ export default function ContactPage() {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     if (!validate()) return
-
     setSending(true)
-
-    // TODO: اربط الفورم بالـ Backend هنا (مثلاً POST /contact).
-    // حالياً بنحاكي الإرسال بتأخير بسيط عشان الواجهة تشتغل كاملة.
     await new Promise((resolve) => setTimeout(resolve, 800))
-
     setSending(false)
     setSent(true)
     setForm(EMPTY_FORM)
   }
-
-  // ----------------------------------------------------------------
-  // Render
-  // ----------------------------------------------------------------
 
   return (
     <LandingLayout>
       <PageHero
         title={
           <>
-            يسعدنا <GradientText>سماعك</GradientText>
+            We'd love to <GradientText>hear from you</GradientText>
           </>
         }
-        description="لأي سؤال عن Zero Plus أو طلب تجربة أو استفسار تقني، اكتب لنا وسنرد عليك في أقرب وقت."
+        description="For any question about Zero Plus, a trial request, or a technical inquiry, write to us and we'll get back to you as soon as possible."
       />
 
       <section className="mx-auto grid max-w-6xl gap-8 px-6 py-8 lg:grid-cols-5">
-        {/* ========================================================== */}
-        {/* Contact Info (يمين في RTL)                                   */}
-        {/* ========================================================== */}
-
+        {/* Contact Info */}
         <aside className="space-y-4 lg:col-span-2">
-          {CONTACT_INFO.map(({ icon: Icon, label, value, ltr }) => (
+          {CONTACT_INFO.map(({ icon: Icon, label, value }) => (
             <div key={label} className={`${cardClass} flex items-center gap-4 p-5`}>
               <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-cyan-500/10 text-cyan-400">
                 <Icon className="h-5 w-5" />
               </div>
               <div className="min-w-0">
                 <p className="text-xs text-slate-500">{label}</p>
-                {/* الإيميل والرقم لازم LTR عشان يتعرضوا صح داخل صفحة RTL */}
-                <p className="truncate text-sm font-medium text-white" dir={ltr ? 'ltr' : undefined}>
+                <p className="truncate text-sm font-medium text-white">
                   {value}
                 </p>
               </div>
@@ -151,81 +112,66 @@ export default function ContactPage() {
           ))}
         </aside>
 
-        {/* ========================================================== */}
-        {/* Form                                                       */}
-        {/* ========================================================== */}
-
+        {/* Form */}
         <div className={`${cardClass} relative overflow-hidden p-7 lg:col-span-3`}>
           <div className="absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-cyan-400/60 to-transparent" />
+          <h2 className="mb-6 text-xl font-bold text-white">Send us a message</h2>
 
-          <h2 className="mb-6 text-xl font-bold text-white">أرسل لنا رسالة</h2>
-
-          {/* رسالة النجاح */}
           {sent && (
             <div
               role="status"
               className="mb-6 flex items-start gap-3 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300"
             >
               <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
-              <span>وصلتنا رسالتك. سنتواصل معك على بريدك الإلكتروني قريباً.</span>
+              <span>We received your message. We'll contact you on your email shortly.</span>
             </div>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-5" noValidate>
             <div className="grid gap-5 sm:grid-cols-2">
-              {/* الاسم */}
-              <Field label="الاسم" error={errors.name}>
+              <Field label="Name" error={errors.name}>
                 <input
                   type="text"
                   value={form.name}
                   onChange={(e) => handleChange('name', e.target.value)}
-                  placeholder="اسمك الكامل"
+                  placeholder="Your full name"
                   disabled={sending}
                   autoComplete="name"
                   className={inputClass(!!errors.name)}
                 />
               </Field>
-
-              {/* البريد */}
-              <Field label="البريد الإلكتروني" error={errors.email}>
+              <Field label="Email" error={errors.email}>
                 <input
                   type="email"
-                  dir="ltr"
                   value={form.email}
                   onChange={(e) => handleChange('email', e.target.value)}
                   placeholder="you@company.com"
                   disabled={sending}
                   autoComplete="email"
-                  className={`${inputClass(!!errors.email)} text-left`}
+                  className={inputClass(!!errors.email)}
                 />
               </Field>
             </div>
-
-            {/* الموضوع */}
-            <Field label="الموضوع" error={errors.subject}>
+            <Field label="Subject" error={errors.subject}>
               <input
                 type="text"
                 value={form.subject}
                 onChange={(e) => handleChange('subject', e.target.value)}
-                placeholder="مثال: استفسار عن حماية سيرفر"
+                placeholder="e.g. Question about server protection"
                 disabled={sending}
                 className={inputClass(!!errors.subject)}
               />
             </Field>
-
-            {/* الرسالة */}
-            <Field label="الرسالة" error={errors.message}>
+            <Field label="Message" error={errors.message}>
               <textarea
                 rows={6}
                 value={form.message}
                 onChange={(e) => handleChange('message', e.target.value)}
-                placeholder="اكتب تفاصيل طلبك هنا..."
+                placeholder="Write the details of your request here..."
                 disabled={sending}
                 className={`${inputClass(!!errors.message)} resize-none`}
               />
             </Field>
-
-            {/* زر الإرسال */}
             <button
               type="submit"
               disabled={sending}
@@ -234,12 +180,12 @@ export default function ContactPage() {
               {sending ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  جاري الإرسال...
+                  Sending...
                 </>
               ) : (
                 <>
-                  إرسال الرسالة
-                  <Send className="h-4 w-4 -scale-x-100" />
+                  Send Message
+                  <Send className="h-4 w-4" />
                 </>
               )}
             </button>
@@ -251,9 +197,8 @@ export default function ContactPage() {
 }
 
 // ==================================================================
-// Field (لابل + حقل + رسالة خطأ)
+// Field (Label + Input + Error message)
 // ==================================================================
-
 function Field({
   label,
   error,

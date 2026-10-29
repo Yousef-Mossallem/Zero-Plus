@@ -6,10 +6,10 @@
 //   GET   /organizations/me → بيانات الشركة + _count (users, servers)
 //   PATCH /organizations/me → { name?, slug? } (بنبعت الحقل اللي اتغير بس)
 //
-// ملاحظات:
-//   - الباك مفيهوش فحص صلاحيات على PATCH، فالواجهة بتسمح بالتعديل لـ
-//     OWNER/ADMIN بس (والأفضل إضافة requireRole في الباك لاحقًا).
-//   - بعد الحفظ بنحدّث اسم الشركة في authStore عشان الـ Navbar يتغير فورًا.
+// مNoحظات:
+//   - الباك مفيهوش فحص صNoحيات على PATCH، فالواجهة بتسمح بالEdit لـ
+//     OWNER/ADMIN بس (والأفضل Add requireRole في الباك Noحقًا).
+//   - بعد الSave بنحدّث اسم الشركة في authStore عشان الـ Navbar يتغير فورًا.
 //   - الـ slug: حروف صغيرة وأرقام وشرطات بس (نفس regex الباك)
 //     والباك بيرجع 409 لو مستخدم عند شركة تانية.
 // ==================================================================
@@ -56,7 +56,7 @@ import { formatDateTime, formatNumber, timeAgo } from '../utils/format'
 
 const SLUG_REGEX = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 
-/** اقتراح slug من الاسم (بيتعرض كزرار، مش بيتطبق لوحده) */
+/** اقتراح slug من Name (بيتعرض كزرار، مش بيتطبق لوحده) */
 function slugify(name: string): string {
   return name
     .toLowerCase()
@@ -137,7 +137,7 @@ export default function OrganizationsPage() {
       setName(merged.name)
       setSlug(merged.slug)
 
-      // تحديث اسم الشركة في الـ store (الـ Navbar بيقرأ منه)
+      // Refresh اسم الشركة في الـ store (الـ Navbar بيقرأ منه)
       const current = useAuthStore.getState().organization
       if (current) {
         useAuthStore.setState({ organization: { ...current, name: merged.name, slug: merged.slug } })

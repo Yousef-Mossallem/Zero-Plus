@@ -1,12 +1,11 @@
 // frontend/src/pages/landing/LandingPage.tsx
 // ==================================================================
-// Zero Plus - Landing Page (الصفحة الرئيسية "/")
-// Hero • أرقام المشكلة • المميزات • محرك الفحص • رحلة العميل • CTA
+// Zero Plus - Landing Page ("/")
+// Hero • Problem Stats • Features • Pipeline • Journey • CTA
 // ==================================================================
-
 import { Link } from 'react-router-dom'
 import {
-  ArrowLeft,
+  ArrowRight,
   Layers,
   Fingerprint,
   Network,
@@ -19,149 +18,132 @@ import {
   Server,
   Shield,
 } from 'lucide-react'
-
 import { useAuthStore, selectIsAuthenticated } from '../../store/authStore'
 import LandingLayout from './LandingLayout'
 import { GradientText, SectionHeading, cardClass } from './LandingShared'
 
 // ==================================================================
-// Data (المحتوى منفصل عن الـ JSX عشان التعديل يبقى سهل)
+// Data
 // ==================================================================
-
-// أرقام المشكلة (من تقرير المشروع)
 const STATS = [
-  { value: '47.1M', label: 'هجوم DDoS رصدته Cloudflare خلال 2025' },
-  { value: '+121%', label: 'زيادة في عدد الهجمات عن العام السابق' },
-  { value: '31.4 Tbps', label: 'أكبر هجوم مسجل في تاريخ الإنترنت (ديسمبر 2025)' },
-  { value: '~90%', label: 'من الزوار الشرعيين يمرّون بفحص خفيف وسريع' },
+  { value: '47.1M', label: 'DDoS attacks detected by Cloudflare in 2025' },
+  { value: '+121%', label: 'Increase in attacks compared to the previous year' },
+  { value: '31.4 Tbps', label: 'Largest attack ever recorded (December 2025)' },
+  { value: '~90%', label: 'Of legitimate visitors pass through lightweight checks' },
 ]
 
-// المميزات الأساسية
 const FEATURES = [
   {
     icon: Layers,
-    title: 'فحص متدرّج (Tiered Detection)',
-    desc: 'الجهاز الجديد يُعامَل ببساطة، وصاحب التاريخ السيئ يُفحص بعمق أكبر. الفحص الثقيل يُصرف فقط على من يستحقه.',
+    title: 'Tiered Detection',
+    desc: 'New devices are treated simply, while those with a bad history undergo deeper inspection. Heavy checks are reserved only for those who deserve them.',
   },
   {
     icon: Fingerprint,
-    title: 'نظام سمعة من 1 إلى 10',
-    desc: 'سمعة تراكمية لكل جهاز مبنية على أحداث سيئة فعلية فقط، فيحصل الجهاز الجديد على فرصة عادلة.',
+    title: 'Reputation System (1 to 10)',
+    desc: 'Cumulative reputation per device based only on actual bad events, giving new devices a fair chance.',
   },
   {
     icon: Zap,
-    title: 'تحقق صامت بدون CAPTCHA',
-    desc: 'اختبار JS Challenge يعمل داخل المتصفح دون إزعاج الزائر الحقيقي، ويشتد تدريجياً مع ارتفاع الشك.',
+    title: 'Silent Verification (No CAPTCHA)',
+    desc: 'JS Challenge runs inside the browser without bothering real visitors, escalating gradually as suspicion rises.',
   },
   {
     icon: Network,
-    title: 'مناعة جماعية (Federated Threat Memory)',
-    desc: 'أول عميل يتعرض لهجوم يُحصّن باقي العملاء فوراً، عبر مشاركة بصمة الجهاز المهاجم فقط دون أي بيانات حساسة.',
+    title: 'Federated Threat Memory',
+    desc: 'The first client attacked instantly immunizes all others, by sharing only the attacker\'s fingerprint without any sensitive data.',
   },
   {
     icon: LockKeyhole,
-    title: 'عزل بيانات صارم (Tenant Isolation)',
-    desc: 'كل شركة في بيئة بيانات منفصلة بمفاتيح تشفير خاصة بها. اختراق عميل واحد لا يمتد لأي عميل آخر.',
+    title: 'Strict Tenant Isolation',
+    desc: 'Each company has a separate data environment with its own encryption keys. A breach of one client never extends to another.',
   },
   {
     icon: FileText,
-    title: 'تقارير بلغة بشرية',
-    desc: 'ملخص نصي مفهوم لكل حدث أمني، بدل أرقام وجداول خام فقط، مع إشعارات فورية عند أي طارئ.',
+    title: 'Human-Readable Reports',
+    desc: 'A clear text summary for every security event, instead of raw numbers and tables only, with instant alerts for any emergency.',
   },
 ]
 
-// أقسام محرك الفحص التسعة (ترتيبها فعلي، فالترقيم هنا معبّر)
 const PIPELINE = [
-  { name: 'Intake Classifier', role: 'يفرز الطلب: جهاز جديد أم له ملف سابق؟' },
-  { name: 'Baseline Verifier', role: 'اختبار JS Challenge صامت للزوار الجدد' },
-  { name: 'IP Reputation Scanner', role: 'يكشف الطلبات القادمة من Data Centers' },
-  { name: 'Similarity Matcher', role: 'يقارن IP + بصمة الجهاز + الموقع بالسجل' },
-  { name: 'Deep Comparison Engine', role: 'مقارنة أعمق عند وجود تطابق أولي' },
-  { name: 'Fingerprint Authenticator', role: 'فحص TLS/JA3/JA4 للأجهزة المشبوهة فقط' },
-  { name: 'Traffic Orchestrator', role: 'يوزّع الطلبات الآمنة على السيرفرات' },
-  { name: 'Adaptive Dashboard Engine', role: 'واجهة تتكيّف مع أسلوب كل مستخدم' },
-  { name: 'Isolation & Immunity Manager', role: 'عزل البيانات ونشر المناعة الجماعية' },
+  { name: 'Intake Classifier', role: 'Sorts the request: new device or existing profile?' },
+  { name: 'Baseline Verifier', role: 'Silent JS Challenge for new visitors' },
+  { name: 'IP Reputation Scanner', role: 'Detects requests coming from Data Centers' },
+  { name: 'Similarity Matcher', role: 'Compares IP + device fingerprint + location against records' },
+  { name: 'Deep Comparison Engine', role: 'Deeper comparison when an initial match is found' },
+  { name: 'Fingerprint Authenticator', role: 'TLS/JA3/JA4 check for suspicious devices only' },
+  { name: 'Traffic Orchestrator', role: 'Routes safe requests to Servers' },
+  { name: 'Adaptive Dashboard Engine', role: 'Interface that adapts to each user\'s style' },
+  { name: 'Isolation & Immunity Manager', role: 'Data isolation and federated immunity deployment' },
 ]
 
-// رحلة العميل من التسجيل حتى الحماية الفعلية
 const STEPS = [
-  { title: 'أنشئ حسابك', desc: 'يتكوّن Organization ومعه مستخدم Admin.' },
-  { title: 'أضف السيرفر', desc: 'أدخل الـ Domain وعنوان الـ Origin Server والـ Port.' },
-  { title: 'غيّر إعدادات DNS', desc: 'نعطيك السجلات المطلوبة ليشير الدومين إلى Zero Plus.' },
-  { title: 'نتحقق من الإعداد', desc: 'نتأكد من وصول الـ Gateway والـ Origin معاً.' },
-  { title: 'الحماية تعمل', desc: 'كل Traffic يمر عبر Zero Plus قبل وصوله لسيرفرك.' },
+  { title: 'Create your account', desc: 'An Organization is created along with an Admin user.' },
+  { title: 'Add your server', desc: 'Enter the Domain, Origin Server address, and Port.' },
+  { title: 'Update DNS settings', desc: 'We provide the required records to point the domain to Zero Plus.' },
+  { title: 'We verify the setup', desc: 'We confirm that both the Gateway and Origin are reachable.' },
+  { title: 'Protection is live', desc: 'All traffic passes through Zero Plus before reaching your server.' },
 ]
 
-// أمثلة توضيحية لقرارات المحرك في كارت الـ Hero (ثابتة، للتوضيح فقط)
 const DEMO_ROWS = [
-  { label: 'زائر جديد · JS Challenge ناجح', allowed: true },
-  { label: 'جهاز بسمعة 2 · فحص خفيف', allowed: true },
-  { label: 'IP من Data Center · بصمة JA3 مشبوهة', allowed: false },
-  { label: 'بصمة معروفة من المناعة الجماعية', allowed: false },
+  { label: 'New visitor · JS Challenge passed', allowed: true },
+  { label: 'Device with reputation 2 · Light check', allowed: true },
+  { label: 'IP from Data Center · Suspicious JA3 fingerprint', allowed: false },
+  { label: 'Known fingerprint from federated immunity', allowed: false },
 ]
 
 // ==================================================================
 // Component
 // ==================================================================
-
 export default function LandingPage() {
   const isAuthenticated = useAuthStore(selectIsAuthenticated)
-
-  // زر الدعوة الرئيسي: لو مسجل دخول يروح للوحة، غير كده يسجّل حساب
   const ctaTo = isAuthenticated ? '/dashboard' : '/signup'
-  const ctaLabel = isAuthenticated ? 'اذهب إلى لوحة التحكم' : 'ابدأ الحماية الآن'
+  const ctaLabel = isAuthenticated ? 'Go to Dashboard' : 'Start protection now'
 
   return (
     <LandingLayout>
-      {/* ============================================================ */}
-      {/* Hero                                                         */}
-      {/* ============================================================ */}
-
+      {/* Hero */}
       <section className="mx-auto grid max-w-7xl items-center gap-12 px-6 pb-20 pt-16 lg:grid-cols-2 lg:pt-24">
-        {/* النص الرئيسي */}
         <div className="space-y-7">
           <h1 className="text-4xl font-bold leading-[1.25] tracking-tight text-white sm:text-5xl xl:text-6xl">
-            احمِ موقعك من هجمات DDoS
+            Protect your site from DDoS attacks
             <span className="mt-2 block">
-              <GradientText>بحارس يفحص كل زائر بحسب سمعته</GradientText>
+              <GradientText>A gateway that scores every visitor by reputation</GradientText>
             </span>
           </h1>
-
           <p className="max-w-xl text-lg leading-relaxed text-slate-400">
-            Zero Plus طبقة وسيطة (Reverse Proxy) بين الزوار وسيرفرك الحقيقي. لا
-            تعامل الجميع بنفس القسوة: تبني ذاكرة عن الأجهزة التي رأتها، وتقرر
-            بسرعة من يمرّ مباشرة ومن يستحق فحصاً أعمق.
+            Zero Plus is a middleware layer (Reverse Proxy) between visitors and
+            your real server. We don't treat everyone equally: we build memory of
+            devices we've seen, and quickly decide who passes directly and who
+            deserves deeper inspection.
           </p>
-
           <div className="flex flex-wrap gap-3">
             <Link
               to={ctaTo}
               className="group flex items-center gap-2 rounded-xl bg-linear-to-r from-cyan-500 to-blue-600 px-7 py-3.5 text-sm font-semibold text-white shadow-lg shadow-cyan-500/25 hover:shadow-cyan-500/40 hover:brightness-110"
             >
               {ctaLabel}
-              <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-1" />
+              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
             </Link>
             <Link
               to="/about"
               className="rounded-xl border border-white/10 bg-white/3 px-7 py-3.5 text-sm font-medium text-slate-200 hover:border-white/20 hover:bg-white/5"
             >
-              تعرّف على المشروع
+              Learn about the project
             </Link>
           </div>
         </div>
 
-        {/* كارت توضيحي: قرارات المحرك على طلبات مختلفة */}
+        {/* Demo Card */}
         <div className={`${cardClass} relative overflow-hidden p-6 shadow-2xl shadow-black/40`}>
           <div className="absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-cyan-400/60 to-transparent" />
-
           <div className="mb-5 flex items-center justify-between">
-            <h2 className="font-semibold text-white">قرارات المحرك (مثال توضيحي)</h2>
+            <h2 className="font-semibold text-white">Engine decisions (example)</h2>
             <span className="flex items-center gap-1.5 text-xs text-emerald-400">
               <span className="h-2 w-2 rounded-full bg-emerald-400" />
               Protection Active
             </span>
           </div>
-
           <ul className="space-y-3">
             {DEMO_ROWS.map((row) => (
               <li
@@ -169,7 +151,6 @@ export default function LandingPage() {
                 className="flex items-center justify-between gap-3 rounded-xl border border-white/6 bg-white/2 px-4 py-3 text-sm"
               >
                 <span className="text-slate-300">{row.label}</span>
-                {/* شارة القرار: سماح (أخضر) أو حظر (أحمر) */}
                 <span
                   className={`flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold ${
                     row.allowed
@@ -186,14 +167,11 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ============================================================ */}
-      {/* Stats: لماذا المشكلة حقيقية                                    */}
-      {/* ============================================================ */}
-
+      {/* Stats */}
       <section className="mx-auto max-w-7xl px-6 py-16">
         <SectionHeading
-          title="المشكلة تكبر كل عام"
-          description="أي جهاز ذكي رخيص وغير آمن في أي منزل قد يصبح سلاحاً في يد طرف ثالث دون علم صاحبه. والحلول التقليدية إما مكلفة جداً أو تزعج الزوار بـ CAPTCHA."
+          title="The problem grows every year"
+          description="Any cheap, insecure smart device in any home can become a weapon in the hands of a third party without its owner's knowledge. Traditional solutions are either too expensive or bother visitors with CAPTCHAs."
         />
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {STATS.map((s) => (
@@ -207,14 +185,11 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ============================================================ */}
-      {/* Features                                                     */}
-      {/* ============================================================ */}
-
+      {/* Features */}
       <section className="mx-auto max-w-7xl px-6 py-16">
         <SectionHeading
-          title="ماذا يقدّم Zero Plus؟"
-          description="حماية أذكى وأوفر في الموارد، بمنطق واضح وقابل للشرح بدل الصندوق الأسود."
+          title="What Zero Plus delivers"
+          description="Smarter, more resource-efficient protection, with clear and explainable logic instead of a black box."
         />
         <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
           {FEATURES.map(({ icon: Icon, title, desc }) => (
@@ -232,19 +207,15 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ============================================================ */}
-      {/* Pipeline: الأقسام التسعة                                       */}
-      {/* ============================================================ */}
-
+      {/* Pipeline */}
       <section className="mx-auto max-w-7xl px-6 py-16">
         <SectionHeading
-          title="تسعة أقسام، لكل قسم مهمة واحدة"
-          description="كل طلب يمر على أقسام متتالية، وكل قسم يمرّر فقط من يستحق المرحلة الأعلى. لذلك يبقى الفحص الثقيل نادراً ومحدداً."
+          title="Nine modules, each with one job"
+          description="Each request passes through successive modules, and each module forwards only those who deserve the next stage. That's why heavy inspection remains rare and targeted."
         />
         <ol className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {PIPELINE.map((p, i) => (
             <li key={p.name} className={`${cardClass} flex gap-4 p-5`}>
-              {/* الرقم هنا معبّر لأن الأقسام بترتيب تنفيذي فعلي */}
               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-linear-to-br from-cyan-400 to-blue-600 text-sm font-bold text-white">
                 {i + 1}
               </span>
@@ -259,31 +230,24 @@ export default function LandingPage() {
         </ol>
       </section>
 
-      {/* ============================================================ */}
-      {/* Before / After: مسار الطلب                                     */}
-      {/* ============================================================ */}
-
+      {/* Before / After */}
       <section className="mx-auto max-w-5xl px-6 py-16">
         <SectionHeading
-          title="كيف يتغيّر مسار الطلب؟"
-          description="لا تحتاج لتثبيت أي برنامج. تغيّر إعداد DNS فقط، ونحن نشغّل البنية التحتية."
+          title="How a request is handled"
+          description="No software installation required. Just change your DNS settings, and we run the infrastructure."
         />
-
-        {/* قبل */}
         <div className={`${cardClass} mb-4 p-5`}>
-          <p className="mb-3 text-sm font-medium text-slate-400">قبل Zero Plus</p>
-          <div className="flex flex-wrap items-center gap-3 text-sm" dir="ltr">
+          <p className="mb-3 text-sm font-medium text-slate-400">Before Zero Plus</p>
+          <div className="flex flex-wrap items-center gap-3 text-sm">
             <FlowNode icon={Globe} label="Internet" />
             <FlowArrow />
             <FlowNode icon={Server} label="Company Server" tone="rose" />
-            <span className="text-xs text-rose-400">أي شخص يصل مباشرة</span>
+            <span className="text-xs text-rose-400">Anyone reaches directly</span>
           </div>
         </div>
-
-        {/* بعد */}
         <div className={`${cardClass} border-cyan-500/30 p-5`}>
-          <p className="mb-3 text-sm font-medium text-cyan-300">بعد Zero Plus</p>
-          <div className="flex flex-wrap items-center gap-3 text-sm" dir="ltr">
+          <p className="mb-3 text-sm font-medium text-cyan-300">After Zero Plus</p>
+          <div className="flex flex-wrap items-center gap-3 text-sm">
             <FlowNode icon={Globe} label="Internet" />
             <FlowArrow />
             <FlowNode icon={Shield} label="Zero Plus" tone="cyan" />
@@ -293,12 +257,9 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ============================================================ */}
-      {/* Steps: رحلة العميل                                             */}
-      {/* ============================================================ */}
-
+      {/* Steps */}
       <section className="mx-auto max-w-7xl px-6 py-16">
-        <SectionHeading title="من التسجيل إلى الحماية في خمس خطوات" />
+        <SectionHeading title="From signup to protection in five steps" />
         <ol className="grid gap-4 md:grid-cols-5">
           {STEPS.map((s, i) => (
             <li key={s.title} className={`${cardClass} p-5`}>
@@ -312,18 +273,15 @@ export default function LandingPage() {
         </ol>
       </section>
 
-      {/* ============================================================ */}
-      {/* Final CTA                                                    */}
-      {/* ============================================================ */}
-
+      {/* Final CTA */}
       <section className="mx-auto max-w-4xl px-6 pt-16">
         <div className={`${cardClass} relative overflow-hidden px-8 py-14 text-center`}>
           <div className="absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-cyan-400/60 to-transparent" />
           <h2 className="text-3xl font-bold text-white sm:text-4xl">
-            جاهز تحمي سيرفرك؟
+            Ready to protect your server?
           </h2>
           <p className="mx-auto mt-4 max-w-xl text-slate-400">
-            أنشئ حسابك وأضف أول سيرفر محمي، أو تواصل معنا لو عندك أي سؤال.
+            Create your account and add your first protected server, or contact us if you have any questions.
           </p>
           <div className="mt-8 flex flex-wrap justify-center gap-3">
             <Link
@@ -336,7 +294,7 @@ export default function LandingPage() {
               to="/contact"
               className="rounded-xl border border-white/10 px-7 py-3.5 text-sm font-medium text-slate-200 hover:bg-white/5"
             >
-              تواصل معنا
+              Contact us
             </Link>
           </div>
         </div>
@@ -346,10 +304,8 @@ export default function LandingPage() {
 }
 
 // ==================================================================
-// Small Local Components (خاصة بقسم مسار الطلب)
+// Small Local Components
 // ==================================================================
-
-// عقدة في مسار الطلب (أيقونة + اسم)
 function FlowNode({
   icon: Icon,
   label,
@@ -359,7 +315,6 @@ function FlowNode({
   label: string
   tone?: 'slate' | 'cyan' | 'rose'
 }) {
-  // ألوان ثابتة لكل tone (Tailwind لازم يشوف أسماء الكلاسات كاملة)
   const tones = {
     slate: 'border-white/10 bg-white/3 text-slate-200',
     cyan: 'border-cyan-500/40 bg-cyan-500/10 text-cyan-200',
@@ -373,7 +328,6 @@ function FlowNode({
   )
 }
 
-// سهم بين العقد (ثابت الاتجاه لأن مسار الطلب بالإنجليزي LTR)
 function FlowArrow() {
   return <span className="text-slate-600">→</span>
 }

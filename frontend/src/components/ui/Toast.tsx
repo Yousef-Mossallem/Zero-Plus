@@ -7,6 +7,8 @@
 //   const toast = useToast()
 //   toast.success('تم الحفظ', 'تفاصيل اختيارية')
 //   toast.error('فشل الطلب')
+//   toast.warning('...', '...')
+//   toast.info('...')
 // ==================================================================
 
 import {
@@ -44,7 +46,7 @@ interface ToastApi {
 }
 
 // ------------------------------------------------------------------
-// Visual config لكل نوع (ألوان الثيم: mint / rose / amber / cyan)
+// Visual config لكل نوع (ألوان الثيم: emerald / rose / amber / cyan)
 // ------------------------------------------------------------------
 
 const KIND_STYLES: Record<
@@ -128,7 +130,7 @@ function ToastCard({
         <span
           className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${style.iconCls}`}
         >
-          <Icon className="h-4.5 w-4.5" />
+          <Icon className="h-[18px] w-[18px]" />
         </span>
 
         <div className="min-w-0 flex-1 pt-0.5">
@@ -172,31 +174,36 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
   // إخفاء ناعم: نعلّم التوست إنه "بيخرج" ثم نمسحه بعد مدة الانيميشن
   const dismiss = useCallback((id: number) => {
-    setToasts((prev) => prev.map((t) => (t.id === id ? { ...t, leaving: true } : t)))
+    setToasts((prev) =>
+      prev.map((t) => (t.id === id ? { ...t, leaving: true } : t)),
+    )
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id))
     }, LEAVE_MS)
   }, [])
 
-  const push = useCallback((kind: ToastKind, title: string, description?: string) => {
-    counter.current += 1
-    const id = counter.current
-    // الأخطاء بتفضل أطول شوية عشان المستخدم يلحق يقراها
-    const duration = kind === 'error' ? 6500 : 4000
+  const push = useCallback(
+    (kind: ToastKind, title: string, description?: string) => {
+      counter.current += 1
+      const id = counter.current
+      // الأخطاء بتفضل أطول شوية عشان المستخدم يلحق يقراها
+      const duration = kind === 'error' ? 6500 : 4000
 
-    setToasts((prev) => {
-      const item: ToastItem = {
-        id,
-        kind,
-        title,
-        duration,
-        leaving: false,
-        ...(description !== undefined && { description }),
-      }
-      // نحتفظ بآخر MAX_VISIBLE بس
-      return [...prev, item].slice(-MAX_VISIBLE)
-    })
-  }, [])
+      setToasts((prev) => {
+        const item: ToastItem = {
+          id,
+          kind,
+          title,
+          duration,
+          leaving: false,
+          ...(description !== undefined && { description }),
+        }
+        // نحتفظ بآخر MAX_VISIBLE بس
+        return [...prev, item].slice(-MAX_VISIBLE)
+      })
+    },
+    [],
+  )
 
   const api = useMemo<ToastApi>(
     () => ({
@@ -215,7 +222,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       {/* حاوية التوست: ثابتة أعلى اليمين فوق كل حاجة */}
       <div
         dir="ltr"
-        className="pointer-events-none fixed right-4 top-4 z-100 flex w-[calc(100%-2rem)] max-w-sm flex-col gap-2.5 sm:right-6 sm:top-6"
+        className="pointer-events-none fixed right-4 top-4 z-[100] flex w-[calc(100%-2rem)] max-w-sm flex-col gap-2.5 sm:right-6 sm:top-6"
       >
         {toasts.map((t) => (
           <ToastCard key={t.id} toast={t} onClose={dismiss} />

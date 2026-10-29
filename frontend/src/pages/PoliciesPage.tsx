@@ -1,20 +1,20 @@
 // frontend/src/pages/PoliciesPage.tsx
 // ==================================================================
 // Zero Plus - Policies Page
-// تعديل حدود الـ Risk Score وإعدادات الحماية للشركة
+// Edit حدود الـ Risk Score وإعدادات الحماية للشركة
 // (مربوطة بـ backend/modules/policies)
 //
 //   GET   /policies/me        → الإعدادات الحالية
 //   GET   /policies/defaults  → القيم الافتراضية (للمقارنة وزرار Reset)
 //   PATCH /policies/me        → بنبعت الحقول اللي اتغيرت بس (Partial)
-//   POST  /policies/me/reset  → { confirm: true } يرجّع كل حاجة للافتراضي
+//   POST  /policies/me/reset  → { confirm: true } يرجّع كل حاجة لNoفتراضي
 //
 // فكرة الصفحة:
-//   - الأرقام بتتخزن كنصوص جوه الفورم (عشان المستخدم يقدر يمسح ويكتب براحته)
-//   - بنعمل نفس Validation بتاع الباك (policies.schema.ts) قبل الإرسال:
+//   - الأرقام بتتخزن كنصوص جوه الفورم (عشان المستخدم يقدر يClear ويكتب براحته)
+//   - بYesل نفس Validation بتاع الباك (policies.schema.ts) قبل الSend:
 //       allow ≤ rateLimit ≤ challenge  •  الحد الأقصى لكل IP ≥ الـ Rate limit الناعم
-//   - شريط ثابت بيظهر لما فيه تعديلات غير محفوظة (Save / Discard)
-//   - الـ VIEWER بيشوف الإعدادات بس (الحقول معطلة) والباك أصلاً بيرفض تعديله
+//   - شريط ثابت بيظهر لما فيه Editات غير محفوظة (Save / Discard)
+//   - الـ VIEWER بيشوف الإعدادات بس (الحقول معطلة) والباك أصNoً بيرفض Editه
 // ==================================================================
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
@@ -77,7 +77,7 @@ export default function PoliciesPage() {
   const dirtyCount = Object.keys(patch).length
   const dirty = dirtyCount > 0
 
-  // تحذير لو المستخدم حاول يقفل الصفحة وفي تعديلات مش محفوظة
+  // Warning لو المستخدم حاول يقفل الصفحة وفي Editات مش محفوظة
   useEffect(() => {
     if (!dirty) return
     const handler = (e: BeforeUnloadEvent) => e.preventDefault()
@@ -130,7 +130,7 @@ export default function PoliciesPage() {
     }
   }
 
-  // ---------------- Zone preview (من القيم الصحيحة بس، وإلا نرجع للمحفوظ) ----------------
+  // ---------------- Zone preview (من القيم الصحيحة بس، وإNo نرجع للمحفوظ) ----------------
   const zones = useMemo(() => {
     const read = (key: NumKey) => {
       const n = draft && !errors[key] ? parseInt10(draft[key]) : undefined
@@ -229,7 +229,7 @@ export default function PoliciesPage() {
             description="A request's risk score (0–100) decides what happens to it."
             delay={0}
           >
-            {/* معاينة المناطق: بتتحدث مباشرة مع كل تعديل */}
+            {/* معاينة المناطق: بتتحدث مباشرة مع كل Edit */}
             <div>
               <div className="flex h-4 w-full overflow-hidden rounded-full bg-white/6">
                 {zones.map((z) => (
@@ -370,7 +370,7 @@ export default function PoliciesPage() {
             </div>
           </Section>
 
-          {/* ============ آخر تعديل اتحفظ ============ */}
+          {/* ============ آخر Edit اتSave ============ */}
           {lastChanges.length > 0 && (
             <Card className="p-5" accent>
               <div className="mb-3 flex items-center justify-between">
@@ -401,7 +401,7 @@ export default function PoliciesPage() {
             Policy last updated {timeAgo(policy.updatedAt)}
           </p>
 
-          {/* ============ شريط الحفظ (بيظهر مع وجود تعديلات) ============ */}
+          {/* ============ شريط الSave (بيظهر مع وجود Editات) ============ */}
           {canEdit && dirty && (
             <div className="sticky bottom-4 z-30 flex justify-center">
               <div className="zp-anim-scale-in flex w-full max-w-xl items-center justify-between gap-4 rounded-2xl border border-amber-400/25 bg-[#0b1224]/95 px-5 py-3.5 shadow-2xl shadow-black/60 backdrop-blur-xl">
