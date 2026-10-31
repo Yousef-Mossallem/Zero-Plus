@@ -37,12 +37,12 @@ import PoliciesPage from '../pages/PoliciesPage'
 // Secondary Pages (لسه مش جاهزة – هتتفعل لما تتعمل)
 // ------------------------------------------------------------------
 
-// import DashboardPage from '../pages/DashboardPage'
+import DashboardPage from '../pages/DashboardPage'
 // import SimulationPage from '../pages/SimulationPage'
 // import LiveTrafficPage from '../pages/LiveTrafficPage'
-// import ReportsPage from '../pages/ReportsPage'
+import ReportsPage from '../pages/ReportsPage'
 // import ThreatIntelligencePage from '../pages/ThreatIntelligencePage'
-// import NotificationsPage from '../pages/NotificationsPage'
+import NotificationsPage from '../pages/NotificationsPage'
 // import ProfilePage from '../pages/ProfilePage'
 
 // ------------------------------------------------------------------
@@ -122,11 +122,7 @@ export default function AppRouter() {
         }
       />
 
-      {/* أي محاولة للدخول على /dashboard تتحوّل لصفحة السيرفرات */}
-      <Route path="/dashboard" element={<Navigate to="/servers" replace />} />
-
-      {/* الصفحات اللي لسه مش جاهزة – هتتفعل لما تتعمل */}
-      {/*
+      {/* الداشبورد (قراءة فقط) + التقارير + الإشعارات */}
       <Route
         path="/dashboard"
         element={
@@ -135,6 +131,25 @@ export default function AppRouter() {
           </ProtectedRoute>
         }
       />
+      <Route
+        path="/reports"
+        element={
+          <ProtectedRoute>
+            <ReportsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/notifications"
+        element={
+          <ProtectedRoute>
+            <NotificationsPage />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* الصفحات اللي لسه مش جاهزة – هتتفعل لما تتعمل */}
+      {/*
       <Route
         path="/simulation"
         element={
@@ -152,26 +167,10 @@ export default function AppRouter() {
         }
       />
       <Route
-        path="/reports"
-        element={
-          <ProtectedRoute>
-            <ReportsPage />
-          </ProtectedRoute>
-        }
-      />
-      <Route
         path="/threat-intelligence"
         element={
           <ProtectedRoute>
             <ThreatIntelligencePage />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/notifications"
-        element={
-          <ProtectedRoute>
-            <NotificationsPage />
           </ProtectedRoute>
         }
       />
@@ -187,11 +186,11 @@ export default function AppRouter() {
 
       {/* ============================================================
           Default Redirect
-          أي مسار غير معروف → صفحة السيرفرات
+          أي مسار غير معروف → الداشبورد
           (ProtectedRoute بيرجّع غير المسجّل لـ /login لوحده)
       ============================================================ */}
 
-      <Route path="*" element={<Navigate to="/servers" replace />} />
+      <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>
   )
 }

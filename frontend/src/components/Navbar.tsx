@@ -27,6 +27,7 @@ import {
 } from 'lucide-react'
 
 // import Logo from './Logo'
+import NotificationBell from './NotificationBell'
 import {
   useAuthStore,
   selectCurrentUser,
@@ -128,6 +129,8 @@ export default function Navbar() {
             </p>
           </div>
         )}
+        {/* جرس الإشعارات + badge غير المقروء (لحظي) */}
+        <NotificationBell className={collapsed ? '' : 'ml-auto'} />
       </div>
 
       {/* Groups */}
@@ -270,13 +273,16 @@ export default function Navbar() {
           </span>
         </div>
 
-        <button
-          type="button"
-          onClick={() => setMobileOpen(true)}
-          className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 text-slate-300 transition hover:bg-white/5"
-        >
-          <Menu className="h-5 w-5" />
-        </button>
+        <div className="flex items-center gap-2">
+          <NotificationBell />
+          <button
+            type="button"
+            onClick={() => setMobileOpen(true)}
+            className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 text-slate-300 transition hover:bg-white/5"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+        </div>
       </div>
 
       {/* Mobile drawer */}

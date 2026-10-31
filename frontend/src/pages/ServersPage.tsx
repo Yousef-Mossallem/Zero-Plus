@@ -58,6 +58,8 @@ import { selectUserRole, useAuthStore } from '../store/authStore'
 import { cn } from '../utils/format'
 
 import { MANAGE_ROLES, PAGE_SIZE, STATUS_META } from './servers/shared'
+import ServerDetailDrawer from './servers/ServerDetailDrawer'
+import { useServerSocket } from './servers/useServerSocket'
 import { ServerFormModal } from './servers/ServerFormModal'
 import { DnsModal } from './servers/DnsModal'
 import { DeleteModal } from './servers/DeleteModal'
@@ -99,6 +101,8 @@ export default function ServersPage() {
     dns: DnsInstructions | null
   } | null>(null)
   const [deleting, setDeleting] = useState<Server | null>(null)
+  /** السيرفر المفتوح في Drawer التفاصيل (بنخزن الـ id والبيانات بتيجي من القايمة المحدّثة لحظيًا) */
+  const [detailId, setDetailId] = useState<string | null>(null)
 
   // ---------------- Query ----------------
   const query = useMemo<ServersQuery>(
@@ -116,9 +120,10 @@ export default function ServersPage() {
   )
 
   // ---------------- Load ----------------
-  const load = useCallback(async () => {
+  // silent=true للتحديثات اللحظية: من غير وميض ولا توست
+  const load = useCallback(async (silent = false) => {
     const id = ++requestId.current
-    setLoading(true)
+    if (!silent) setLoading(true)
 
     try {
       const res = await listServers(query)
@@ -133,17 +138,22 @@ export default function ServersPage() {
       setError(null)
     } catch (err) {
       if (id !== requestId.current) return
+      if (silent) return
       const { message } = parseApiError(err)
       setError(message)
       toast.error('Failed to load servers', message)
     } finally {
-      if (id === requestId.current) setLoading(false)
+      if (id === requestId.current && !silent) setLoading(false)
     }
   }, [query, toast])
 
   useEffect(() => {
     void load()
   }, [load])
+
+  // ---------------- Socket: server:status ----------------
+  // تحديث الكروت والـ Drawer لحظيًا (الشرح في servers/useServerSocket.ts)
+  useServerSocket({ setServers, setDetailId, reload: () => void load(true) })
 
   // ---------------- Helpers ----------------
   const hasFilters = Boolean(search || status || mode || dnsFilter)
@@ -415,6 +425,7 @@ export default function ServersPage() {
                 onEdit={() => setFormState({ open: true, server })}
                 onDelete={() => setDeleting(server)}
                 onMaintenance={() => void handleMaintenance(server)}
+                onDetails={() => setDetailId(server.id)}
               />
             ))}
           </div>
@@ -459,6 +470,15 @@ export default function ServersPage() {
         canManage={canManage}
         onClose={() => setDnsState(null)}
         onVerified={handleVerified}
+      />
+
+      {/* تفاصيل السيرفر + قياس السعة (Probe) */}
+      <ServerDetailDrawer
+        server={servers.find((s) => s.id === detailId) ?? null}
+        canManage={canManage}
+        onClose={() => setDetailId(null)}
+        onOpenDns={(server) => setDnsState({ server, dns: null })}
+        onServerUpdated={replaceServer}
       />
 
       <DeleteModal

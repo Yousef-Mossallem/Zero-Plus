@@ -1,281 +1,157 @@
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useState,
-  type ReactNode,
-} from "react";
-import { createPortal } from "react-dom";
-import {
-  CheckCircle2,
-  XCircle,
-  AlertTriangle,
-  Info,
-  X,
-} from "lucide-react";
+// frontend/src/components/AlertToast.tsx
+// ==================================================================
+// Zero Plus - Alert Toast (توست الإشعارات اللحظية)
+// بيظهر فوق كل صفحة (top-right) أول ما notification:new يوصل.
+//
+//   - أيقونة حسب NotificationType، ولون حسب الشدة (severity)
+//   - بيختفي بعد 5 ثواني، أو بالـ X، والـ hover بيوقف العدّاد
+//   - الضغط عليه بيفتح صفحة الإشعارات
+//   - بيدخل في نفس حاوية توست النظام (#zp-toast-stack) عن طريق Portal
+//     عشان الاتنين يتراكموا تحت بعض ومايتغطوش
+// ==================================================================
 
-/* -------------------------------------------------------------------------- */
-/* Types                                                                      */
-/* -------------------------------------------------------------------------- */
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
+import { useNavigate } from 'react-router-dom'
+import { X } from 'lucide-react'
 
-export type ToastVariant = "success" | "error" | "warning" | "info";
+import useNotificationStore from '../store/notificationStore'
+import type { AppNotification } from '../services/notificationsService'
+import { SEVERITY_LABELS, metaFor, visualFor } from '../utils/notificationMeta'
 
-export type ToastItem = {
-  id: string;
-  title: string;
-  description?: string;
-  variant: ToastVariant;
-  duration?: number; // ms — default 4000
-};
+const DURATION_MS = 5000
+const LEAVE_MS = 250
 
-type ToastContextValue = {
-  toast: (opts: Omit<ToastItem, "id">) => string;
-  success: (title: string, description?: string) => string;
-  error: (title: string, description?: string) => string;
-  warning: (title: string, description?: string) => string;
-  info: (title: string, description?: string) => string;
-  dismiss: (id: string) => void;
-  dismissAll: () => void;
-};
-
-/* -------------------------------------------------------------------------- */
-/* Context                                                                    */
-/* -------------------------------------------------------------------------- */
-
-const ToastContext = createContext<ToastContextValue | null>(null);
-
-export function useToast() {
-  const ctx = useContext(ToastContext);
-  if (!ctx) {
-    throw new Error("useToast must be used inside <ToastProvider>");
-  }
-  return ctx;
-}
-
-/* -------------------------------------------------------------------------- */
-/* Variant styles                                                             */
-/* -------------------------------------------------------------------------- */
-
-const VARIANT_STYLES: Record<
-  ToastVariant,
-  {
-    icon: typeof CheckCircle2;
-    accent: string;
-    glow: string;
-    bar: string;
-  }
-> = {
-  success: {
-    icon: CheckCircle2,
-    accent: "text-zp-safe",
-    glow: "shadow-[0_0_20px_-4px_rgba(16,185,129,0.35)]",
-    bar: "bg-zp-safe",
-  },
-  error: {
-    icon: XCircle,
-    accent: "text-zp-rose",
-    glow: "shadow-[0_0_20px_-4px_rgba(244,63,94,0.35)]",
-    bar: "bg-zp-rose",
-  },
-  warning: {
-    icon: AlertTriangle,
-    accent: "text-zp-amber",
-    glow: "shadow-[0_0_20px_-4px_rgba(245,158,11,0.35)]",
-    bar: "bg-zp-amber",
-  },
-  info: {
-    icon: Info,
-    accent: "text-zp-cyan",
-    glow: "shadow-[0_0_20px_-4px_rgba(56,189,248,0.35)]",
-    bar: "bg-zp-cyan",
-  },
-};
-
-/* -------------------------------------------------------------------------- */
-/* Single Toast                                                               */
-/* -------------------------------------------------------------------------- */
-
-function ToastCard({
-  item,
-  onDismiss,
+function NotificationToastCard({
+  notification,
+  onClose,
+  onOpen,
 }: {
-  item: ToastItem;
-  onDismiss: (id: string) => void;
+  notification: AppNotification
+  onClose: (id: string) => void
+  onOpen: (id: string) => void
 }) {
-  const [exiting, setExiting] = useState(false);
-  const [progress, setProgress] = useState(100);
-  const duration = item.duration ?? 4000;
-  const style = VARIANT_STYLES[item.variant];
-  const Icon = style.icon;
+  const [leaving, setLeaving] = useState(false)
+  const [paused, setPaused] = useState(false)
+
+  // الوقت المتبقي (بيتحفظ لما المستخدم يعمل hover)
+  const remaining = useRef(DURATION_MS)
+  const startedAt = useRef(Date.now())
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const close = useCallback(() => {
+    setLeaving(true)
+    setTimeout(() => onClose(notification.id), LEAVE_MS)
+  }, [notification.id, onClose])
 
   useEffect(() => {
-    if (duration <= 0) return;
+    if (paused) return
+    startedAt.current = Date.now()
+    timer.current = setTimeout(close, remaining.current)
+    return () => {
+      if (timer.current) clearTimeout(timer.current)
+      // لو اتوقف بـ hover: نخزن اللي فاضل
+      remaining.current = Math.max(0, remaining.current - (Date.now() - startedAt.current))
+    }
+  }, [paused, close])
 
-    const start = Date.now();
-    const tick = () => {
-      const elapsed = Date.now() - start;
-      const left = Math.max(0, 100 - (elapsed / duration) * 100);
-      setProgress(left);
-      if (left <= 0) {
-        setExiting(true);
-        setTimeout(() => onDismiss(item.id), 220);
-      }
-    };
-
-    const id = window.setInterval(tick, 30);
-    return () => window.clearInterval(id);
-  }, [duration, item.id, onDismiss]);
-
-  const handleClose = () => {
-    setExiting(true);
-    setTimeout(() => onDismiss(item.id), 220);
-  };
+  const meta = metaFor(notification.type)
+  const visual = visualFor(notification.type, notification.severity)
+  const Icon = meta.icon
 
   return (
     <div
-      role="status"
-      aria-live="polite"
-      className={[
-        "relative w-full max-w-sm overflow-hidden rounded-zp-lg",
-        "zp-glass-strong border border-white/10",
-        style.glow,
-        "transition-all duration-200 ease-out",
-        exiting
-          ? "translate-x-4 opacity-0 scale-95"
-          : "translate-x-0 opacity-100 scale-100",
-      ].join(" ")}
+      role={notification.severity >= 4 ? 'alert' : 'status'}
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+      className={`
+        pointer-events-auto relative w-full cursor-pointer overflow-hidden rounded-xl border
+        bg-[#0b1224]/95 shadow-2xl shadow-black/50 backdrop-blur-xl
+        ${visual.ring}
+        ${leaving ? 'zp-anim-toast-out' : 'zp-anim-toast-in'}
+      `}
+      onClick={() => onOpen(notification.id)}
     >
-      {/* progress bar */}
-      {duration > 0 && (
-        <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-white/5">
-          <div
-            className={`h-full ${style.bar} transition-[width] duration-75 ease-linear`}
-            style={{ width: `${progress}%` }}
-          />
-        </div>
-      )}
-
-      <div className="flex items-start gap-3 p-3.5 pe-2">
-        <div
-          className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/5 ${style.accent}`}
-        >
-          <Icon className="h-4.5 w-4.5" strokeWidth={2.2} />
-        </div>
+      <div className="flex items-start gap-3 p-4">
+        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${visual.iconCls}`}>
+          <Icon className="h-5 w-5" />
+        </span>
 
         <div className="min-w-0 flex-1 pt-0.5">
-          <p className="text-sm font-semibold text-zp-text-primary leading-snug">
-            {item.title}
-          </p>
-          {item.description ? (
-            <p className="mt-0.5 text-xs text-zp-text-secondary leading-relaxed">
-              {item.description}
+          <div className="flex items-center gap-2">
+            <p dir="auto" className="truncate text-sm font-semibold text-white">
+              {notification.title}
             </p>
-          ) : null}
+            <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+              {SEVERITY_LABELS[notification.severity] ?? ''}
+            </span>
+          </div>
+          <p dir="auto" className="mt-0.5 line-clamp-2 text-xs leading-relaxed text-slate-400">
+            {notification.message}
+          </p>
         </div>
 
         <button
           type="button"
-          onClick={handleClose}
-          aria-label="إغلاق"
-          className="mt-0.5 rounded-md p-1 text-zp-text-secondary hover:bg-white/8 hover:text-zp-text-primary"
+          aria-label="Dismiss"
+          onClick={(e) => {
+            e.stopPropagation() // مايفتحش الصفحة
+            close()
+          }}
+          className="rounded-md p-1 text-slate-500 hover:bg-white/5 hover:text-white"
         >
-          <X className="h-3.5 w-3.5" />
+          <X className="h-4 w-4" />
         </button>
       </div>
+
+      {/* شريط الوقت */}
+      <div
+        className={`absolute bottom-0 left-0 h-0.5 w-full origin-left opacity-70 ${visual.bar}`}
+        style={{
+          animation: `zp-progress ${DURATION_MS}ms linear forwards`,
+          animationPlayState: paused ? 'paused' : 'running',
+        }}
+      />
     </div>
-  );
+  )
 }
 
-/* -------------------------------------------------------------------------- */
-/* Viewport                                                                   */
-/* -------------------------------------------------------------------------- */
+export default function AlertToast() {
+  const navigate = useNavigate()
+  const toasts = useNotificationStore((s) => s.toasts)
+  const dismiss = useNotificationStore((s) => s.dismissToast)
 
-function ToastViewport({
-  items,
-  onDismiss,
-}: {
-  items: ToastItem[];
-  onDismiss: (id: string) => void;
-}) {
-  if (typeof document === "undefined") return null;
+  // الحاوية بتتعمل في ToastProvider (بعد أول render) فبندوّر عليها في effect
+  const [host, setHost] = useState<HTMLElement | null>(null)
+  useEffect(() => {
+    setHost(document.getElementById('zp-toast-stack'))
+  }, [])
 
-  return createPortal(
-    <div
-      className="pointer-events-none fixed inset-x-0 top-0 z-9999 flex flex-col items-end gap-2 p-4 sm:p-6"
-      style={{ paddingTop: "max(1rem, env(safe-area-inset-top))" }}
-    >
-      {items.map((item) => (
-        <div key={item.id} className="pointer-events-auto w-full max-w-sm">
-          <ToastCard item={item} onDismiss={onDismiss} />
-        </div>
-      ))}
-    </div>,
-    document.body
-  );
-}
+  const open = useCallback(
+    (id: string) => {
+      dismiss(id)
+      navigate('/notifications')
+    },
+    [dismiss, navigate],
+  )
 
-/* -------------------------------------------------------------------------- */
-/* Provider                                                                   */
-/* -------------------------------------------------------------------------- */
+  if (toasts.length === 0) return null
 
-let toastIdCounter = 0;
+  const cards = toasts.map((n) => (
+    <NotificationToastCard key={n.id} notification={n} onClose={dismiss} onOpen={open} />
+  ))
 
-export function ToastProvider({ children }: { children: ReactNode }) {
-  const [items, setItems] = useState<ToastItem[]>([]);
+  // لو ToastProvider مش موجود لأي سبب: حاوية احتياطية خاصة بينا
+  if (!host) {
+    return (
+      <div
+        dir="ltr"
+        className="pointer-events-none fixed right-4 top-4 z-100 flex w-[calc(100%-2rem)] max-w-sm flex-col gap-2.5 sm:right-6 sm:top-6"
+      >
+        {cards}
+      </div>
+    )
+  }
 
-  const dismiss = useCallback((id: string) => {
-    setItems((prev) => prev.filter((t) => t.id !== id));
-  }, []);
-
-  const dismissAll = useCallback(() => {
-    setItems([]);
-  }, []);
-
-  const toast = useCallback((opts: Omit<ToastItem, "id">) => {
-    const id = `zp-toast-${++toastIdCounter}-${Date.now()}`;
-    setItems((prev) => {
-      // max 5 toasts
-      const next = [...prev, { ...opts, id }];
-      return next.slice(-5);
-    });
-    return id;
-  }, []);
-
-  const success = useCallback(
-    (title: string, description?: string) =>
-      toast({ title, description, variant: "success" }),
-    [toast]
-  );
-
-  const error = useCallback(
-    (title: string, description?: string) =>
-      toast({ title, description, variant: "error" }),
-    [toast]
-  );
-
-  const warning = useCallback(
-    (title: string, description?: string) =>
-      toast({ title, description, variant: "warning" }),
-    [toast]
-  );
-
-  const info = useCallback(
-    (title: string, description?: string) =>
-      toast({ title, description, variant: "info" }),
-    [toast]
-  );
-
-  const value = useMemo(
-    () => ({ toast, success, error, warning, info, dismiss, dismissAll }),
-    [toast, success, error, warning, info, dismiss, dismissAll]
-  );
-
-  return (
-    <ToastContext.Provider value={value}>
-      {children}
-      <ToastViewport items={items} onDismiss={dismiss} />
-    </ToastContext.Provider>
-  );
+  return createPortal(cards, host)
 }

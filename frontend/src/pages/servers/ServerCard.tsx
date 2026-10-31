@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   Circle,
   Cpu,
+  Gauge,
   Globe,
   Lock,
   LockOpen,
@@ -20,6 +21,7 @@ import {
 import { Badge, Button, Card } from '../../components/ui/kit'
 import { type Server } from '../../services/serversService'
 import { cn, timeAgo } from '../../utils/format'
+import { REC_META } from '../../utils/serverMeta'
 import { STATUS_META } from './shared'
 
 // ==================================================================
@@ -35,6 +37,7 @@ export function ServerCard({
   onEdit,
   onDelete,
   onMaintenance,
+  onDetails,
 }: {
   server: Server
   index: number
@@ -44,7 +47,10 @@ export function ServerCard({
   onEdit: () => void
   onDelete: () => void
   onMaintenance: () => void
+  /** فتح تفاصيل السيرفر ونتائج قياس السعة */
+  onDetails?: () => void
 }) {
+  const rec = server.probeRecommendation ? REC_META[server.probeRecommendation] : undefined
   const meta = STATUS_META[server.status]
   const inMaintenance = server.status === 'MAINTENANCE'
   const fullySetUp = server.dnsVerified && server.gatewayReachable
@@ -214,6 +220,36 @@ export function ServerCard({
       </div>
 
       {/* ============================================================
+          السعة الآمنة (safeRequestsPerSecond) + جودة السيرفر (Probe)
+          الرقم الأساسي للعرض والتسعير
+      ============================================================ */}
+      <div
+        onClick={onDetails}
+        className={cn(
+          'mt-4 rounded-xl border border-white/6 bg-white/2 px-3.5 py-3',
+          onDetails && 'cursor-pointer hover:border-cyan-400/25',
+        )}
+      >
+        <div className="flex items-center justify-between gap-3">
+          <span className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-slate-500">
+            <Gauge className="h-3.5 w-3.5 text-cyan-400" />
+            Safe capacity
+          </span>
+          {rec && <Badge tone={rec.tone}>{rec.label}</Badge>}
+        </div>
+        {server.safeRequestsPerSecond !== null ? (
+          <p className="mt-1 text-lg font-bold text-white">
+            {server.safeRequestsPerSecond.toLocaleString('en-US')}
+            <span className="ml-1 text-xs font-medium text-slate-500">req/s</span>
+          </p>
+        ) : (
+          <p className="mt-1 text-xs text-slate-500">
+            {!server.dnsVerified ? 'Verify the domain to measure capacity' : server.lastProbeAt === null ? 'Not measured yet' : 'No usable result'}
+          </p>
+        )}
+      </div>
+
+      {/* ============================================================
           Actions – DNS + Maintenance + Edit/Delete
           (mt-auto عشان الأزرار تفضل تحت دايمًا)
       ============================================================ */}
@@ -228,6 +264,12 @@ export function ServerCard({
         >
           {fullySetUp ? 'DNS details' : 'Finish setup'}
         </Button>
+
+        {onDetails && (
+          <Button size="sm" icon={Gauge} onClick={onDetails}>
+            Capacity
+          </Button>
+        )}
 
         {canManage && (
           <>

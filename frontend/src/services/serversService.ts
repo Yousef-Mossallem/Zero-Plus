@@ -16,7 +16,13 @@
 
 import api from './api'
 import { cleanParams } from './types'
-import type { Pagination, ServerMode, ServerStatus } from './types'
+import type {
+  Pagination,
+  ProbeConfidence,
+  ProbeRecommendation,
+  ServerMode,
+  ServerStatus,
+} from './types'
 
 // ------------------------------------------------------------------
 // Types – متطابقة 100% مع الباك
@@ -29,7 +35,19 @@ export interface Server {
   originPort: number
   status: ServerStatus
   mode: ServerMode
+  /** أعلى معدل Requests/ثانية تم قياسه بشكل مستدام */
   maxRequestsPerSecond: number | null
+  /** المعدل الآمن: الرقم الأساسي للعرض والتسعير */
+  safeRequestsPerSecond: number | null
+  /** زمن الاستجابة P95 وقت الهدوء */
+  p95ResponseTimeMs: number | null
+  /** زمن الاستجابة P99 تحت الحمل */
+  loadLatencyP99Ms: number | null
+  /** نسبة الأخطاء في آخر قياس */
+  probeErrorRate: number | null
+  probeConfidence: ProbeConfidence
+  probeRecommendation: ProbeRecommendation
+  lastProbeAt: string | null
   cpuCores: number | null
   ramMb: number | null
   avgResponseTimeMs: number | null
@@ -309,4 +327,15 @@ export async function deleteServer(
     message: data.message,
     data: data.data,
   }
+}
+
+/**
+ * إعادة قياس سعة السيرفر (Origin Probe)
+ * POST /servers/:id/probe  (OWNER/ADMIN)
+ * الرد 202 فورًا، والنتيجة بتوصل بعدين عن طريق Socket (server:status).
+ * الأخطاء: 409 OWNERSHIP_REQUIRED • 429 PROBE_TOO_FREQUENT (details.retryAfterSec) • 404 SERVER_NOT_FOUND
+ */
+export async function probeServer(id: string): Promise<{ message: string }> {
+  const { data } = await api.post<{ success: boolean; message: string }>(`/servers/${id}/probe`, {})
+  return { message: data.message }
 }
