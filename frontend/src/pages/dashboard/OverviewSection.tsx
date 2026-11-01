@@ -71,7 +71,7 @@ export default function OverviewSection({ section }: { section: Section<Overview
           hint={t ? pct(t.challenged, t.total) : undefined} />
         <StatCard label="Rate limited" value={formatNumber(t?.rateLimited)} icon={Timer} tone="amber" loading={first} delay={200}
           hint={t ? `${formatNumber(t.monitored)} monitored` : undefined} />
-        <StatCard label="Avg risk score" value={data ? data.risk.avgScore.toFixed(1) : '—'} icon={Gauge} tone="orange" loading={first} delay={250}
+        <StatCard label="Avg risk score" value={data ? data.risk.avgScore.toFixed(1) : '—'} icon={Gauge} tone="amber" loading={first} delay={250}
           hint="Out of 100" />
       </div>
 

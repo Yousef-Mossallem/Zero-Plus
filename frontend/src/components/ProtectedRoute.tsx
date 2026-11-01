@@ -5,7 +5,7 @@ import { useEffect, type ReactNode } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
 import { Loader2, Shield } from 'lucide-react'
 
-import { BYPASS_AUTH, HOME_PATH } from '../router/paths'
+import { BYPASS_AUTH } from '../router/paths'
 import {
   useAuthStore,
   selectIsAuthenticated,
@@ -16,8 +16,6 @@ import {
 interface ProtectedRouteProps {
   children: ReactNode
 }
-
-const ENTRY_PATHS = new Set(['/', '/dashboard'])
 
 function SessionGate() {
   return (
@@ -51,10 +49,10 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
     initializeAuth()
   }, [isInitialized, initializeAuth])
 
-  // الجذر ولوحة التحكم لسه من غير صفحة: نفتح الإشعارات.
-  if (ENTRY_PATHS.has(location.pathname)) {
-    return <Navigate to={HOME_PATH} replace />
-  }
+  // شيلنا الـ redirect اللي كان بيروح للإشعارات
+  // if (ENTRY_PATHS.has(location.pathname)) {
+  //   return <Navigate to={HOME_PATH} replace />
+  // }
 
   if (BYPASS_AUTH) {
     return <>{children}</>

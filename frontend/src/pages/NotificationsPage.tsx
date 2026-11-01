@@ -19,7 +19,6 @@ import {
   Bell,
   BellRing,
   CheckCheck,
-  Inbox,
   Radio,
   RefreshCw,
   Search,
@@ -31,7 +30,6 @@ import {
 
 import { useToast } from '../components/ui/Toast'
 import {
-  Badge,
   Button,
   Card,
   EmptyState,
@@ -39,9 +37,7 @@ import {
   PageHeader,
   PageShell,
   PaginationBar,
-  SelectInput,
   Skeleton,
-  StatCard,
   TextInput,
   Toggle,
 } from '../components/ui/kit'
@@ -49,7 +45,8 @@ import { useDebounce } from '../hooks/useDebounce'
 import type { NotificationsQuery } from '../services/notificationsService'
 import useNotificationStore, { type ConnectionStatus } from '../store/notificationStore'
 import { NOTIFICATION_TYPES, TYPE_META, type NotificationType } from '../utils/notificationMeta'
-import { formatNumber } from '../utils/format'
+import type { AppNotification } from '../services/notificationsService'
+import { cn, formatDate, formatNumber } from '../utils/format'
 import NotificationItem from './notifications/NotificationItem'
 
 const CONNECTION_LABEL: Record<ConnectionStatus, { text: string; hint: string }> = {
@@ -58,6 +55,30 @@ const CONNECTION_LABEL: Record<ConnectionStatus, { text: string; hint: string }>
   disconnected: { text: 'Offline', hint: 'Retrying automatically' },
   unauthorized: { text: 'Signed out', hint: 'Session rejected by the socket' },
   idle: { text: 'Idle', hint: 'Not connected' },
+}
+
+const SEVERITY_OPTIONS: { value: string; label: string }[] = [
+  { value: '', label: 'Any' },
+  { value: '2', label: 'Notice+' },
+  { value: '3', label: 'Important+' },
+  { value: '4', label: 'Critical+' },
+]
+
+/** تجميع الإشعارات حسب اليوم (Today / Yesterday / تاريخ) مع الحفاظ على الترتيب */
+function groupByDay(items: AppNotification[]): { label: string; items: AppNotification[] }[] {
+  const today = new Date().toDateString()
+  const yesterday = new Date(Date.now() - 86_400_000).toDateString()
+  const groups: { key: string; label: string; items: AppNotification[] }[] = []
+  for (const n of items) {
+    const key = new Date(n.createdAt).toDateString()
+    let g = groups[groups.length - 1]
+    if (!g || g.key !== key) {
+      g = { key, label: key === today ? 'Today' : key === yesterday ? 'Yesterday' : formatDate(n.createdAt), items: [] }
+      groups.push(g)
+    }
+    g.items.push(n)
+  }
+  return groups
 }
 
 export default function NotificationsPage() {
@@ -169,6 +190,16 @@ export default function NotificationsPage() {
   const conn = CONNECTION_LABEL[connection]
   const live = connection === 'connected'
   const fresh = new Set(freshIds)
+  const groups = useMemo(() => groupByDay(items), [items])
+  const firstLoad = loading && items.length === 0
+
+  const chip = (active: boolean) =>
+    cn(
+      'flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-medium transition lg:w-full lg:border-transparent lg:py-2 lg:text-sm',
+      active
+        ? 'border-cyan-400/40 bg-cyan-500/15 text-white'
+        : 'border-white/10 text-slate-400 hover:bg-white/5 hover:text-white',
+    )
 
   // ==================================================================
   // Render
@@ -179,19 +210,9 @@ export default function NotificationsPage() {
       <PageHeader
         icon={Bell}
         title="Notifications"
-        subtitle="Security alerts and system updates for your organization, in real time."
+        subtitle="Security alerts and system updates, as they happen."
         actions={
           <>
-            <Badge tone={live ? 'emerald' : connection === 'connecting' ? 'amber' : 'rose'} dot>
-              {conn.text}
-            </Badge>
-            <Button
-              icon={soundEnabled ? Volume2 : VolumeX}
-              onClick={() => useNotificationStore.getState().setSoundEnabled(!soundEnabled)}
-              title={soundEnabled ? 'Mute notification sound' : 'Unmute notification sound'}
-            >
-              {soundEnabled ? 'Sound on' : 'Muted'}
-            </Button>
             <Button icon={RefreshCw} loading={loading && items.length > 0} onClick={() => void useNotificationStore.getState().fetchList()}>
               Refresh
             </Button>
@@ -202,31 +223,56 @@ export default function NotificationsPage() {
         }
       />
 
-      {/* ---------- Stats ---------- */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <StatCard label="Unread" value={formatNumber(unreadCount)} icon={BellRing} tone="rose" loading={!loaded && loading} delay={0} />
-        <StatCard
-          label={hasFilters ? 'Matching' : 'Total'}
-          value={formatNumber(pagination.total)}
-          icon={Inbox}
-          tone="cyan"
-          loading={!loaded && loading}
-          delay={60}
-        />
-        <StatCard
-          label="Live updates"
-          value={conn.text}
-          icon={live ? Radio : WifiOff}
-          tone={live ? 'emerald' : 'amber'}
-          hint={conn.hint}
-          delay={120}
-        />
-      </div>
+      <div className="grid gap-6 lg:grid-cols-[18rem_minmax(0,1fr)]">
+        {/* ============ Side panel ============ */}
+        <aside className="space-y-4 lg:sticky lg:top-8 lg:self-start">
+          {/* Live status + unread */}
+          <Card accent className="p-5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <span
+                  className={cn(
+                    'flex h-10 w-10 items-center justify-center rounded-xl',
+                    live ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400',
+                  )}
+                >
+                  {live ? <Radio className="h-5 w-5" /> : <WifiOff className="h-5 w-5" />}
+                </span>
+                <div>
+                  <p className="text-sm font-semibold text-white">{conn.text}</p>
+                  <p className="text-xs text-slate-500">{conn.hint}</p>
+                </div>
+              </div>
+              <Button
+                size="sm"
+                variant="ghost"
+                icon={soundEnabled ? Volume2 : VolumeX}
+                aria-label={soundEnabled ? 'Mute notification sound' : 'Unmute notification sound'}
+                title={soundEnabled ? 'Mute notification sound' : 'Unmute notification sound'}
+                onClick={() => useNotificationStore.getState().setSoundEnabled(!soundEnabled)}
+              />
+            </div>
 
-      {/* ---------- Filters ---------- */}
-      <Card className="p-5" delay={120} accent>
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-          <div className="flex-1">
+            <div className="mt-4 flex items-end justify-between border-t border-white/5 pt-4">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Unread</p>
+                {!loaded && loading ? (
+                  <div className="zp-skeleton mt-1 h-8 w-12 rounded-md" />
+                ) : (
+                  <p className="text-3xl font-bold tracking-tight text-white">{formatNumber(unreadCount)}</p>
+                )}
+              </div>
+              <div className="text-right">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                  {hasFilters ? 'Matching' : 'Total'}
+                </p>
+                <p className="text-xl font-semibold text-slate-300">{formatNumber(pagination.total)}</p>
+              </div>
+            </div>
+          </Card>
+
+          {/* Filters */}
+          <Card className="space-y-5 p-5">
             <TextInput
               icon={Search}
               value={search}
@@ -234,123 +280,160 @@ export default function NotificationsPage() {
                 setSearch(e.target.value)
                 resetPage()
               }}
-              placeholder="Search title or message…"
+              placeholder="Search…"
             />
-          </div>
 
-          <div className="grid grid-cols-2 gap-3 lg:flex">
-            <SelectInput
-              value={type}
-              onChange={(e) => {
-                setType(e.target.value)
-                resetPage()
-              }}
-              className="lg:w-52"
-            >
-              <option value="">All types</option>
-              {NOTIFICATION_TYPES.map((t) => (
-                <option key={t} value={t} className="bg-[#0b1224]">
-                  {TYPE_META[t].label}
-                </option>
-              ))}
-            </SelectInput>
-
-            <SelectInput
-              value={severity}
-              onChange={(e) => {
-                setSeverity(e.target.value)
-                resetPage()
-              }}
-              className="lg:w-40"
-            >
-              <option value="">Any severity</option>
-              <option value="2" className="bg-[#0b1224]">Notice +</option>
-              <option value="3" className="bg-[#0b1224]">Important +</option>
-              <option value="4" className="bg-[#0b1224]">Critical +</option>
-            </SelectInput>
-          </div>
-
-          <label className="flex items-center gap-2.5 rounded-xl border border-white/10 bg-white/3 px-3.5 py-2 text-sm text-slate-300">
-            Unread only
-            <Toggle
-              checked={unreadOnly}
-              onChange={(v) => {
-                setUnreadOnly(v)
-                resetPage()
-              }}
-              label="Unread only"
-            />
-          </label>
-
-          {hasFilters && (
-            <Button icon={X} variant="ghost" onClick={clearFilters}>
-              Clear
-            </Button>
-          )}
-        </div>
-      </Card>
-
-      {/* ---------- List ---------- */}
-      <Card delay={200}>
-        {error && items.length === 0 ? (
-          <ErrorState message={error} onRetry={() => void useNotificationStore.getState().fetchList()} />
-        ) : loading && items.length === 0 ? (
-          <div className="space-y-px p-2">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} className="flex gap-4 px-3 py-4">
-                <Skeleton className="h-10 w-10 shrink-0 rounded-xl" />
-                <div className="flex-1 space-y-2">
-                  <Skeleton className="h-4 w-48" />
-                  <Skeleton className="h-3.5 w-full max-w-lg" />
-                </div>
+            <div>
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Type</p>
+              <div className="flex flex-wrap gap-1.5 lg:flex-col lg:gap-0.5">
+                <button
+                  type="button"
+                  className={chip(type === '')}
+                  onClick={() => {
+                    setType('')
+                    resetPage()
+                  }}
+                >
+                  <BellRing className="h-4 w-4" />
+                  All types
+                </button>
+                {NOTIFICATION_TYPES.map((t) => {
+                  const TypeIcon = TYPE_META[t].icon
+                  return (
+                    <button
+                      key={t}
+                      type="button"
+                      className={chip(type === t)}
+                      onClick={() => {
+                        setType(type === t ? '' : t)
+                        resetPage()
+                      }}
+                    >
+                      <TypeIcon className="h-4 w-4" />
+                      {TYPE_META[t].label}
+                    </button>
+                  )
+                })}
               </div>
-            ))}
-          </div>
-        ) : items.length === 0 ? (
-          <EmptyState
-            icon={Bell}
-            title={hasFilters ? 'No notifications match these filters' : "You're all caught up"}
-            description={
-              hasFilters
-                ? 'Try widening the filters.'
-                : 'Attack alerts, new blocks and server updates will show up here the moment they happen.'
-            }
-            action={
-              hasFilters ? (
-                <Button icon={X} onClick={clearFilters}>
-                  Clear filters
-                </Button>
-              ) : undefined
-            }
-          />
-        ) : (
-          <>
-            <ul className={loading ? 'opacity-60' : undefined}>
-              {items.map((n, i) => (
-                <NotificationItem
-                  key={n.id}
-                  notification={n}
-                  fresh={fresh.has(n.id)}
-                  index={i}
-                  onMarkRead={(id) => void handleMarkOne(id)}
-                />
+            </div>
+
+            <div>
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Severity</p>
+              <div className="grid grid-cols-2 gap-1.5">
+                {SEVERITY_OPTIONS.map((o) => (
+                  <button
+                    key={o.label}
+                    type="button"
+                    className={cn(chip(severity === o.value), 'justify-center lg:py-1.5')}
+                    onClick={() => {
+                      setSeverity(o.value)
+                      resetPage()
+                    }}
+                  >
+                    {o.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <label className="flex items-center justify-between text-sm text-slate-300">
+              Unread only
+              <Toggle
+                checked={unreadOnly}
+                onChange={(v) => {
+                  setUnreadOnly(v)
+                  resetPage()
+                }}
+                label="Unread only"
+              />
+            </label>
+
+            {hasFilters && (
+              <Button icon={X} variant="ghost" className="w-full" onClick={clearFilters}>
+                Clear filters
+              </Button>
+            )}
+          </Card>
+        </aside>
+
+        {/* ============ Timeline ============ */}
+        <section className="min-w-0 space-y-6">
+          {error && items.length === 0 ? (
+            <Card>
+              <ErrorState message={error} onRetry={() => void useNotificationStore.getState().fetchList()} />
+            </Card>
+          ) : firstLoad ? (
+            <div className="space-y-4">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="flex gap-4">
+                  <Skeleton className="h-10 w-10 shrink-0 rounded-full" />
+                  <Skeleton className="h-24 flex-1 rounded-2xl" />
+                </div>
               ))}
-            </ul>
-            <PaginationBar
-              page={page}
-              totalPages={pagination.totalPages}
-              total={pagination.total}
-              limit={limit}
-              disabled={loading}
-              onPage={setPage}
-              onLimit={(n) => {
-                setLimit(n)
-                resetPage()
-              }}
-            />
-          </>
-        )}
-      </Card>
+            </div>
+          ) : items.length === 0 ? (
+            <Card>
+              <EmptyState
+                icon={Bell}
+                title={hasFilters ? 'No notifications match these filters' : "You're all caught up"}
+                description={
+                  hasFilters
+                    ? 'Try widening the filters.'
+                    : 'Attack alerts, new blocks and server updates will show up here the moment they happen.'
+                }
+                action={
+                  hasFilters ? (
+                    <Button icon={X} onClick={clearFilters}>
+                      Clear filters
+                    </Button>
+                  ) : undefined
+                }
+              />
+            </Card>
+          ) : (
+            <>
+              <div className={cn('space-y-8', loading && 'opacity-60')}>
+                {groups.map((g) => (
+                  <div key={g.label + g.items[0]?.id}>
+                    <div className="mb-3 flex items-center gap-3">
+                      <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400">{g.label}</h2>
+                      <span className="h-px flex-1 bg-white/8" />
+                      <span className="text-xs text-slate-600">{g.items.length}</span>
+                    </div>
+                    <ul className="relative space-y-3">
+                      {/* الخط الرأسي */}
+                      <span className="absolute bottom-6 left-5 top-6 w-px bg-white/8" />
+                      {g.items.map((n) => (
+                        <NotificationItem
+                          key={n.id}
+                          notification={n}
+                          fresh={fresh.has(n.id)}
+                          index={items.indexOf(n)}
+                          onMarkRead={(id) => void handleMarkOne(id)}
+                        />
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+              <Card>
+                <PaginationBar
+                  page={page}
+                  totalPages={pagination.totalPages}
+                  total={pagination.total}
+                  limit={limit}
+                  disabled={loading}
+                  onPage={setPage}
+                  onLimit={(n) => {
+                    setLimit(n)
+                    resetPage()
+                  }}
+                />
+              </Card>
+            </>
+          )}
+        </section>
+      </div>
     </PageShell>
   )
 }

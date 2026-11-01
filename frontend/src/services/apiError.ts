@@ -12,8 +12,6 @@ export interface ParsedApiError {
   message: string
   code?: string
   status?: number
-  /** ثواني الانتظار قبل إعادة المحاولة (429): من details.retryAfterSec أو هيدر Retry-After */
-  retryAfterSec?: number
   /** أخطاء مرتبطة بحقول معينة (للعرض تحت الـ input) */
   fieldErrors: Record<string, string>
 }
@@ -57,19 +55,8 @@ export function parseApiError(
 
   if (typeof response['status'] === 'number') result.status = response['status']
 
-  // Retry-After (هيدر) أو details.retryAfterSec (جسم الرد) في حالة 429
-  const headers = response['headers']
-  if (isObject(headers)) {
-    const h = Number(headers['retry-after'])
-    if (Number.isFinite(h) && h > 0) result.retryAfterSec = h
-  }
-
   const data = response['data']
   if (!isObject(data)) return result
-
-  if (isObject(data['details']) && typeof data['details']['retryAfterSec'] === 'number') {
-    result.retryAfterSec = data['details']['retryAfterSec']
-  }
 
   if (typeof data['message'] === 'string' && data['message']) {
     result.message = data['message']

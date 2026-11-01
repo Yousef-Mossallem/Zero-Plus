@@ -11,11 +11,10 @@
 // ==================================================================
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Bot, CheckCircle2, Clock, FilePlus2, FileText, RefreshCw, XCircle, X } from 'lucide-react'
+import { Bot, FilePlus2, FileText, MessageSquareText, RefreshCw, X } from 'lucide-react'
 
 import { useToast } from '../components/ui/Toast'
 import {
-  Badge,
   Button,
   Card,
   Drawer,
@@ -26,7 +25,6 @@ import {
   PaginationBar,
   SelectInput,
   Skeleton,
-  StatCard,
 } from '../components/ui/kit'
 import { parseApiError } from '../services/apiError'
 import {
@@ -40,11 +38,12 @@ import {
 import { listServers, type Server } from '../services/serversService'
 import { SocketEvents, getSocket } from '../services/socket'
 import { selectUserRole, useAuthStore } from '../store/authStore'
-import { cn, formatNumber, timeAgo } from '../utils/format'
+import { cn, formatNumber } from '../utils/format'
 import ChatPanel from './reports/ChatPanel'
 import CreateReportModal from './reports/CreateReportModal'
 import ReportDrawer from './reports/ReportDrawer'
-import { MANAGE_ROLES, ReportStatusBadge, STATUS_META, TYPE_META, periodLabel } from './reports/shared'
+import ReportCard from './reports/ReportCard'
+import { MANAGE_ROLES, TYPE_META } from './reports/shared'
 
 type Summary = Partial<Record<ReportStatus, number>>
 
@@ -179,69 +178,105 @@ export default function ReportsPage() {
     setPage(1)
   }
   const selected = reports.find((r) => r.id === selectedId) ?? null
-  const inProgress = (summary.GENERATING ?? 0) + (summary.PENDING ?? 0)
   const total = Object.values(summary).reduce((n, v) => n + (v ?? 0), 0)
+
+  const tabs: { value: string; label: string; count: number; dot: string }[] = [
+    { value: '', label: 'All', count: total, dot: 'bg-cyan-400' },
+    { value: 'READY', label: 'Ready', count: summary.READY ?? 0, dot: 'bg-emerald-400' },
+    { value: 'GENERATING', label: 'Generating', count: summary.GENERATING ?? 0, dot: 'bg-amber-400' },
+    { value: 'PENDING', label: 'Pending', count: summary.PENDING ?? 0, dot: 'bg-slate-400' },
+    { value: 'FAILED', label: 'Failed', count: summary.FAILED ?? 0, dot: 'bg-rose-400' },
+  ]
+  const firstLoad = loading && reports.length === 0
 
   return (
     <PageShell>
       <PageHeader
         icon={FileText}
         title="Reports"
-        subtitle="AI-written security reports for your traffic, plus an assistant you can ask directly."
+        subtitle="AI-written security reports for your traffic."
         actions={
           <>
-            <Button icon={Bot} onClick={() => setChatOpen(true)}>Ask assistant</Button>
             <Button icon={RefreshCw} loading={loading && reports.length > 0} onClick={() => void load()}>Refresh</Button>
             <Button variant="primary" icon={FilePlus2} onClick={() => setCreating(true)}>New report</Button>
           </>
         }
       />
 
-      {/* ---------- Stats (من summary الباك) ---------- */}
-      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
-        <StatCard label="All reports" value={formatNumber(total)} icon={FileText} tone="cyan" loading={loading && reports.length === 0} delay={0} />
-        <StatCard label="Ready" value={formatNumber(summary.READY ?? 0)} icon={CheckCircle2} tone="emerald" loading={loading && reports.length === 0} delay={60} />
-        <StatCard label="In progress" value={formatNumber(inProgress)} icon={Clock} tone="amber" loading={loading && reports.length === 0} delay={120}
-          hint={inProgress > 0 ? 'Updating live' : undefined} />
-        <StatCard label="Failed" value={formatNumber(summary.FAILED ?? 0)} icon={XCircle} tone="rose" loading={loading && reports.length === 0} delay={180} />
-      </div>
-
-      {/* ---------- Filters ---------- */}
-      <Card className="p-5" delay={120} accent>
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-          <div className="grid flex-1 grid-cols-1 gap-3 sm:grid-cols-3">
-            <SelectInput value={status} onChange={(e) => { setStatus(e.target.value); setPage(1) }}>
-              <option value="">All statuses</option>
-              {(Object.keys(STATUS_META) as ReportStatus[]).map((s) => (
-                <option key={s} value={s} className="bg-[#0b1224]">{STATUS_META[s].label}</option>
-              ))}
-            </SelectInput>
-            <SelectInput value={type} onChange={(e) => { setType(e.target.value); setPage(1) }}>
-              <option value="">All types</option>
-              {(Object.keys(TYPE_META) as ReportType[]).map((t) => (
-                <option key={t} value={t} className="bg-[#0b1224]">{TYPE_META[t].label}</option>
-              ))}
-            </SelectInput>
-            <SelectInput value={serverId} onChange={(e) => { setServerId(e.target.value); setPage(1) }}>
-              <option value="">All servers</option>
-              {servers.map((s) => (
-                <option key={s.id} value={s.id} className="bg-[#0b1224]">{s.domain}</option>
-              ))}
-            </SelectInput>
+      {/* ---------- Assistant banner ---------- */}
+      <Card accent className="bg-linear-to-r from-cyan-500/10 via-transparent to-indigo-500/10">
+        <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-4">
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-cyan-500/10 text-cyan-300 ring-1 ring-cyan-400/20">
+              <Bot className="h-6 w-6" />
+            </span>
+            <div>
+              <p className="text-sm font-semibold text-white">Security assistant</p>
+              <p className="mt-0.5 text-xs text-slate-400">
+                Ask about attacks, blocked IPs or traffic patterns, and get answers from your own data.
+              </p>
+            </div>
           </div>
-          {hasFilters && <Button icon={X} variant="ghost" onClick={clearFilters}>Clear</Button>}
+          <Button icon={MessageSquareText} onClick={() => setChatOpen(true)}>Start a chat</Button>
         </div>
       </Card>
 
-      {/* ---------- List ---------- */}
-      <Card delay={200}>
-        {error && reports.length === 0 ? (
-          <ErrorState message={error} onRetry={() => void load()} />
-        ) : loading && reports.length === 0 ? (
-          <div className="space-y-px p-3">
-            {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="my-2 h-16 w-full rounded-xl" />)}
-          </div>
-        ) : reports.length === 0 ? (
+      {/* ---------- Status tabs + secondary filters ---------- */}
+      <div className="space-y-3">
+        <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+          {tabs.map((t) => {
+            const active = status === t.value
+            return (
+              <button
+                key={t.label}
+                type="button"
+                onClick={() => { setStatus(t.value); setPage(1) }}
+                className={cn(
+                  'flex shrink-0 items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition',
+                  active
+                    ? 'border-cyan-400/40 bg-cyan-500/15 text-white shadow-lg shadow-cyan-500/10'
+                    : 'border-white/10 bg-white/3 text-slate-400 hover:border-white/20 hover:text-white',
+                )}
+              >
+                <span className={cn('h-2 w-2 rounded-full', t.dot, t.value === 'GENERATING' && t.count > 0 && 'animate-pulse')} />
+                {t.label}
+                <span className={cn('rounded-md px-1.5 text-xs', active ? 'bg-white/15 text-white' : 'bg-white/5 text-slate-500')}>
+                  {firstLoad ? '–' : formatNumber(t.count)}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <SelectInput className="sm:w-48" value={type} onChange={(e) => { setType(e.target.value); setPage(1) }}>
+            <option value="">All types</option>
+            {(Object.keys(TYPE_META) as ReportType[]).map((t) => (
+              <option key={t} value={t} className="bg-[#0b1224]">{TYPE_META[t].label}</option>
+            ))}
+          </SelectInput>
+          <SelectInput className="sm:w-64" value={serverId} onChange={(e) => { setServerId(e.target.value); setPage(1) }}>
+            <option value="">All servers</option>
+            {servers.map((s) => (
+              <option key={s.id} value={s.id} className="bg-[#0b1224]">{s.domain}</option>
+            ))}
+          </SelectInput>
+          {hasFilters && <Button icon={X} variant="ghost" onClick={clearFilters}>Clear</Button>}
+          {inProgressHint(summary) && (
+            <span className="text-xs text-amber-300/80 sm:ml-auto">Reports in progress update live</span>
+          )}
+        </div>
+      </div>
+
+      {/* ---------- Cards grid ---------- */}
+      {error && reports.length === 0 ? (
+        <Card><ErrorState message={error} onRetry={() => void load()} /></Card>
+      ) : firstLoad ? (
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-52 w-full rounded-2xl" />)}
+        </div>
+      ) : reports.length === 0 ? (
+        <Card>
           <EmptyState
             icon={FileText}
             title={hasFilters ? 'No reports match these filters' : 'No reports yet'}
@@ -250,43 +285,15 @@ export default function ReportsPage() {
               ? <Button icon={X} onClick={clearFilters}>Clear filters</Button>
               : <Button variant="primary" icon={FilePlus2} onClick={() => setCreating(true)}>New report</Button>}
           />
-        ) : (
-          <>
-            <ul className={cn(loading && 'opacity-60')}>
-              {reports.map((r, i) => (
-                <li
-                  key={r.id}
-                  onClick={() => setSelectedId(r.id)}
-                  style={{ animationDelay: `${Math.min(i, 10) * 35}ms` }}
-                  className="zp-anim-fade-up group flex cursor-pointer items-center gap-4 border-b border-white/5 px-5 py-4 last:border-0 hover:bg-white/3"
-                >
-                  <span className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-xl',
-                    r.status === 'READY' ? 'bg-emerald-500/10 text-emerald-400'
-                      : r.status === 'FAILED' ? 'bg-rose-500/10 text-rose-400'
-                      : r.status === 'GENERATING' ? 'bg-amber-400/10 text-amber-300' : 'bg-white/5 text-slate-400')}>
-                    <FileText className="h-5 w-5" />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p dir="auto" className="truncate text-sm font-semibold text-white">{r.title}</p>
-                    <p className="mt-0.5 truncate text-xs text-slate-500">{periodLabel(r)}</p>
-                    {r.status === 'FAILED' && r.errorMessage && (
-                      <p dir="auto" className="mt-1 truncate text-xs text-rose-300/80">{r.errorMessage}</p>
-                    )}
-                  </div>
-                  <div className="hidden items-center gap-2 sm:flex">
-                    <Badge tone={TYPE_META[r.type].tone}>{TYPE_META[r.type].label}</Badge>
-                  </div>
-                  <div className="hidden text-right text-xs text-slate-500 md:block">
-                    <p>{formatNumber(r.eventCount)} events</p>
-                    <p>{formatNumber(r.blockedCount)} blocked</p>
-                  </div>
-                  <div className="flex shrink-0 flex-col items-end gap-1.5">
-                    <ReportStatusBadge status={r.status} />
-                    <span className="text-[11px] text-slate-600">{timeAgo(r.createdAt)}</span>
-                  </div>
-                </li>
-              ))}
-            </ul>
+        </Card>
+      ) : (
+        <>
+          <div className={cn('grid gap-4 sm:grid-cols-2 xl:grid-cols-3', loading && 'opacity-60')}>
+            {reports.map((r, i) => (
+              <ReportCard key={r.id} report={r} index={i} onOpen={() => setSelectedId(r.id)} />
+            ))}
+          </div>
+          <Card>
             <PaginationBar
               page={page}
               totalPages={pagination.totalPages}
@@ -296,9 +303,9 @@ export default function ReportsPage() {
               onPage={setPage}
               onLimit={(n) => { setLimit(n); setPage(1) }}
             />
-          </>
-        )}
-      </Card>
+          </Card>
+        </>
+      )}
 
       {/* ---------- Modals / Drawers ---------- */}
       <CreateReportModal
@@ -320,4 +327,8 @@ export default function ReportsPage() {
       </Drawer>
     </PageShell>
   )
+}
+
+function inProgressHint(summary: Summary): boolean {
+  return (summary.GENERATING ?? 0) + (summary.PENDING ?? 0) > 0
 }
