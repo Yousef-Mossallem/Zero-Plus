@@ -333,3 +333,71 @@ svg {
   background-size: 200% 100%;
   animation: zp-shimmer 1.6s linear infinite;
 }
+/* -------------------------------------------------------------------------- */
+/* Scrollbar                                                                  */
+/* شريط رفيع شفاف مع Thumb رمادي مزرق، بيتحول لسيان عند الـ hover            */
+/* من غير أسهم (فوق/تحت)، ومتوافق مع Chrome / Edge / Safari / Firefox         */
+/* -------------------------------------------------------------------------- */
+
+html {
+  color-scheme: dark; /* الـ scrollbar وعناصر الفورم الافتراضية بتاخد الثيم الغامق */
+}
+
+/* Chrome / Edge / Safari */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* شيل الأسهم */
+::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+/* الـ border الشفاف بيخلي الـ thumb يبان أرفع (6px) من غير ما تصغر مساحة الإمساك */
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.22);
+  background-clip: padding-box;
+  border: 2px solid transparent;
+  border-radius: 999px;
+  transition: background-color 0.2s;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(34, 211, 238, 0.45);
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:active {
+  background: rgba(34, 211, 238, 0.65);
+  background-clip: padding-box;
+}
+
+/* Firefox (مابيدعمش ::-webkit-scrollbar) */
+@supports (-moz-appearance: none) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(148, 163, 184, 0.3) transparent;
+  }
+}
+
+/* أنحف شوية للمناطق الداخلية (الـ Sidebar / القوايم / الـ Drawers)
+   الكلاس scrollbar-thin كان مستخدم في الـ Navbar ومش متعرّف */
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  border-width: 1px;
+  background-color: rgba(148, 163, 184, 0.18);
+}
+
+/* -------------------------------------------------------------------------- */

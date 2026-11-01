@@ -1,14 +1,7 @@
 // frontend/src/pages/landing/SitePoliciesPage.tsx
 // ==================================================================
-// Zero Plus - Public Policies Page (السياسات "/legal")
-// تبويبات: Privacy Policy • Terms of Service • Security & Data Isolation
-//
-// ملحوظات:
-// - اسم الملف SitePoliciesPage عشان ميتعارضش مع PoliciesPage بتاع الـ
-//   Dashboard (المعلّق في AppRouter على مسار /policies).
-// - النصوص صياغة مبدئية مبنية على تصميم المشروع، ويُفضّل مراجعتها
-//   قانونياً قبل الإطلاق الفعلي.
-// - التبويب النشط بيتحكم فيه الرابط: /legal?tab=privacy|terms|security
+// Zero Plus - Public Policies Page (English) "/legal"
+// Tabs: Privacy Policy • Terms of Service • Security & Data Isolation
 // ==================================================================
 
 import { useSearchParams } from 'react-router-dom'
@@ -17,11 +10,6 @@ import { ShieldCheck, FileText, LockKeyhole } from 'lucide-react'
 import LandingLayout from './LandingLayout'
 import { GradientText, PageHero, cardClass } from './LandingShared'
 
-// ==================================================================
-// Types
-// ==================================================================
-
-// قسم داخل السياسة: عنوان + فقرة اختيارية + نقاط اختيارية
 interface PolicySection {
   heading: string
   body?: string
@@ -36,143 +24,122 @@ interface Policy {
   sections: PolicySection[]
 }
 
-// ==================================================================
-// Content (محتوى السياسات)
-// ==================================================================
-
 const POLICIES: Policy[] = [
-  // ----------------------------------------------------------------
-  // Privacy Policy
-  // ----------------------------------------------------------------
   {
     id: 'privacy',
     label: 'Privacy Policy',
     icon: ShieldCheck,
     intro:
-      'توضح هذه السياسة ما البيانات التي يجمعها Zero Plus، ولماذا، وكيف نحميها.',
+      'This policy explains what data Zero Plus collects, why, and how we protect it.',
     sections: [
       {
-        heading: 'البيانات التي نجمعها',
+        heading: 'Data we collect',
         points: [
-          'بيانات الحساب: الاسم، البريد الإلكتروني، اسم الـ Organization، ودور المستخدم.',
-          'بيانات الخوادم المحمية: الـ Domain وعنوان الـ Origin Server والـ Port.',
-          'بيانات الطلبات المارّة عبر الـ Gateway: عنوان IP، بصمة الجهاز، بصمة التشفير TLS/JA3/JA4، والموقع الجغرافي التقريبي، مع القرار الذي اتُّخذ.',
+          'Account data: name, email, Organization name, and user role.',
+          'Protected server data: domain, origin server address, and port.',
+          'Request data passing through the Gateway: IP address, device fingerprint, TLS/JA3/JA4 fingerprint, approximate geolocation, and the decision taken.',
         ],
       },
       {
-        heading: 'كيف نستخدم البيانات',
+        heading: 'How we use the data',
         points: [
-          'اتخاذ قرار السماح أو الحجب أو الفحص الإضافي لكل طلب.',
-          'عرض الأحداث والتقارير والتنبيهات داخل لوحة التحكم الخاصة بمنظمتك.',
-          'تحسين دقة الكشف وتقليل الإيجابيات الكاذبة (False Positives).',
+          'Decide allow, block, or extra checks for every request.',
+          'Show events, reports, and alerts inside your organization’s dashboard.',
+          'Improve detection accuracy and reduce false positives.',
         ],
       },
       {
-        heading: 'التسجيل الكسول (Lazy Registration)',
-        body: 'لا نُنشئ سجلاً دائماً لأي جهاز إلا عند وقوع حدث سيء فعلي منه. الزائر الذي لا يسبب مشكلة لا يُحفظ له ملف سمعة.',
+        heading: 'Lazy Registration',
+        body: 'We do not create a permanent record for any device unless a real bad event comes from it. A visitor who causes no problem does not get a reputation profile.',
       },
       {
-        heading: 'خدمات الطرف الثالث',
-        body: 'نستخدم Gemini API لصياغة نصوص التقارير والإشعارات فقط، أي لتحويل بيانات حدث وقع بالفعل (مثل نوع الهجوم ودرجة الخطورة وعنوان IP) إلى لغة مفهومة. لا يشارك Gemini في أي قرار أمني.',
+        heading: 'Third-party services',
+        body: 'We use the Gemini API only to draft report and notification text—turning data about an event that already happened (attack type, severity, IP) into plain language. Gemini does not take part in any security decision.',
       },
       {
-        heading: 'حقوقك',
-        body: 'يمكنك طلب الاطلاع على بيانات منظمتك أو تعديلها أو حذفها بالتواصل معنا عبر صفحة تواصل معنا أو البريد example@example.com.',
+        heading: 'Your rights',
+        body: 'You can request access to, correction of, or deletion of your organization’s data by contacting us via the Contact page or at example@example.com.',
       },
     ],
   },
-
-  // ----------------------------------------------------------------
-  // Terms of Service
-  // ----------------------------------------------------------------
   {
     id: 'terms',
     label: 'Terms of Service',
     icon: FileText,
-    intro: 'باستخدامك Zero Plus فإنك توافق على الشروط التالية.',
+    intro: 'By using Zero Plus you agree to the following terms.',
     sections: [
       {
-        heading: 'وصف الخدمة',
-        body: 'Zero Plus خدمة (SaaS) تعمل كـ Reverse Proxy بين زوار موقعك وسيرفرك الحقيقي، وتفحص الطلبات وتقرر السماح بها أو حجبها أو إخضاعها لتحقق إضافي. نحن من يشغّل البنية التحتية، ولا تحتاج لتثبيت أي برنامج.',
+        heading: 'Service description',
+        body: 'Zero Plus is a SaaS reverse proxy between your site’s visitors and your real server. It inspects requests and decides to allow, block, or apply extra verification. We run the infrastructure; you do not install any software.',
       },
       {
-        heading: 'مسؤوليات العميل',
+        heading: 'Customer responsibilities',
         points: [
-          'إدخال بيانات صحيحة للحساب والسيرفرات، والحفاظ على سرية بيانات الدخول.',
-          'تغيير إعدادات DNS كما نحددها ليمر الـ Traffic عبر Zero Plus.',
-          'منع الوصول المباشر إلى الـ Origin Server من خارج Zero Plus، فبدون ذلك يمكن تجاوز الحماية.',
-          'المسؤولية عن المستخدمين الذين تضيفهم إلى منظمتك وصلاحياتهم.',
+          'Provide accurate account and server data, and keep login credentials confidential.',
+          'Change DNS settings as we specify so traffic flows through Zero Plus.',
+          'Prevent direct access to the origin server from outside Zero Plus; otherwise protection can be bypassed.',
+          'Responsibility for users you add to your organization and their permissions.',
         ],
       },
       {
-        heading: 'الاستخدام المقبول',
+        heading: 'Acceptable use',
         points: [
-          'يُمنع استخدام الخدمة لحماية مواقع أو خدمات غير قانونية.',
-          'يُمنع محاولة اختراق الخدمة أو الالتفاف على حدودها أو الوصول إلى بيانات عميل آخر.',
-          'يُمنع استخدام مختبر المحاكاة (Simulation Lab) ضد أي سيرفر لا تملكه.',
+          'Using the service to protect illegal sites or services is prohibited.',
+          'Attempting to hack the service, bypass its limits, or access another customer’s data is prohibited.',
+          'Using the Simulation Lab against any server you do not own is prohibited.',
         ],
       },
       {
-        heading: 'حدود الخدمة',
-        body: 'نبذل أقصى جهد لضمان استمرارية الحماية ودقتها، لكن لا يمكن ضمان صد كل هجوم بنسبة 100%، وقد يُحجب زائر شرعي بالخطأ في حالات نادرة. توفّر لوحة التحكم أدوات لمراجعة هذه الحالات.',
+        heading: 'Service limits',
+        body: 'We make every effort to keep protection continuous and accurate, but we cannot guarantee blocking every attack 100%, and a legitimate visitor may rarely be blocked by mistake. The dashboard provides tools to review such cases.',
       },
       {
-        heading: 'إيقاف الحساب والتعديلات',
-        body: 'يحق لنا تعليق الحساب عند مخالفة هذه الشروط، ويحق لك إنهاء استخدامك في أي وقت. قد نعدّل هذه الشروط من وقت لآخر، وسنُعلمك بالتغييرات الجوهرية قبل سريانها.',
+        heading: 'Account suspension and changes',
+        body: 'We may suspend an account for violating these terms. You may stop using the service at any time. We may update these terms from time to time and will notify you of material changes before they take effect.',
       },
     ],
   },
-
-  // ----------------------------------------------------------------
-  // Security & Data Isolation
-  // ----------------------------------------------------------------
   {
     id: 'security',
     label: 'Security & Data Isolation',
     icon: LockKeyhole,
-    intro: 'كيف نحمي بيانات كل عميل، وما الذي يُشارَك وما الذي لا يغادر بيئتك أبداً.',
+    intro:
+      'How we protect each customer’s data, what is shared, and what never leaves your environment.',
     sections: [
       {
-        heading: 'عزل البيانات بين العملاء (Tenant Isolation)',
+        heading: 'Tenant Isolation',
         points: [
-          'لكل عميل بيئة بيانات منفصلة منطقياً لا تتقاطع مع أي عميل آخر.',
-          'مفاتيح تشفير مستقلة لكل عميل، فالوصول غير المصرح به لبيانات شركة لا يمنح وصولاً لشركة أخرى.',
-          'سجل السمعة والقائمة السوداء الخاصة بكل شركة تبقى محلية داخل بيئتها.',
+          'Each customer has a logically separate data environment that does not overlap with any other customer.',
+          'Independent encryption keys per customer; unauthorized access to one company’s data does not grant access to another.',
+          'Each company’s reputation log and blacklist stay local inside its environment.',
         ],
       },
       {
-        heading: 'المناعة الجماعية (Federated Threat Memory)',
-        body: 'عند تأكد حدث سيء، نستخلص بصمة الجهاز المهاجم فقط (مثل بصمة TLS/JA3/JA4 ونوعه) مجرّدة من أي هوية، ونضيفها لذاكرة تهديدات مشتركة، فيصبح باقي العملاء محصّنين قبل أن يتعرضوا للهجوم نفسه.',
+        heading: 'Federated Threat Memory',
+        body: 'When a bad event is confirmed, we extract only the attacking device’s fingerprint (e.g. TLS/JA3/JA4 type), stripped of any identity, and add it to a shared threat memory so other customers are hardened before they face the same attack.',
       },
       {
-        heading: 'ما الذي يُشارَك وما الذي لا يُشارَك',
+        heading: 'What is shared and what is not',
         points: [
-          'يُشارَك: بصمة التهديد المجرّدة، وهي بيانات غير حساسة لا تحمل أي معرّف للشركة.',
-          'لا يُشارَك أبداً: بيانات المستخدمين، تفاصيل السيرفرات، السجلات الكاملة، معلومات الحساب.',
+          'Shared: the stripped threat fingerprint—non-sensitive data with no company identifier.',
+          'Never shared: user data, server details, full logs, account information.',
         ],
       },
       {
-        heading: 'القرار الأمني مستقل عن الخدمات الخارجية',
-        body: 'قرارات السماح والحجب تُتخذ بالكامل داخل محرك Zero Plus. الخدمات الخارجية (مثل Gemini) تُستخدم لصياغة النصوص بعد اتخاذ القرار، فلا يتوقف أي قرار حساس على استجابة طرف ثالث.',
+        heading: 'Security decisions independent of external services',
+        body: 'Allow and block decisions are made entirely inside the Zero Plus engine. External services (e.g. Gemini) are used only to draft text after the decision; no sensitive decision depends on a third-party response.',
       },
       {
-        heading: 'الإبلاغ عن ثغرة أمنية',
-        body: 'إذا اكتشفت ثغرة في Zero Plus، راسلنا على security@example.com بالتفاصيل، ونعدك بمراجعتها بجدية والرد عليك.',
+        heading: 'Reporting a security vulnerability',
+        body: 'If you discover a vulnerability in Zero Plus, email security@example.com with details. We will review it seriously and respond.',
       },
     ],
   },
 ]
 
-// ==================================================================
-// Component
-// ==================================================================
-
 export default function SitePoliciesPage() {
-  // التبويب النشط يُقرأ من الرابط (?tab=...) عشان روابط الفوتر تشتغل
   const [params, setParams] = useSearchParams()
   const tabParam = params.get('tab')
-
-  // لو الـ tab مش معروف نرجع لأول تبويب
   const active = POLICIES.find((p) => p.id === tabParam) ?? POLICIES[0]
 
   return (
@@ -180,17 +147,13 @@ export default function SitePoliciesPage() {
       <PageHero
         title={
           <>
-            السياسات <GradientText>والشروط</GradientText>
+            Policies <GradientText>& terms</GradientText>
           </>
         }
-        description="نوضّح لك بصراحة كيف نتعامل مع بياناتك، وما الذي تتوقعه منا وما نتوقعه منك."
+        description="We state clearly how we handle your data, what you can expect from us, and what we expect from you."
       />
 
       <section className="mx-auto max-w-4xl px-6 py-8">
-        {/* ========================================================== */}
-        {/* Tabs                                                       */}
-        {/* ========================================================== */}
-
         <div
           role="tablist"
           className="mb-8 flex flex-wrap gap-2 rounded-2xl border border-white/8 bg-white/3 p-2"
@@ -216,10 +179,6 @@ export default function SitePoliciesPage() {
             )
           })}
         </div>
-
-        {/* ========================================================== */}
-        {/* Active Policy Content                                      */}
-        {/* ========================================================== */}
 
         <article className={`${cardClass} p-8`} role="tabpanel">
           <p className="mb-8 leading-relaxed text-slate-300">{active.intro}</p>
@@ -250,7 +209,7 @@ export default function SitePoliciesPage() {
           </div>
 
           <p className="mt-10 border-t border-white/6 pt-5 text-xs text-slate-600">
-            آخر تحديث: أكتوبر 2026
+            Last updated: October 2026
           </p>
         </article>
       </section>

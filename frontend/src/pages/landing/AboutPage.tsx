@@ -1,7 +1,6 @@
 // frontend/src/pages/landing/AboutPage.tsx
 // ==================================================================
-// Zero Plus - About Page (عن المشروع "/about")
-// الرؤية • المشكلة • المبادئ • الفصل بين القرار والشرح • التقنيات
+// Zero Plus - About Page (English) "/about"
 // ==================================================================
 
 import { Link } from 'react-router-dom'
@@ -10,75 +9,57 @@ import { Eye, Target, Scale, Scan, Users, EyeOff, Cpu, MessageSquareText } from 
 import LandingLayout from './LandingLayout'
 import { GradientText, PageHero, SectionHeading, cardClass } from './LandingShared'
 
-// ==================================================================
-// Data
-// ==================================================================
-
-// المبادئ التي يقوم عليها التصميم
 const PRINCIPLES = [
   {
     icon: EyeOff,
-    title: 'منطق واضح بدل الصندوق الأسود',
-    desc: 'قرار السماح أو الحجب يمر بأقسام معروفة، كل قسم له دور واحد. تقدر تفهم لماذا اتُّخذ أي قرار وتراجعه.',
+    title: 'Clear logic, not a black box',
+    desc: 'Allow or block decisions pass through known stages, each with one job. You can understand and review why any decision was made.',
   },
   {
     icon: Scale,
-    title: 'فرصة عادلة لكل جهاز جديد',
-    desc: 'لا نسجّل جهازاً إلا عند وقوع حدث سيء فعلي (Lazy Registration). الجهاز الجديد بريء حتى يثبت العكس.',
+    title: 'A fair chance for every new device',
+    desc: 'We only register a device when a real bad event occurs (Lazy Registration). A new device is innocent until proven otherwise.',
   },
   {
     icon: Scan,
-    title: 'فحص ثقيل لمن يستحقه فقط',
-    desc: 'الفحص الأعمق (مثل TLS/JA3/JA4) يُصرف على نسبة صغيرة مشبوهة، فنوفّر الموارد ونقلل التأخير (Latency).',
+    title: 'Heavy checks only when needed',
+    desc: 'Deeper inspection (e.g. TLS/JA3/JA4) is spent on a small suspicious share, so we save resources and keep latency low.',
   },
   {
     icon: Users,
-    title: 'خصوصية لا تُساوَم',
-    desc: 'بيانات كل شركة تبقى داخل بيئتها المعزولة. المشترك الوحيد هو بصمة التهديد المجرّدة من أي هوية.',
+    title: 'Privacy that is not compromised',
+    desc: 'Each company’s data stays in its isolated environment. The only thing shared is a threat fingerprint stripped of any identity.',
   },
 ]
 
-// التقنيات المستخدمة في المشروع (مجمّعة حسب الطبقة)
 const STACK = [
   { layer: 'Frontend', items: 'React, TypeScript, Vite, Tailwind CSS, Zustand, Recharts' },
   { layer: 'Backend', items: 'Node.js, Express, TypeScript, Socket.io, Zod' },
   { layer: 'Infrastructure', items: 'Docker, Nginx, PostgreSQL, Redis' },
-  { layer: 'IoT Simulation', items: 'ESP32 + MicroPython لمحاكاة أجهزة شرعية ومهاجمة' },
+  { layer: 'IoT Simulation', items: 'ESP32 + MicroPython to simulate legitimate and attacking devices' },
 ]
-
-// ==================================================================
-// Component
-// ==================================================================
 
 export default function AboutPage() {
   return (
     <LandingLayout>
-      {/* ============================================================ */}
-      {/* Hero                                                         */}
-      {/* ============================================================ */}
-
       <PageHero
         title={
           <>
-            نعيد تنظيم الحماية <GradientText>بطريقة أذكى</GradientText>
+            Rethinking protection <GradientText>the smarter way</GradientText>
           </>
         }
-        description="Zero Plus مشروع يهدف لجعل الحماية من هجمات DDoS متاحة وواضحة للشركات الصغيرة والمتوسطة، بدون تكلفة المؤسسات الكبرى وبدون إزعاج الزوار."
+        description="Zero Plus aims to make DDoS protection accessible and transparent for small and medium businesses—without enterprise cost and without annoying visitors."
       />
-
-      {/* ============================================================ */}
-      {/* Vision & Mission                                             */}
-      {/* ============================================================ */}
 
       <section className="mx-auto grid max-w-5xl gap-5 px-6 py-8 md:grid-cols-2">
         <div className={`${cardClass} p-7`}>
           <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-cyan-500/10 text-cyan-400">
             <Eye className="h-5 w-5" />
           </div>
-          <h2 className="mb-3 text-xl font-bold text-white">رؤيتنا</h2>
+          <h2 className="mb-3 text-xl font-bold text-white">Our vision</h2>
           <p className="leading-relaxed text-slate-400">
-            أن تستمر كل خدمة على الإنترنت في العمل حتى وقت الهجوم، وأن يصل
-            الزائر الحقيقي إلى الموقع بسلاسة كأن شيئاً لم يحدث.
+            That every service on the internet keeps running even during an attack,
+            and that a real visitor reaches the site smoothly as if nothing happened.
           </p>
         </div>
 
@@ -86,48 +67,41 @@ export default function AboutPage() {
           <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-cyan-500/10 text-cyan-400">
             <Target className="h-5 w-5" />
           </div>
-          <h2 className="mb-3 text-xl font-bold text-white">رسالتنا</h2>
+          <h2 className="mb-3 text-xl font-bold text-white">Our mission</h2>
           <p className="leading-relaxed text-slate-400">
-            تقديم حماية متدرّجة وذكية: نثق بمن يستحق الثقة، ونفحص بعمق من يثير
-            الشك، ونشارك المناعة بين العملاء دون المساس بخصوصية أحد.
+            Deliver graduated, smart protection: trust who deserves it, inspect
+            deeply who raises suspicion, and share immunity across customers without
+            compromising anyone’s privacy.
           </p>
         </div>
       </section>
 
-      {/* ============================================================ */}
-      {/* Problem                                                      */}
-      {/* ============================================================ */}
-
       <section className="mx-auto max-w-4xl px-6 py-16">
-        <SectionHeading title="لماذا بنينا Zero Plus؟" />
+        <SectionHeading title="Why we built Zero Plus" />
 
         <div className={`${cardClass} space-y-5 p-8 leading-loose text-slate-300`}>
           <p>
-            هجمات DDoS لم تعد ظاهرة هامشية. فقد رصدت Cloudflare نحو 47.1 مليون
-            هجوم خلال 2025، بزيادة 121% عن العام السابق، وسُجّل في ديسمبر 2025
-            أكبر هجوم في التاريخ بقوة 31.4 تيرابت في الثانية.
+            DDoS attacks are no longer a fringe issue. Cloudflare observed about
+            47.1 million attacks in 2025—a 121% increase over the previous year—and
+            in December 2025 the largest attack in history was recorded at 31.4 Tbps.
           </p>
           <p>
-            الأخطر أن هذه الهجمات لم تعد تعتمد على حواسيب مخترقة فقط، بل على
-            أجهزة إنترنت الأشياء (IoT) مثل التلفاز الذكي والكاميرات والراوترات
-            غير الآمنة، وهي أجهزة موجودة في منازل عادية ويملكها أشخاص لا يعلمون
-            أنها تُستغل.
+            What makes this worse is that these attacks no longer rely only on
+            compromised PCs, but on IoT devices—smart TVs, cameras, insecure
+            routers—sitting in ordinary homes, owned by people who have no idea
+            they are being abused.
           </p>
           <p>
-            أمام الشركات الصغيرة خياران: حلول عالمية مكلفة، أو أنظمة تعتمد على
-            CAPTCHA تزعج المستخدمين وتحجب أحياناً زواراً حقيقيين بالخطأ. Zero
-            Plus طريق ثالث: حماية تفحص بحسب السمعة، فتبقى سريعة وخفيفة على
-            الزائر الحقيقي.
+            Small companies face two options: expensive global solutions, or
+            CAPTCHA-heavy systems that frustrate users and sometimes block real
+            visitors by mistake. Zero Plus is a third path: protection that checks
+            by reputation, so it stays fast and light for legitimate visitors.
           </p>
         </div>
       </section>
 
-      {/* ============================================================ */}
-      {/* Principles                                                   */}
-      {/* ============================================================ */}
-
       <section className="mx-auto max-w-6xl px-6 py-16">
-        <SectionHeading title="المبادئ التي نبني عليها" />
+        <SectionHeading title="Principles we build on" />
         <div className="grid gap-5 md:grid-cols-2">
           {PRINCIPLES.map(({ icon: Icon, title, desc }) => (
             <div key={title} className={`${cardClass} flex gap-4 p-6`}>
@@ -143,14 +117,10 @@ export default function AboutPage() {
         </div>
       </section>
 
-      {/* ============================================================ */}
-      {/* Decision Engine vs Gemini                                    */}
-      {/* ============================================================ */}
-
       <section className="mx-auto max-w-5xl px-6 py-16">
         <SectionHeading
-          title="من يقرر، ومن يشرح؟"
-          description="فصل واضح بين اتخاذ القرار الأمني وبين صياغته بلغة مفهومة، حتى لا يعتمد أي قرار حساس على خدمة خارجية."
+          title="Who decides, and who explains?"
+          description="A clear split between making the security decision and phrasing it in plain language—so no sensitive decision depends on an external service."
         />
         <div className="grid gap-5 md:grid-cols-2">
           <div className={`${cardClass} border-cyan-500/30 p-7`}>
@@ -159,9 +129,10 @@ export default function AboutPage() {
               <h3 className="font-semibold text-white">Zero Plus AI Engine</h3>
             </div>
             <p className="text-sm leading-relaxed text-slate-400">
-              محرك القرار مبني ومملوك للمشروع بالكامل. يقرر السماح أو الحجب أو
-              الفحص الإضافي لكل طلب، اعتماداً على بيانات الطلب نفسه (IP، بصمة
-              الجهاز، السمعة، TLS)، ويعمل دون أي خدمة سحابية خارجية.
+              The decision engine is built and owned entirely by the project. It
+              decides allow, block, or extra checks for every request based on the
+              request itself (IP, device fingerprint, reputation, TLS)—with no
+              external cloud service in the loop.
             </p>
           </div>
 
@@ -171,19 +142,16 @@ export default function AboutPage() {
               <h3 className="font-semibold text-white">Gemini API</h3>
             </div>
             <p className="text-sm leading-relaxed text-slate-400">
-              لا يتخذ أي قرار أمني. دوره يبدأ بعد اتخاذ القرار، لتحويل بيانات
-              الحدث إلى جملة أو فقرة مفهومة تظهر في صفحة التقارير ونص الإشعار.
+              It does not make any security decision. Its role starts after the
+              decision is made: turning event data into a clear sentence or paragraph
+              shown on the reports page and in notification text.
             </p>
           </div>
         </div>
       </section>
 
-      {/* ============================================================ */}
-      {/* Tech Stack                                                   */}
-      {/* ============================================================ */}
-
       <section className="mx-auto max-w-4xl px-6 py-16">
-        <SectionHeading title="التقنيات المستخدمة" />
+        <SectionHeading title="Technology stack" />
         <div className={`${cardClass} divide-y divide-white/6`}>
           {STACK.map((s) => (
             <div
@@ -199,17 +167,13 @@ export default function AboutPage() {
         </div>
       </section>
 
-      {/* ============================================================ */}
-      {/* CTA                                                          */}
-      {/* ============================================================ */}
-
       <section className="mx-auto max-w-3xl px-6 pt-8 text-center">
-        <p className="text-slate-400">عندك سؤال عن المشروع أو تريد تجربة الحماية؟</p>
+        <p className="text-slate-400">Have a question about the project or want to try protection?</p>
         <Link
           to="/contact"
           className="mt-5 inline-block rounded-xl bg-linear-to-r from-cyan-500 to-blue-600 px-7 py-3.5 text-sm font-semibold text-white shadow-lg shadow-cyan-500/25 hover:brightness-110"
         >
-          تواصل معنا
+          Contact us
         </Link>
       </section>
     </LandingLayout>
