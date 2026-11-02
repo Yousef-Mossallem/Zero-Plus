@@ -8,30 +8,23 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 
 // ------------------------------------------------------------------
-// Auth Pages (شغالة دلوقتي)
+// Auth Pages
 // ------------------------------------------------------------------
 
-// TODO: هتتشال الكومنت دي لما SignupPage.tsx يتعمل
 import SignupPage from '../pages/SignupPage'
-
-// TODO: هتتشال الكومنت دي لما LoginPage.tsx يتعمل
 import LoginPage from '../pages/LoginPage'
 
 // ------------------------------------------------------------------
-// Core Pages (المرحلة الجاية)
+// Core Pages
 // ------------------------------------------------------------------
 
 import DashboardPage from '../pages/DashboardPage'
-
-// TODO: هتتشال الكومنت دي لما SimulationPage.tsx يتعمل
-// import SimulationPage from '../pages/SimulationPage'
-
+import SimulationPage from '../pages/SimulationPage'
 import SecurityEventsPage from '../pages/SecurityEventsPage'
-
 import ReputationPage from '../pages/ReputationPage'
 
 // ------------------------------------------------------------------
-// Secondary Pages (تتعمل في أي وقت فاضي، مش على الخط الحرج)
+// Secondary Pages
 // ------------------------------------------------------------------
 
 // TODO: هتتشال الكومنت دي لما LiveTrafficPage.tsx يتعمل
@@ -43,15 +36,10 @@ import ReportsPage from '../pages/ReportsPage'
 // import ThreatIntelligencePage from '../pages/ThreatIntelligencePage'
 
 import ServersPage from '../pages/ServersPage'
-
 import OrganizationsPage from '../pages/OrganizationsPage'
-
 import NotificationsPage from '../pages/NotificationsPage'
-
 import PoliciesPage from '../pages/PoliciesPage'
-
-// TODO: هتتشال الكومنت دي لما ProfilePage.tsx يتعمل
-// import ProfilePage from '../pages/ProfilePage'
+import ProfilePage from '../pages/ProfilePage'
 
 // ------------------------------------------------------------------
 // Protected Route Wrapper (يحمي أي صفحة محتاجة تسجيل دخول)
@@ -71,15 +59,11 @@ export default function AppRouter() {
           Public Routes (مفتوحة للكل، من غير تسجيل دخول)
       ============================================================ */}
 
-      {/* TODO: هتتشال الكومنت دي لما SignupPage.tsx يتعمل */}
       <Route path="/signup" element={<SignupPage />} />
-
-      {/* TODO: هتتشال الكومنت دي لما LoginPage.tsx يتعمل */}
       <Route path="/login" element={<LoginPage />} />
 
       {/* ============================================================
           Protected Routes (محتاجة تسجيل دخول)
-          كل الصفحات دي لازم تتلف بـ <ProtectedRoute> لما يتعمل
       ============================================================ */}
 
       <Route
@@ -91,8 +75,6 @@ export default function AppRouter() {
         }
       />
 
-      {/* TODO: هتتشال الكومنت دي لما SimulationPage.tsx يتعمل */}
-      {/*
       <Route
         path="/simulation"
         element={
@@ -101,7 +83,6 @@ export default function AppRouter() {
           </ProtectedRoute>
         }
       />
-      */}
 
       <Route
         path="/security-events"
@@ -190,8 +171,6 @@ export default function AppRouter() {
         }
       />
 
-      {/* TODO: هتتشال الكومنت دي لما ProfilePage.tsx يتعمل */}
-      {/*
       <Route
         path="/profile"
         element={
@@ -200,7 +179,6 @@ export default function AppRouter() {
           </ProtectedRoute>
         }
       />
-      */}
 
       {/* ============================================================
           Default Redirect
