@@ -177,7 +177,7 @@ export default function ReportDrawer({
 
       <Modal
         open={confirmOpen}
-        onClose={deleting ? undefined : () => setConfirmOpen(false)}
+        onClose={deleting ? () => {} : () => setConfirmOpen(false)}
         title="Delete this report?"
         description="The report and its content are removed permanently."
         icon={Trash2}

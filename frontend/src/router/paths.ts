@@ -5,4 +5,4 @@ export const HOME_PATH = '/notifications'
 
 // true = الصفحات المحمية تتفتح من غير جلسة.
 // رجّعه false لما تسجيل الدخول يبقى مطلوب تاني.
-export const BYPASS_AUTH = true
+export const BYPASS_AUTH = false
