@@ -1,159 +1,277 @@
 /**
  * core/risk.engine.ts
  * ==================================================================
- * المسؤولية الوحيدة لهذا الملف:
- *   تحويل "إشارات الفحص" إلى Risk Score من 0 إلى 100،
- *   مع توضيح مساهمة كل إشارة في النتيجة (components).
+ * تحويل إشارات الفحص إلى Risk Score (0–100) + components قابلة للتفسير.
  *
- * ما لا يفعله هذا الملف عن قصد (قواعد استقلالية الملفات):
- *   - لا يقرر الحظر ولا السماح           -> هذا شغل policy.engine.ts
- *   - لا يختار مسار الفحص                -> هذا شغل suspicion-router.ts
- *   - لا يتصل بـ Redis أو AI أو Backend  -> الإشارات تُمرَّر له جاهزة
- *   - لا يستورد أي ملف TypeScript من خدمة الـ AI
- *     (الـ AI يرسل درجة الشذوذ عبر HTTP، ومن يستقبلها يمررها هنا كرقم)
+ * لا يقرر ALLOW/BLOCK (policy) · لا يختار المسار (suspicion-router)
+ * لا يتصل بـ Redis / AI / Backend — كل القيم تُمرَّر جاهزة.
  *
- * طبيعة الملف: دوال نقية (Pure Functions).
- *   نفس المدخلات تعطي نفس المخرجات دائماً، ولا توجد حالة مخزنة،
- *   وهذا يجعل الاختبار سهلاً ويجعل النتيجة قابلة للتفسير والتتبع.
+ * AI:
+ *   - رقم 0..1 من خدمة AI الحقيقية، أو من X-ZP-Sim-AI (محاكاة موثوقة فقط)
+ *   - null/undefined → مساهمة 0 (fail-open: عطل عندنا لا يعاقب الزائر)
+ *
+ * Pure functions: نفس المدخلات → نفس المخرجات.
  * ==================================================================
  */
 
-/**
- * أوزان الإشارات حسب التصميم المعتمد.
- *
- * ملاحظة مهمة: مجموع الأوزان = 100 بالضبط
- *   15 + 25 + 30 + 10 + 20 = 100
- * وهذا هو الضمان البنيوي بأن الدرجة لن تتجاوز 100:
- * كل إشارة لا تستطيع أن تضيف أكثر من وزنها، ومجموع الأوزان هو السقف.
- * (يوجد اختبار يتأكد أن المجموع 100 حتى لا يكسره تعديل مستقبلي بالخطأ.)
- *
- * `as const` تجعل القيم ثابتة للقراءة فقط، وتجعل TypeScript يعرف
- * أسماء المفاتيح بدقة ليشتق منها النوع RiskSignalName أدناه.
- */
+// ------------------------------------------------------------------
+// أوزان — المجموع = 100
+// ------------------------------------------------------------------
+
 export const RISK_WEIGHTS = {
-  badIp: 15, // سمعة IP سيئة
-  highRequestRate: 25, // معدل طلبات مرتفع
-  aiAnomaly: 30, // شذوذ صادر عن خدمة الـ AI
-  suspiciousFingerprint: 10, // بصمة مشبوهة
-  priorHistory: 20, // سجل سابق سيئ للزائر
+  /** سمعة / نوع الشبكة (Tor, DC, VPN عالي الخطورة، …) */
+  badIp: 15,
+  /** ضغط معدل الطلبات (soft/hard من rate-limiter) */
+  highRequestRate: 25,
+  /** شذوذ سلوكي — AI أو بديل المحاكاة */
+  aiAnomaly: 30,
+  /** JA3/JA4 / device fp مشبوه أو غير متسق */
+  suspiciousFingerprint: 10,
+  /** سجل سمعة / حظر سابق / فشل تحديات */
+  priorHistory: 20,
 } as const;
 
-/**
- * أسماء الإشارات مشتقة من كائن الأوزان نفسه (keyof typeof).
- * الفائدة: لو أضفنا إشارة جديدة في RISK_WEIGHTS يتحدث النوع تلقائياً،
- * ولا يمكن أن يحدث تعارض بين الأسماء والأوزان.
- */
 export type RiskSignalName = keyof typeof RISK_WEIGHTS;
 
-/** الحد الأقصى المطلق للدرجة النهائية. */
 export const MAX_RISK_SCORE = 100;
 
+/** تحقق بنيوي: لو اتعدّلت الأوزان بالغلط في المستقبل */
+export function sumRiskWeights(): number {
+  return (Object.values(RISK_WEIGHTS) as number[]).reduce((a, b) => a + b, 0);
+}
+
+// ------------------------------------------------------------------
+// المدخلات
+// ------------------------------------------------------------------
+
 /**
- * إشارات الفحص المُدخلة للمحرك.
- *
- * الإشارات الأربع (IP، المعدل، البصمة، السجل) ثنائية: موجودة أو غير موجودة.
- * أما الـ AI فيعطي درجة متدرجة من 0 إلى 1، لأن الشذوذ ليس "نعم/لا" بل مستوى.
+ * كل إشارة ثنائية تقدر تتبدّل بنسبة 0..1 أدق (اختياري).
+ * لو الاتنين موجودين: النسبة لها الأولوية.
+ * لو الاتنين فاضيين: 0.
  */
 export interface RiskSignals {
-  /** هل الـ IP ذو سمعة سيئة (من ip-reputation). */
-  badIp: boolean;
-  /** هل معدل الطلبات مرتفع (من rate-limiter). */
-  highRequestRate: boolean;
+  /** IP خطير (من ip-reputation: tor / datacenter عالي / blocklist…) */
+  badIp?: boolean;
+  /** 0..1 شدة شبكة/سمعة IP */
+  badIpScore?: number | null;
+
+  /** تجاوز soft/hard rate */
+  highRequestRate?: boolean;
   /**
-   * درجة الشذوذ من خدمة الـ AI، بين 0 و 1.
-   * null أو undefined تعني أن الـ AI غير متاح الآن (تعطل مثلاً)،
-   * وفي هذه الحالة تُحسب 0 حتى لا نعاقب الزائر بسبب عطل عندنا.
+   * 0..1 — مثال: soft فقط ≈ 0.4–0.6 ، hard ≈ 1
+   * لو null والـ boolean true → 1
+   */
+  highRequestRateScore?: number | null;
+
+  /**
+   * شذوذ AI 0..1
+   * محاكاة: من sim context بعد توكن صالح
+   * إنتاج: من ai.client
+   * غير متاح: null → 0
    */
   aiAnomalyScore?: number | null;
-  /** هل البصمة مشبوهة (من fingerprint-authenticator). */
-  suspiciousFingerprint: boolean;
-  /** هل للزائر سجل سابق سيئ. */
-  priorHistory: boolean;
+
+  suspiciousFingerprint?: boolean;
+  suspiciousFingerprintScore?: number | null;
+
+  priorHistory?: boolean;
+  priorHistoryScore?: number | null;
 }
 
-/** مساهمة إشارة واحدة في النتيجة النهائية. */
 export interface RiskComponent {
-  /** اسم الإشارة. */
   signal: RiskSignalName;
-  /** الوزن الأقصى الذي تستطيع هذه الإشارة إضافته. */
   weight: number;
-  /** النقاط التي أضافتها فعلياً (عدد صحيح بين 0 و weight). */
   contribution: number;
-  /** هل ساهمت الإشارة بأي نقاط (contribution > 0). */
   triggered: boolean;
+  /** النسبة المستخدمة 0..1 بعد التطبيع */
+  ratio: number;
 }
 
-/** نتيجة حساب المخاطر. */
 export interface RiskResult {
-  /** الدرجة النهائية، عدد صحيح من 0 إلى 100. */
+  /** 0..100 صحيح */
   score: number;
-  /**
-   * تفاصيل الإشارات الخمس دائماً وبنفس الترتيب،
-   * ومجموع contribution فيها يساوي score بالضبط.
-   */
   components: RiskComponent[];
+  /** true لو AI لم يُحسب (null) — للشفافية في اللوجات */
+  aiUnavailable: boolean;
 }
 
+// ------------------------------------------------------------------
+// تطبيع
+// ------------------------------------------------------------------
+
 /**
- * تحويل أي قيمة إلى نسبة آمنة بين 0 و 1.
- *
- * - القيمة الأكبر من 1 تُقصّ إلى 1 (لا تعطي أكثر من الوزن الكامل).
- * - القيمة السالبة تُقصّ إلى 0.
- * - القيم غير الرقمية أو NaN أو Infinity أو null/undefined تُعتبر 0،
- *   لأن بيانات تالفة لا تصلح أساساً لمعاقبة زائر.
+ * يقص أي رقم إلى [0, 1]. غير رقمي / NaN / Infinity → 0
  */
-function toRatio(value: number | null | undefined): number {
-  // typeof يستبعد null و undefined والنصوص، وisFinite يستبعد NaN والـ Infinity.
+export function toRatio(value: number | null | undefined): number {
   if (typeof value !== 'number' || !Number.isFinite(value)) return 0;
-  // Math.max(0, ...) يمنع السالب، وMath.min(1, ...) يمنع ما فوق 1.
-  return Math.min(1, Math.max(0, value));
+  if (value <= 0) return 0;
+  if (value >= 1) return 1;
+  return value;
 }
 
 /**
- * بناء مكوّن واحد من مكونات النتيجة.
- *
- * النقاط = الوزن × النسبة، مقرّبة لأقرب عدد صحيح.
- * التقريب يتم هنا (لكل مكوّن على حدة) وليس على المجموع،
- * وهذا هو ما يجعل مجموع المكونات مطابقاً للدرجة النهائية بدقة تامة:
- * نحن نجمع أعداداً صحيحة فقط فلا يوجد كسور تضيع عند الجمع.
- *
- * @param signal اسم الإشارة
- * @param ratio  نسبة التفعيل بين 0 و 1 (0 = غير مفعّلة، 1 = كاملة)
+ * boolean و/أو score → نسبة واحدة
  */
-function buildComponent(signal: RiskSignalName, ratio: number): RiskComponent {
+function resolveRatio(
+  flag: boolean | undefined,
+  score: number | null | undefined,
+): number {
+  if (score !== undefined && score !== null) {
+    return toRatio(score);
+  }
+  return flag ? 1 : 0;
+}
+
+function buildComponent(
+  signal: RiskSignalName,
+  ratio: number,
+): RiskComponent {
   const weight = RISK_WEIGHTS[signal];
-  const contribution = Math.round(weight * ratio);
-  return { signal, weight, contribution, triggered: contribution > 0 };
+  const safe = toRatio(ratio);
+  const contribution = Math.round(weight * safe);
+  return {
+    signal,
+    weight,
+    contribution,
+    ratio: safe,
+    triggered: contribution > 0,
+  };
 }
 
-/**
- * حساب درجة المخاطر.
- *
- * الخطوات:
- *   1) تحويل كل إشارة إلى نسبة (0 أو 1 للثنائية، 0..1 للـ AI).
- *   2) تحويل كل نسبة إلى مكوّن (نقاط صحيحة).
- *   3) جمع النقاط.
- *   4) تقييد الناتج بـ 100 كحماية إضافية.
- *
- * @param signals الإشارات المجمّعة من طبقات الفحص
- * @returns الدرجة النهائية + تفاصيل مساهمة كل إشارة
- */
+// ------------------------------------------------------------------
+// الحساب الرئيسي
+// ------------------------------------------------------------------
+
 export function calculateRisk(signals: RiskSignals): RiskResult {
-  // الترتيب هنا ثابت ومقصود: السجلات والواجهات تعتمد عليه.
+  const aiRaw = signals.aiAnomalyScore;
+  const aiUnavailable =
+    aiRaw === null ||
+    aiRaw === undefined ||
+    (typeof aiRaw === 'number' && !Number.isFinite(aiRaw));
+
   const components: RiskComponent[] = [
-    buildComponent('badIp', signals.badIp ? 1 : 0),
-    buildComponent('highRequestRate', signals.highRequestRate ? 1 : 0),
-    buildComponent('aiAnomaly', toRatio(signals.aiAnomalyScore)),
-    buildComponent('suspiciousFingerprint', signals.suspiciousFingerprint ? 1 : 0),
-    buildComponent('priorHistory', signals.priorHistory ? 1 : 0),
+    buildComponent(
+      'badIp',
+      resolveRatio(signals.badIp, signals.badIpScore),
+    ),
+    buildComponent(
+      'highRequestRate',
+      resolveRatio(signals.highRequestRate, signals.highRequestRateScore),
+    ),
+    buildComponent('aiAnomaly', aiUnavailable ? 0 : toRatio(aiRaw)),
+    buildComponent(
+      'suspiciousFingerprint',
+      resolveRatio(
+        signals.suspiciousFingerprint,
+        signals.suspiciousFingerprintScore,
+      ),
+    ),
+    buildComponent(
+      'priorHistory',
+      resolveRatio(signals.priorHistory, signals.priorHistoryScore),
+    ),
   ];
 
-  // جمع النقاط الصحيحة لكل المكونات.
   const total = components.reduce((sum, c) => sum + c.contribution, 0);
+  const score = Math.min(MAX_RISK_SCORE, Math.max(0, total));
 
-  // لن يتفعّل هذا الحد فعلياً لأن مجموع الأوزان 100،
-  // لكنه خط دفاع ثانٍ يضمن "لا تتجاوز 100 أبداً" حتى لو عُدّلت الأوزان بالخطأ مستقبلاً.
-  const score = Math.min(MAX_RISK_SCORE, total);
-
-  return { score, components };
+  return { score, components, aiUnavailable };
 }
+
+// ------------------------------------------------------------------
+// مساعدات لـ app.ts / المحاكاة / الإنتاج
+// ------------------------------------------------------------------
+
+/** إشارات نظيفة */
+export function emptyRiskSignals(): RiskSignals {
+  return {
+    badIp: false,
+    highRequestRate: false,
+    aiAnomalyScore: null,
+    suspiciousFingerprint: false,
+    priorHistory: false,
+  };
+}
+
+/**
+ * بناء سريع من طبقات الـ Gateway
+ *
+ * rateLevel: 'none' | 'soft' | 'hard'
+ * aiScore: من AI الحقيقي أو simulationAiAnomalyScore(ctx)
+ */
+export function buildRiskSignals(input: {
+  badIp?: boolean;
+  badIpScore?: number | null;
+  rateLevel?: 'none' | 'soft' | 'hard';
+  highRequestRate?: boolean;
+  highRequestRateScore?: number | null;
+  aiAnomalyScore?: number | null;
+  suspiciousFingerprint?: boolean;
+  suspiciousFingerprintScore?: number | null;
+  priorHistory?: boolean;
+  priorHistoryScore?: number | null;
+}): RiskSignals {
+  let highRequestRate = input.highRequestRate;
+  let highRequestRateScore = input.highRequestRateScore;
+
+  if (input.rateLevel === 'hard') {
+    highRequestRate = true;
+    highRequestRateScore = highRequestRateScore ?? 1;
+  } else if (input.rateLevel === 'soft') {
+    highRequestRate = true;
+    highRequestRateScore = highRequestRateScore ?? 0.5;
+  } else if (input.rateLevel === 'none') {
+    highRequestRate = false;
+    highRequestRateScore = 0;
+  }
+
+  return {
+    badIp: input.badIp ?? false,
+    badIpScore: input.badIpScore,
+    highRequestRate: highRequestRate ?? false,
+    highRequestRateScore,
+    aiAnomalyScore:
+      input.aiAnomalyScore === undefined ? null : input.aiAnomalyScore,
+    suspiciousFingerprint: input.suspiciousFingerprint ?? false,
+    suspiciousFingerprintScore: input.suspiciousFingerprintScore,
+    priorHistory: input.priorHistory ?? false,
+    priorHistoryScore: input.priorHistoryScore,
+  };
+}
+
+/** ملخص نصي للـ event logger */
+export function summarizeRisk(result: RiskResult): string {
+  const hit = result.components
+    .filter((c) => c.triggered)
+    .map((c) => `${c.signal}:${c.contribution}`)
+    .join(', ');
+  const aiNote = result.aiUnavailable ? ' (ai unavailable)' : '';
+  return `risk=${result.score}${aiNote}${hit ? ` [${hit}]` : ''}`;
+}
+
+/**
+ * هل الدرجة في نطاق يستحق تحدّي/حظر حسب حدود افتراضية؟
+ * (القرار النهائي يبقى لـ policy.engine بعتبات الشركة)
+ */
+export function bandForScore(score: number): 'low' | 'medium' | 'high' | 'critical' {
+  if (!Number.isFinite(score) || score <= 30) return 'low';
+  if (score <= 60) return 'medium';
+  if (score <= 80) return 'high';
+  return 'critical';
+}
+
+// ------------------------------------------------------------------
+// تصدير افتراضي
+// ------------------------------------------------------------------
+
+export default {
+  RISK_WEIGHTS,
+  MAX_RISK_SCORE,
+  calculateRisk,
+  buildRiskSignals,
+  emptyRiskSignals,
+  summarizeRisk,
+  bandForScore,
+  toRatio,
+  sumRiskWeights,
+};

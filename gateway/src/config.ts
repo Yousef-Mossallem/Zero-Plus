@@ -17,17 +17,12 @@
 import dotenv from 'dotenv';
 import path from 'path';
 
-// تحميل ملف .env من جذر المشروع
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 
 // ======================================================
 // Helper Functions
 // ======================================================
 
-/**
- * بيجيب متغير بيئة ويحوله لرقم.
- * لو مش موجود أو مش رقم → بيرجع القيمة الافتراضية.
- */
 function envNumber(key: string, defaultValue: number): number {
   const value = process.env[key];
   if (value === undefined || value === '') return defaultValue;
@@ -35,34 +30,22 @@ function envNumber(key: string, defaultValue: number): number {
   return Number.isFinite(parsed) ? parsed : defaultValue;
 }
 
-/**
- * بيجيب متغير بيئة ويحوله لـ boolean.
- * بيقبل: true / 1 / yes / on
- */
 function envBoolean(key: string, defaultValue: boolean): boolean {
   const value = process.env[key];
   if (value === undefined || value === '') return defaultValue;
   return ['true', '1', 'yes', 'on'].includes(value.toLowerCase());
 }
 
-/**
- * بيجيب متغير بيئة كـ string.
- * لو مش موجود → بيرجع القيمة الافتراضية.
- */
 function envString(key: string, defaultValue: string): string {
   const value = process.env[key];
   return value !== undefined && value !== '' ? value : defaultValue;
 }
 
-/**
- * بيتأكد إن السر مش فاضي ومش القيمة الافتراضية الضعيفة.
- * بيطبع تحذير لو لقى حاجة ضعيفة (مش بيوقف السيرفر).
- */
 function assertStrongSecret(name: string, value: string, minLength = 16): void {
   if (!value || value.length < minLength) {
     console.warn(
       `[CONFIG WARNING] ${name} ضعيف جدًا أو فاضي (الطول الحالي: ${value?.length || 0}). ` +
-        `يُفضل استخدام مفتاح عشوائي قوي بطول ${minLength}+ حرف.`
+        `يُفضل استخدام مفتاح عشوائي قوي بطول ${minLength}+ حرف.`,
     );
   }
 }
@@ -72,19 +55,13 @@ function assertStrongSecret(name: string, value: string, minLength = 16): void {
 // ======================================================
 
 const server = {
-  /** البورت اللي الـ Gateway هيستمع عليه */
   port: envNumber('PORT', 3000),
-
-  /** العنوان اللي هيستمع عليه (0.0.0.0 = كل الواجهات) */
   host: envString('HOST', '0.0.0.0'),
-
-  /** بيئة التشغيل: development | production | test */
-  nodeEnv: envString('NODE_ENV', 'development') as 'development' | 'production' | 'test',
-
-  /** هل إحنا في وضع التطوير؟ */
+  nodeEnv: envString('NODE_ENV', 'development') as
+    | 'development'
+    | 'production'
+    | 'test',
   isDev: envString('NODE_ENV', 'development') !== 'production',
-
-  /** هل إحنا في وضع الإنتاج؟ */
   isProd: envString('NODE_ENV', 'development') === 'production',
 };
 
@@ -93,41 +70,22 @@ const server = {
 // ======================================================
 
 const redis = {
-  /**
-   * رابط Redis الكامل.
-   * مثال: redis://localhost:6379
-   * أو مع باسورد: redis://:password@localhost:6379
-   */
   url: envString('REDIS_URL', 'redis://localhost:6379'),
-
-  /** أقصى عدد اتصالات في الـ pool */
   maxRetriesPerRequest: envNumber('REDIS_MAX_RETRIES', 3),
-
-  /** مدة الانتظار قبل إعادة المحاولة (ms) */
   retryDelayMs: envNumber('REDIS_RETRY_DELAY_MS', 200),
-
-  /** مفتاح بادئة لكل المفاتيح عشان ما تتداخلش مع خدمات تانية */
   keyPrefix: envString('REDIS_KEY_PREFIX', 'zp:gw:'),
 };
 
 // ======================================================
-// Backend Service (الـ Backend الإداري بتاعنا)
+// Backend Service
 // ======================================================
 
 const backend = {
-  /** عنوان الـ Backend (Fastify) */
   url: envString('BACKEND_URL', 'http://localhost:4000'),
-
-  /**
-   * السر المشترك بين الـ Gateway والـ Backend.
-   * بيستخدم في التحقق من الطلبات الداخلية (Internal API).
-   */
   internalSecret: envString(
     'GATEWAY_INTERNAL_SECRET',
-    'zp_gw_8f3a2c1e9b0d4f6a7c8e1b2d3f4a5c6e7b8d9f0a1c2e3b4d5f6a7c8e9b0d1f2'
+    'zp_gw_8f3a2c1e9b0d4f6a7c8e1b2d3f4a5c6e7b8d9f0a1c2e3b4d5f6a7c8e9b0d1f2',
   ),
-
-  /** timeout للطلبات اللي بتروح للـ Backend (ms) */
   timeoutMs: envNumber('BACKEND_TIMEOUT_MS', 5000),
 };
 
@@ -136,74 +94,38 @@ const backend = {
 // ======================================================
 
 const ai = {
-  /** عنوان خدمة الـ AI (Python + FastAPI + River) */
   url: envString('AI_URL', 'http://localhost:8000'),
-
-  /** timeout لتحليل الـ AI (ms) — لازم يكون قصير عشان ما يبطّأش الطلب */
   timeoutMs: envNumber('AI_TIMEOUT_MS', 12000),
-
-  /**
-   * مدة كاش نتيجة الـ AI لكل (orgId + ip) بالثواني.
-   * حسب الدوسيه: TTL 10 ثواني.
-   */
   cacheTtlSeconds: envNumber('AI_CACHE_TTL_SECONDS', 10),
-
-  /** هل نفعّل استدعاء الـ AI أصلًا؟ (ممكن نطفيه في التطوير) */
   enabled: envBoolean('AI_ENABLED', true),
 };
 
 // ======================================================
-// Clearance Cookie (تصريح المرور الموقع)
+// Clearance Cookie
 // ======================================================
 
 const clearance = {
-  /**
-   * السر اللي بنوقع بيه الـ Clearance Cookie (HMAC).
-   * لازم يكون قوي جدًا وما يتغيرش بسهولة.
-   */
   secret: envString('CLEARANCE_SECRET', 'zeroplusgateway2024secretkey9999'),
-
-  /**
-   * مدة صلاحية التصريح بالثواني.
-   * بعد المدة دي لازم الزائر يعمل challenge تاني.
-   */
-  ttlSeconds: envNumber('CLEARANCE_TTL_SECONDS', 1800), // 30 دقيقة
-
-  /** اسم الكوكي */
+  ttlSeconds: envNumber('CLEARANCE_TTL_SECONDS', 1800),
   cookieName: envString('CLEARANCE_COOKIE_NAME', '__zp_clearance'),
-
-  /** هل الكوكي HttpOnly؟ (مستحسن true) */
   httpOnly: envBoolean('CLEARANCE_HTTP_ONLY', true),
-
-  /** هل الكوكي Secure؟ (في الإنتاج لازم true) */
   secure: envBoolean('CLEARANCE_SECURE', server.isProd),
-
-  /** SameSite */
-  sameSite: envString('CLEARANCE_SAME_SITE', 'Lax') as 'Strict' | 'Lax' | 'None',
+  sameSite: envString('CLEARANCE_SAME_SITE', 'Lax') as
+    | 'Strict'
+    | 'Lax'
+    | 'None',
 };
 
 // ======================================================
-// Origin Probe (اختبار سيرفر العميل)
+// Origin Probe
 // ======================================================
 
 const originProbe = {
-  /**
-   * عنوان الـ Origin الافتراضي (للتطوير فقط).
-   * في الإنتاج كل منظمة ليها Origin خاص بيها من الـ Backend.
-   */
   defaultOriginUrl: envString('ORIGIN_URL', 'http://localhost:5000'),
-
-  /** timeout لطلب الـ Health Check (ms) */
   healthTimeoutMs: envNumber('ORIGIN_HEALTH_TIMEOUT_MS', 3000),
-
-  /** عدد الطلبات اللي بنعملها في اختبار الـ Load الخفيف */
   loadTestRequests: envNumber('ORIGIN_LOAD_TEST_REQUESTS', 20),
-
-  /** المدة القصوى لاختبار الـ Load (ms) */
   loadTestMaxDurationMs: envNumber('ORIGIN_LOAD_TEST_MAX_DURATION_MS', 5000),
-
-  /** الفاصل بين كل اختبار Origin تلقائي (بالثواني) */
-  probeIntervalSeconds: envNumber('ORIGIN_PROBE_INTERVAL_SECONDS', 300), // كل 5 دقايق
+  probeIntervalSeconds: envNumber('ORIGIN_PROBE_INTERVAL_SECONDS', 300),
 };
 
 // ======================================================
@@ -211,10 +133,6 @@ const originProbe = {
 // ======================================================
 
 const risk = {
-  /**
-   * الأوزان الافتراضية لمكونات الـ Risk Score.
-   * تقدر تتعدل لكل منظمة من خلال الـ Policy.
-   */
   weights: {
     ip: envNumber('RISK_WEIGHT_IP', 15),
     rate: envNumber('RISK_WEIGHT_RATE', 25),
@@ -224,14 +142,6 @@ const risk = {
     path: envNumber('RISK_WEIGHT_PATH', 10),
     history: envNumber('RISK_WEIGHT_HISTORY', 20),
   },
-
-  /**
-   * الحدود الافتراضية للقرار (قابلة للتعديل لكل منظمة).
-   * 0-30   → ALLOW
-   * 31-60  → RATE_LIMIT / MONITOR
-   * 61-80  → CHALLENGE
-   * 81-100 → BLOCK
-   */
   thresholds: {
     allow: envNumber('RISK_THRESHOLD_ALLOW', 30),
     rateLimit: envNumber('RISK_THRESHOLD_RATE_LIMIT', 60),
@@ -244,19 +154,10 @@ const risk = {
 // ======================================================
 
 const rateLimit = {
-  /** عدد الطلبات المسموح بها في النافذة الزمنية (للـ IP العادي) */
   windowRequests: envNumber('RATE_LIMIT_WINDOW_REQUESTS', 60),
-
-  /** طول النافذة الزمنية بالثواني */
   windowSeconds: envNumber('RATE_LIMIT_WINDOW_SECONDS', 60),
-
-  /** مدة الحظر القصيرة (بالثواني) — فشل JS بسيط */
-  shortBanSeconds: envNumber('BAN_SHORT_SECONDS', 7200), // ساعتين
-
-  /** مدة الحظر المتوسطة (بالثواني) — فشل متقدم */
-  mediumBanSeconds: envNumber('BAN_MEDIUM_SECONDS', 86400), // 24 ساعة
-
-  /** هل الحظر يكون على (IP + Device Fingerprint) ولا IP لوحده؟ */
+  shortBanSeconds: envNumber('BAN_SHORT_SECONDS', 7200),
+  mediumBanSeconds: envNumber('BAN_MEDIUM_SECONDS', 86400),
   banByDevice: envBoolean('BAN_BY_DEVICE', true),
 };
 
@@ -265,20 +166,11 @@ const rateLimit = {
 // ======================================================
 
 const reputation = {
-  /**
-   * نقاط السمعة المتدرجة (حسب الدوسيه):
-   * فشل JS بسيط     → +1
-   * فشل متقدم       → +3
-   * بصمة في المناعة → +5
-   * سمعة 9-10       → حظر دائم
-   */
   points: {
     jsFailSimple: envNumber('REP_POINTS_JS_SIMPLE', 1),
     advancedFail: envNumber('REP_POINTS_ADVANCED', 3),
     collectiveFingerprint: envNumber('REP_POINTS_COLLECTIVE', 5),
   },
-
-  /** عند الوصول للدرجة دي → حظر دائم */
   permanentBanThreshold: envNumber('REP_PERMANENT_THRESHOLD', 9),
 };
 
@@ -287,14 +179,66 @@ const reputation = {
 // ======================================================
 
 const challenge = {
-  /** مدة صلاحية توكن الـ Challenge (ثواني) */
   tokenTtlSeconds: envNumber('CHALLENGE_TOKEN_TTL_SECONDS', 120),
-
-  /** أقصى وقت انتظار لإجابة الـ JS Challenge (ثواني) */
   jsTimeoutSeconds: envNumber('CHALLENGE_JS_TIMEOUT_SECONDS', 8),
-
-  /** هل نسمح بتمرير الطلب لو الـ JS Challenge اتعطل (timeout)؟ */
   allowOnJsTimeout: envBoolean('CHALLENGE_ALLOW_ON_TIMEOUT', true),
+};
+
+// ======================================================
+// Simulation Lab (Backend Worker → Gateway)
+// السر يجب أن يطابق Backend: SIMULATION_TOKEN_SECRET أو GATEWAY_SECRET
+// ======================================================
+
+const simulation = {
+  /**
+   * تفعيل مسار المحاكاة الموثوق.
+   * في الإنتاج: true فقط إذا نفس النود يستقبل Worker داخلي.
+   */
+  enabled: envBoolean('SIMULATION_ENABLED', !server.isProd || envBoolean('SIMULATION_ENABLED', false)),
+
+  /**
+   * سر HMAC لتوكن X-ZP-Simulation
+   * الأولوية: SIMULATION_TOKEN_SECRET → GATEWAY_SECRET → GATEWAY_INTERNAL_SECRET
+   */
+  secret: envString(
+    'SIMULATION_TOKEN_SECRET',
+    envString(
+      'GATEWAY_SECRET',
+      envString(
+        'GATEWAY_INTERNAL_SECRET',
+        'zp_gw_8f3a2c1e9b0d4f6a7c8e1b2d3f4a5c6e7b8d9f0a1c2e3b4d5f6a7c8e9b0d1f2',
+      ),
+    ),
+  ),
+
+  /** تسامح الساعة عند التحقق من exp (ثواني) */
+  clockSkewSec: envNumber('SIMULATION_CLOCK_SKEW_SEC', 30),
+
+  /**
+   * السماح بهيدر X-ZP-Sim-AI كبديل مؤقت لدرجة الـ AI
+   * (فقط بعد توكن محاكاة صالح — منطق app/sim-auth)
+   */
+  allowSimAiHeader: envBoolean('SIMULATION_ALLOW_AI_HEADER', true),
+
+  /**
+   * السماح بـ X-ZP-Sim-JS = pass|fail|skip بدل تحدي HTML
+   */
+  allowSimJsDirective: envBoolean('SIMULATION_ALLOW_JS_DIRECTIVE', true),
+
+  /**
+   * السماح بـ X-ZP-Sim-Country كـ fallback لو geo lookup فشل
+   */
+  allowSimCountryHint: envBoolean('SIMULATION_ALLOW_COUNTRY_HINT', true),
+
+  /** أسماء الهيدرز (لو حابب توحّدها مع Nginx لاحقًا) */
+  headers: {
+    token: envString('SIM_HEADER_TOKEN', 'x-zp-simulation'),
+    runId: envString('SIM_HEADER_RUN', 'x-zp-sim-run'),
+    js: envString('SIM_HEADER_JS', 'x-zp-sim-js'),
+    ai: envString('SIM_HEADER_AI', 'x-zp-sim-ai'),
+    persona: envString('SIM_HEADER_PERSONA', 'x-zp-sim-persona'),
+    country: envString('SIM_HEADER_COUNTRY', 'x-zp-sim-country'),
+  },
 };
 
 // ======================================================
@@ -302,13 +246,8 @@ const challenge = {
 // ======================================================
 
 const logging = {
-  /** مستوى اللوج: fatal | error | warn | info | debug | trace */
   level: envString('LOG_LEVEL', server.isDev ? 'debug' : 'info'),
-
-  /** هل نسجل كل الطلبات (حتى الـ ALLOW)؟ */
   logAllRequests: envBoolean('LOG_ALL_REQUESTS', server.isDev),
-
-  /** هل نبعت الـ Security Events للـ Backend فورًا؟ */
   sendEventsToBackend: envBoolean('SEND_EVENTS_TO_BACKEND', true),
 };
 
@@ -317,20 +256,15 @@ const logging = {
 // ======================================================
 
 const security = {
-  /**
-   * اسم الهيدر اللي Nginx بيبعت فيه الـ JA4 fingerprint.
-   * الـ Gateway بيمسح أي هيدر بنفس الاسم جاي من الزائر (منع التزوير).
-   */
   ja4HeaderName: envString('JA4_HEADER_NAME', 'x-ja4'),
-
-  /** اسم هيدر الـ JA3 (لو موجود) */
   ja3HeaderName: envString('JA3_HEADER_NAME', 'x-ja3'),
-
-  /** اسم هيدر الـ Real IP (من Nginx) */
   realIpHeaderName: envString('REAL_IP_HEADER_NAME', 'x-real-ip'),
-
-  /** اسم هيدر الـ Forwarded For */
-  forwardedForHeaderName: envString('FORWARDED_FOR_HEADER_NAME', 'x-forwarded-for'),
+  forwardedForHeaderName: envString(
+    'FORWARDED_FOR_HEADER_NAME',
+    'x-forwarded-for',
+  ),
+  /** توكن الحافة المتوقع في X-Edge-Server (محاكاة/إنتاج) */
+  edgeServerToken: envString('ZP_EDGE_TOKEN', 'zeroplus-edge'),
 };
 
 // ======================================================
@@ -340,6 +274,10 @@ const security = {
 function validateConfig(): void {
   assertStrongSecret('CLEARANCE_SECRET', clearance.secret, 24);
   assertStrongSecret('GATEWAY_INTERNAL_SECRET', backend.internalSecret, 32);
+
+  if (simulation.enabled) {
+    assertStrongSecret('SIMULATION_TOKEN_SECRET (or GATEWAY_SECRET)', simulation.secret, 16);
+  }
 
   if (server.port < 1 || server.port > 65535) {
     throw new Error(`[CONFIG ERROR] PORT غير صالح: ${server.port}`);
@@ -359,9 +297,9 @@ function validateConfig(): void {
   console.log(`[CONFIG] Redis URL   : ${redis.url}`);
   console.log(`[CONFIG] Backend URL : ${backend.url}`);
   console.log(`[CONFIG] AI URL      : ${ai.url}`);
+  console.log(`[CONFIG] Simulation  : ${simulation.enabled ? 'enabled' : 'disabled'}`);
 }
 
-// ننفذ التحقق فور تحميل الملف
 validateConfig();
 
 // ======================================================
@@ -379,11 +317,11 @@ export const config = {
   rateLimit,
   reputation,
   challenge,
+  simulation,
   logging,
   security,
 } as const;
 
-// عشان لو حد حب يستورد حاجة معينة مباشرة
 export type Config = typeof config;
 
 export default config;

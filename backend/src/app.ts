@@ -40,16 +40,14 @@ import { organizationRoutes } from './modules/organizations/organizations.routes
 import eventRoutes from './modules/events/events.routes.js'
 import internalEventRoutes from './modules/events/events.internal.routes.js'
 
-// اسم التصدير في الملف: notificationsRoutes (بالـ s)
-import {
-  notificationsRoutes,
-} from './modules/notifications/notifications.routes.js'
+import { notificationsRoutes } from './modules/notifications/notifications.routes.js'
 
 import { reportRoutes } from './modules/reports/reports.routes.js'
 
 import { dashboardRoutes } from './modules/dashboard/dashboard.routes.js'
 
-// import { simulationRoutes } from './modules/simulation/simulation.routes.js'
+// Simulation Lab — اسم المجلد/التصدير كما اتفقنا
+import { simulationsRoutes } from './modules/simulations/simulations.routes.js'
 
 // ------------------------------------------------------------------
 // بناء التطبيق
@@ -90,13 +88,7 @@ export async function buildApp() {
 
   // ================================================================
   // 2. Custom Plugins
-  // الترتيب مهم:
-  //   prisma → jwt → gateway-auth → socket
-  // الـ Routes تعتمد على:
-  //   fastify.prisma
-  //   fastify.authenticate / fastify.requireRole
-  //   fastify.authenticateGateway
-  //   fastify.broadcastToOrg / fastify.io
+  // الترتيب: prisma → jwt → gateway-auth → socket
   // ================================================================
   await app.register(prismaPlugin)
   await app.register(jwtPlugin)
@@ -104,7 +96,7 @@ export async function buildApp() {
   await app.register(socketPlugin)
 
   // ================================================================
-  // 2.1 DNS config check (تحذير فقط)
+  // 2.1 DNS config check
   // ================================================================
   const dnsConfig = readDnsConfig()
 
@@ -134,6 +126,23 @@ export async function buildApp() {
   if (!process.env.GEMINI_API_KEY) {
     app.log.warn(
       'GEMINI_API_KEY مش مضبوط: تقارير Gemini والـ Chat هيفشلوا لحد ما يتضاف المفتاح',
+    )
+  }
+
+  // Simulation → Gateway
+  if (!process.env.GATEWAY_URL && !process.env.ZERO_PLUS_GATEWAY_URL) {
+    app.log.warn(
+      'GATEWAY_URL مش مضبوط: Simulation Worker هيستخدم http://127.0.0.1:3000',
+    )
+  }
+
+  const simSecret =
+    process.env.SIMULATION_TOKEN_SECRET ||
+    process.env.GATEWAY_SECRET ||
+    process.env.GATEWAY_INTERNAL_SECRET
+  if (!simSecret || simSecret.length < 16) {
+    app.log.warn(
+      'SIMULATION_TOKEN_SECRET / GATEWAY_SECRET ناقص أو قصير: إصدار توكن المحاكاة هيفشل',
     )
   }
 
@@ -184,45 +193,38 @@ export async function buildApp() {
   // 5. Register Modules (Routes)
   // ================================================================
 
-  // Auth
   await app.register(authRoutes.authRoutes, { prefix: '/auth' })
 
-  // Organizations
   await app.register(organizationRoutes, { prefix: '/organizations' })
 
-  // Policies
   await app.register(policiesRoutes, { prefix: '/policies' })
   await app.register(policiesInternalRoutes, {
     prefix: '/internal/gateway',
   })
 
-  // Servers
   await app.register(serverRoutes, { prefix: '/servers' })
   await app.register(serversInternalRoutes, {
     prefix: '/internal/gateway',
   })
 
-  // Reputation
   await app.register(reputationRoutes, { prefix: '/reputation' })
   await app.register(reputationInternalRoutes, {
     prefix: '/internal/gateway',
   })
 
-  // Events
   await app.register(eventRoutes, { prefix: '/events' })
   await app.register(internalEventRoutes, {
     prefix: '/internal/gateway/events',
   })
 
-  // Notifications (Dashboard JWT + Socket من الـ service)
   await app.register(notificationsRoutes, { prefix: '/notifications' })
 
-  // Reports (Gemini)
   await app.register(reportRoutes, { prefix: '/reports' })
 
   await app.register(dashboardRoutes, { prefix: '/dashboard' })
 
-  // await app.register(simulationRoutes, { prefix: '/simulation' })
+  // Simulation Lab (الفرونت: /simulations)
+  await app.register(simulationsRoutes, { prefix: '/simulations' })
 
   return app
 }

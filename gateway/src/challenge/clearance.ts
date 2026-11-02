@@ -305,6 +305,56 @@ export function revokeClearance(reply: FastifyReply): void {
 }
 
 // ------------------------------------------------------
+// JS-pass marker: علامة قصيرة (دقيقتين) بتقول "الزائر ده عدّى تحدي JS"
+// بتتستخدم لما التحدي مفعّل لكل الزوار، عشان الطلب اللي بعده يكمل
+// على Risk / Router / Policy قبل ما نمنح الـ clearance النهائي.
+// ------------------------------------------------------
+
+export const JS_PASS_COOKIE = 'zp_jspass'
+const JS_PASS_TTL_MINUTES = 2
+
+export function setJsPassCookie(
+  reply: FastifyReply,
+  input: IssueClearanceInput,
+): void {
+  const { token, maxAgeSec } = issueClearanceToken({
+    ...input,
+    policy: { ttlMinutes: JS_PASS_TTL_MINUTES },
+  })
+  reply.setCookie(JS_PASS_COOKIE, token, {
+    path: '/',
+    httpOnly: true,
+    secure: config.server?.isProd === true,
+    sameSite: 'lax',
+    maxAge: maxAgeSec,
+  })
+}
+
+export function verifyJsPassFromRequest(
+  request: FastifyRequest,
+  opts: {
+    organizationId: string
+    ip: string
+    deviceFingerprint?: string | null
+  },
+): boolean {
+  const raw = request.cookies?.[JS_PASS_COOKIE] || ''
+  if (!raw) return false
+  return verifyClearanceToken({
+    token: raw,
+    organizationId: opts.organizationId,
+    ip: opts.ip,
+    deviceFingerprint: opts.deviceFingerprint,
+    bindIp: false,
+    bindDevice: true,
+  }).valid
+}
+
+export function clearJsPassCookie(reply: FastifyReply): void {
+  reply.clearCookie(JS_PASS_COOKIE, { path: '/' })
+}
+
+// ------------------------------------------------------
 export default {
   issueClearanceToken,
   setClearanceCookie,

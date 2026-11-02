@@ -5,9 +5,13 @@
 //   POST /internal/gateway/events
 //   POST /internal/gateway/events/batch
 //
-// - غير حاجز للطلب (fire-and-forget + طابور خفيف)
-// - يبني GatewaySecurityEvent كامل من سياق الـ pipeline
-// - يضم risk / route / policy / rate / JS / advanced / edge
+// - غير حاجز للطلب (fire-and-forget + طابور + سقف أمان)
+// - risk / route / policy / rate / JS / advanced / edge / geo
+// - مرآة سمعة عند BLOCK أو فشل تحدي حقيقي
+// - Simulation Lab: simulationRunId + persona + sim metadata
+//   (التوكن يتحقق في app/sim-auth — هنا تمرير فقط)
+//
+// JS: phase expired/failed/error = فشل حقيقي → challengePassed=false
 // ======================================================
 
 import { randomUUID } from 'node:crypto'
@@ -22,17 +26,19 @@ import {
   type ChallengeTypeValue,
   type IpTypeValue,
   type ReputationSignal,
-  type SignalSeverity,
 } from '../services/backend.client'
 import type { RiskResult } from '../core/risk.engine'
 import type { PolicyDecision } from '../core/policy.engine'
 import type { RouteDecision } from '../detection/suspicion-router'
 import type { RateLimitResult } from '../detection/rate-limiter'
 import type { JsChallengeResult } from '../challenge/js-challenge'
+import { isJsChallengeHardFailure } from '../challenge/js-challenge'
 import type { AdvancedChallengeResult } from '../challenge/advanced-fingerprint-challenge'
+import type { IpReputationResult } from '../detection/ip-reputation'
+import type { SimulationContext } from '../detection/sim-auth'
 
 // ------------------------------------------------------
-// أنواع الإدخال من app
+// أنواع الإدخال
 // ------------------------------------------------------
 
 export interface EventLoggerInput {
@@ -49,13 +55,9 @@ export interface EventLoggerInput {
   decision: EventDecision | string
   processingTimeMs?: number
 
-  /** من risk.engine */
   riskResult?: RiskResult | null
-  /** من suspicion-router */
   routeDecision?: RouteDecision | null
-  /** من policy.engine */
   policyDecision?: PolicyDecision | null
-  /** من rate-limiter */
   rateLimit?: RateLimitResult | null
 
   ja3?: string | null
@@ -70,7 +72,16 @@ export interface EventLoggerInput {
 
   countryCode?: string | null
   asn?: number | null
+  asOrg?: string | null
+  region?: string | null
+  city?: string | null
+  latitude?: number | null
+  longitude?: number | null
+  timezone?: string | null
+  countryName?: string | null
+
   ipType?: IpTypeValue | string | null
+  ipReputation?: IpReputationResult | null
 
   isChallenged?: boolean
   challengeType?: ChallengeTypeValue | string | null
@@ -80,16 +91,24 @@ export interface EventLoggerInput {
   advancedChallenge?: AdvancedChallengeResult | null
 
   reputationEntryId?: string | null
-  /** ملخص جاهز؛ وإلا يُبنى تلقائيًا */
   reasonSummary?: string | null
   reasonDetails?: Record<string, unknown> | null
-
   decidedAtStage?: DetectionStageValue | string | null
 
   /**
-   * true (افتراضي): أرسل أيضًا أدلة سمعة عند BLOCK / فشل تحدي
+   * undefined/true: مرآة سمعة عند BLOCK أو فشل تحدي
+   * false: لا applyReputation
    */
   mirrorReputation?: boolean
+
+  // ----- Simulation Lab -----
+  /** من سياق المحاكاة بعد توكن صالح */
+  simulation?: SimulationContext | null
+  /** أو تمرير مباشر */
+  simulationRunId?: string | null
+  simulationPersona?: string | null
+  /** true لو الطلب جاء من Worker محاكاة موثوق */
+  isSimulation?: boolean
 }
 
 export interface EventLoggerResult {
@@ -100,11 +119,14 @@ export interface EventLoggerResult {
 }
 
 // ------------------------------------------------------
-// طابور دفعات (خفيف في الذاكرة)
+// طابور دفعات
 // ------------------------------------------------------
 
 const BATCH_MAX = 40
 const BATCH_FLUSH_MS = 400
+const QUEUE_HARD_CAP = 5000
+const FALLBACK_CONCURRENCY = 5
+
 const queue: GatewaySecurityEvent[] = []
 let flushTimer: ReturnType<typeof setTimeout> | null = null
 let flushing = false
@@ -115,6 +137,28 @@ function scheduleFlush(): void {
     flushTimer = null
     void flushQueue()
   }, BATCH_FLUSH_MS)
+  if (typeof flushTimer === 'object' && flushTimer && 'unref' in flushTimer) {
+    ;(flushTimer as { unref: () => void }).unref()
+  }
+}
+
+async function sendOneByOne(chunk: GatewaySecurityEvent[]): Promise<void> {
+  for (let i = 0; i < chunk.length; i += FALLBACK_CONCURRENCY) {
+    const slice = chunk.slice(i, i + FALLBACK_CONCURRENCY)
+    await Promise.all(
+      slice.map(async (ev) => {
+        try {
+          await sendSecurityEvent(ev)
+        } catch (e) {
+          console.error(
+            '[event-logger] send failed',
+            (e as Error).message,
+            ev.requestId,
+          )
+        }
+      }),
+    )
+  }
 }
 
 async function flushQueue(): Promise<void> {
@@ -124,28 +168,31 @@ async function flushQueue(): Promise<void> {
     while (queue.length > 0) {
       const chunk = queue.splice(0, BATCH_MAX)
       try {
-        await sendSecurityEventsBatch(chunk)
-      } catch (err) {
-        // محاولة واحد-واحد كاحتياطي
-        for (const ev of chunk) {
-          try {
-            await sendSecurityEvent(ev)
-          } catch (e) {
-            console.error(
-              '[event-logger] send failed',
-              (e as Error).message,
-              ev.requestId,
-            )
+        const res = await sendSecurityEventsBatch(chunk)
+        if (res?.summary?.failed) {
+          for (const r of res.results) {
+            if (!r.ok) {
+              const ev = chunk[r.index]
+              console.error('[event-logger] batch item rejected', {
+                index: r.index,
+                code: r.code,
+                message: r.message,
+                requestId: ev?.requestId,
+                decision: ev?.decision,
+              })
+            }
           }
         }
+      } catch {
+        await sendOneByOne(chunk)
       }
     }
   } finally {
     flushing = false
+    if (queue.length > 0) scheduleFlush()
   }
 }
 
-/** عند الإغلاق — فرّغ الطابور */
 export async function flushEventLogger(): Promise<void> {
   if (flushTimer) {
     clearTimeout(flushTimer)
@@ -166,6 +213,15 @@ const METHODS = new Set([
   'DELETE',
   'OPTIONS',
   'HEAD',
+])
+
+const IP_TYPES = new Set<string>([
+  'RESIDENTIAL',
+  'MOBILE',
+  'DATACENTER',
+  'VPN_PROXY',
+  'TOR',
+  'UNKNOWN',
 ])
 
 function mapMethod(m: string): HttpMethod {
@@ -190,12 +246,132 @@ function mapDecision(d: string): EventDecision {
   return 'MONITOR'
 }
 
-function mapStage(
-  input: EventLoggerInput,
-): DetectionStageValue | undefined {
+function mapIpType(value: string | null | undefined): IpTypeValue | undefined {
+  if (!value) return undefined
+  const u = String(value).toUpperCase()
+  return IP_TYPES.has(u) ? (u as IpTypeValue) : 'UNKNOWN'
+}
+
+function resolveSimulationMeta(input: EventLoggerInput): {
+  active: boolean
+  runId?: string
+  persona?: string | null
+  js?: string | null
+  aiScore?: number | null
+  countryHint?: string | null
+} {
+  const sim = input.simulation
+  const runId =
+    input.simulationRunId ||
+    (sim?.active ? sim.runId : undefined) ||
+    undefined
+  const active =
+    input.isSimulation === true ||
+    !!runId ||
+    (sim?.active === true)
+  return {
+    active,
+    runId,
+    persona: input.simulationPersona ?? sim?.persona ?? null,
+    js: sim?.js ?? null,
+    aiScore: sim?.aiScore ?? null,
+    countryHint: sim?.countryHint ?? null,
+  }
+}
+
+function isRealJsFailure(js: JsChallengeResult | null | undefined): boolean {
+  if (!js) return false
+  if (js.passed) return false
+  if (js.phase === 'issue' || js.phase === 'disabled' || js.phase === 'passed') {
+    return false
+  }
+  return isJsChallengeHardFailure(js)
+}
+
+function isJsExpired(js: JsChallengeResult | null | undefined): boolean {
+  if (!js) return false
+  return js.phase === 'expired' || js.telemetry?.expired === true
+}
+
+function isRealAdvancedFailure(
+  adv: AdvancedChallengeResult | null | undefined,
+): boolean {
+  if (!adv) return false
+  if (adv.passed) return false
+  if (adv.responseSent) return false
+  return true
+}
+
+function resolveGeoNetwork(input: EventLoggerInput): {
+  countryCode?: string
+  asn?: number
+  asOrg?: string
+  region?: string
+  city?: string
+  latitude?: number
+  longitude?: number
+  timezone?: string
+  countryName?: string
+  ipType?: IpTypeValue
+  networkRiskScore?: number
+  badIp?: boolean
+  confidence?: number
+  reasons?: string[]
+  sources?: string[]
+} {
+  const sim = resolveSimulationMeta(input)
+  const rep = input.ipReputation
+  const countryCode =
+    input.countryCode ??
+    rep?.geo.countryCode ??
+    sim.countryHint ??
+    undefined
+  const asn = input.asn ?? rep?.asn.asn ?? undefined
+  const asOrg = input.asOrg ?? rep?.asn.asOrg ?? rep?.asn.network ?? undefined
+  const region = input.region ?? rep?.geo.region ?? undefined
+  const city = input.city ?? rep?.geo.city ?? undefined
+  const latitude = input.latitude ?? rep?.geo.latitude ?? undefined
+  const longitude = input.longitude ?? rep?.geo.longitude ?? undefined
+  const timezone = input.timezone ?? rep?.geo.timezone ?? undefined
+  const countryName = input.countryName ?? rep?.geo.countryName ?? undefined
+  const ipType = mapIpType(input.ipType ?? rep?.kind ?? undefined)
+
+  return {
+    countryCode: countryCode
+      ? String(countryCode).toUpperCase().slice(0, 8)
+      : undefined,
+    asn: typeof asn === 'number' && Number.isFinite(asn) ? asn : undefined,
+    asOrg: asOrg ? String(asOrg).slice(0, 200) : undefined,
+    region: region ? String(region).slice(0, 120) : undefined,
+    city: city ? String(city).slice(0, 120) : undefined,
+    latitude:
+      typeof latitude === 'number' && Number.isFinite(latitude)
+        ? latitude
+        : undefined,
+    longitude:
+      typeof longitude === 'number' && Number.isFinite(longitude)
+        ? longitude
+        : undefined,
+    timezone: timezone ? String(timezone).slice(0, 64) : undefined,
+    countryName: countryName ? String(countryName).slice(0, 120) : undefined,
+    ipType,
+    networkRiskScore: rep?.networkRiskScore,
+    badIp: rep?.badIp,
+    confidence: rep?.confidence,
+    reasons: rep?.reasons,
+    sources: rep?.sources,
+  }
+}
+
+function mapStage(input: EventLoggerInput): DetectionStageValue | undefined {
   if (input.decidedAtStage) {
     return input.decidedAtStage as DetectionStageValue
   }
+  if (isRealJsFailure(input.jsChallenge)) return 'JS_CHALLENGE'
+  if (isRealAdvancedFailure(input.advancedChallenge)) return 'TLS_FINGERPRINT'
+  if (input.jsChallenge?.phase === 'issue') return 'JS_CHALLENGE'
+  if (input.advancedChallenge?.responseSent) return 'TLS_FINGERPRINT'
+
   const route = input.routeDecision?.route
   if (route === 'ban') return 'BAN_LIST'
   if (route === 'silent_js_challenge') return 'JS_CHALLENGE'
@@ -203,8 +379,6 @@ function mapStage(
   if (route === 'advanced_fingerprint_check') return 'TLS_FINGERPRINT'
   if (input.policyDecision?.action?.includes('ban')) return 'POLICY'
   if (input.rateLimit?.hardExceeded) return 'HARD_LIMIT'
-  if (input.jsChallenge) return 'JS_CHALLENGE'
-  if (input.advancedChallenge) return 'TLS_FINGERPRINT'
   if (input.anomalyScore != null && input.anomalyScore > 0.3) {
     return 'AI_ANOMALY'
   }
@@ -217,22 +391,48 @@ function mapChallengeType(
   if (input.challengeType) {
     return input.challengeType as ChallengeTypeValue
   }
+  if (input.jsChallenge) return 'JS_SILENT'
+  if (input.advancedChallenge) return 'TLS_FINGERPRINT'
   const route = input.routeDecision?.route
-  if (route === 'silent_js_challenge' || input.jsChallenge) {
-    return 'JS_SILENT'
-  }
-  if (route === 'advanced_fingerprint_check' || input.advancedChallenge) {
-    return 'TLS_FINGERPRINT'
-  }
+  if (route === 'silent_js_challenge') return 'JS_SILENT'
+  if (route === 'advanced_fingerprint_check') return 'TLS_FINGERPRINT'
   if (route === 'rate_limit_with_challenge') return 'RATE_LIMIT_SOFT'
   return undefined
 }
 
-function buildReasonSummary(input: EventLoggerInput): string {
+function resolveChallengePassed(input: EventLoggerInput): boolean | undefined {
+  if (input.challengePassed != null) return input.challengePassed
+
+  const js = input.jsChallenge
+  if (js) {
+    if (js.phase === 'issue') return undefined
+    if (js.phase === 'disabled') return undefined
+    if (isJsExpired(js)) return false
+    return js.passed
+  }
+
+  const adv = input.advancedChallenge
+  if (adv) {
+    if (adv.responseSent) return undefined
+    return adv.passed
+  }
+  return undefined
+}
+
+function buildReasonSummary(
+  input: EventLoggerInput,
+  geo: ReturnType<typeof resolveGeoNetwork>,
+): string {
   if (input.reasonSummary) return input.reasonSummary
 
+  const sim = resolveSimulationMeta(input)
   const parts: string[] = []
   parts.push(`risk=${input.riskScore}`)
+  if (sim.active) {
+    parts.push('sim=1')
+    if (sim.runId) parts.push(`run=${sim.runId.slice(0, 8)}`)
+    if (sim.persona) parts.push(`persona=${sim.persona}`)
+  }
   if (input.routeDecision?.route) {
     parts.push(`route=${input.routeDecision.route}`)
   }
@@ -246,9 +446,10 @@ function buildReasonSummary(input: EventLoggerInput): string {
     parts.push(`rl=${input.rateLimit.level}`)
   }
   if (input.jsChallenge) {
-    parts.push(
-      `js=${input.jsChallenge.phase}/${input.jsChallenge.passed ? 'ok' : 'fail'}`,
-    )
+    const js = input.jsChallenge
+    const state = js.phase === 'issue' ? 'pending' : js.passed ? 'ok' : 'fail'
+    parts.push(`js=${js.phase}/${state}`)
+    if (isJsExpired(js)) parts.push('exp=1')
   }
   if (input.advancedChallenge) {
     parts.push(
@@ -258,19 +459,38 @@ function buildReasonSummary(input: EventLoggerInput): string {
   if (input.anomalyScore != null) {
     parts.push(`ai=${input.anomalyScore}`)
   }
-  if (input.ipType) parts.push(`ipType=${input.ipType}`)
+  if (geo.ipType) parts.push(`ipType=${geo.ipType}`)
+  if (geo.countryCode) parts.push(`cc=${geo.countryCode}`)
+  if (geo.city) parts.push(`city=${geo.city}`)
+  if (geo.asn != null) parts.push(`asn=${geo.asn}`)
   return parts.join(' | ').slice(0, 500)
 }
 
 function buildReasonDetails(
   input: EventLoggerInput,
+  geo: ReturnType<typeof resolveGeoNetwork>,
 ): Record<string, unknown> {
+  const sim = resolveSimulationMeta(input)
   const base: Record<string, unknown> = {
     ...(input.reasonDetails || {}),
   }
 
+  if (sim.active) {
+    base.simulation = {
+      active: true,
+      runId: sim.runId ?? null,
+      persona: sim.persona ?? null,
+      jsDirective: sim.js ?? null,
+      aiScore: sim.aiScore ?? null,
+      countryHint: sim.countryHint ?? null,
+    }
+  }
+
   if (input.riskResult) {
     base.riskComponents = input.riskResult.components
+    if ('aiUnavailable' in input.riskResult) {
+      base.aiUnavailable = (input.riskResult as RiskResult).aiUnavailable
+    }
   }
   if (input.routeDecision) {
     base.route = {
@@ -301,22 +521,27 @@ function buildReasonDetails(
     }
   }
   if (input.jsChallenge) {
+    const js = input.jsChallenge
+    const expired = isJsExpired(js)
+    base.challengeExpired = expired
     base.jsChallenge = {
-      phase: input.jsChallenge.phase,
-      passed: input.jsChallenge.passed,
-      localSuspicionScore: input.jsChallenge.telemetry.localSuspicionScore,
-      failReasons: input.jsChallenge.telemetry.failReasons,
-      suspicionHints: input.jsChallenge.telemetry.suspicionHints,
-      solveDurationMs: input.jsChallenge.telemetry.solveDurationMs,
-      token: input.jsChallenge.telemetry.token ?? null,
-      // متصفح مختصر للتخزين (مش كامل لو ضخم)
-      browserSummary: input.jsChallenge.telemetry.browser
+      phase: js.phase,
+      passed: js.passed,
+      hardFailure: isRealJsFailure(js),
+      expired,
+      localSuspicionScore: js.telemetry.localSuspicionScore,
+      failReasons: js.telemetry.failReasons,
+      suspicionHints: js.telemetry.suspicionHints,
+      solveDurationMs: js.telemetry.solveDurationMs,
+      challengeId: js.telemetry.challengeId || null,
+      token: js.telemetry.token ?? null,
+      browserSummary: js.telemetry.browser
         ? {
-            webdriver: input.jsChallenge.telemetry.browser.nav.webdriver,
-            platform: input.jsChallenge.telemetry.browser.nav.platform,
-            hw: input.jsChallenge.telemetry.browser.nav.hardwareConcurrency,
-            webglOk: input.jsChallenge.telemetry.browser.webgl.ok,
-            plugins: input.jsChallenge.telemetry.browser.nav.pluginsLength,
+            webdriver: js.telemetry.browser.nav.webdriver,
+            platform: js.telemetry.browser.nav.platform,
+            hw: js.telemetry.browser.nav.hardwareConcurrency,
+            webglOk: js.telemetry.browser.webgl.ok,
+            plugins: js.telemetry.browser.nav.pluginsLength,
           }
         : null,
     }
@@ -338,17 +563,66 @@ function buildReasonDetails(
     }
   }
 
+  base.geo = {
+    countryCode: geo.countryCode ?? null,
+    countryName: geo.countryName ?? null,
+    region: geo.region ?? null,
+    city: geo.city ?? null,
+    latitude: geo.latitude ?? null,
+    longitude: geo.longitude ?? null,
+    timezone: geo.timezone ?? null,
+  }
+  base.asnInfo = {
+    asn: geo.asn ?? null,
+    asOrg: geo.asOrg ?? null,
+  }
+  if (input.ipReputation) {
+    base.ipReputation = {
+      kind: input.ipReputation.kind,
+      networkRiskScore: input.ipReputation.networkRiskScore,
+      confidence: input.ipReputation.confidence,
+      badIp: input.ipReputation.badIp,
+      badIpContributionHint: input.ipReputation.badIpContributionHint,
+      signals: input.ipReputation.signals,
+      reasons: input.ipReputation.reasons,
+      hints: input.ipReputation.hints,
+      sources: input.ipReputation.sources,
+      timingMs: input.ipReputation.timingMs,
+    }
+  } else if (
+    geo.networkRiskScore != null ||
+    geo.badIp != null ||
+    geo.ipType
+  ) {
+    base.ipReputation = {
+      kind: geo.ipType ?? null,
+      networkRiskScore: geo.networkRiskScore ?? null,
+      confidence: geo.confidence ?? null,
+      badIp: geo.badIp ?? null,
+      reasons: geo.reasons ?? null,
+      sources: geo.sources ?? null,
+    }
+  }
+
   return base
 }
 
-/**
- * يبني جسم الحدث المطابق لـ GatewaySecurityEvent
- */
 export function buildSecurityEvent(
   input: EventLoggerInput,
 ): GatewaySecurityEvent {
-  const decision = mapDecision(String(input.decision))
+  const geo = resolveGeoNetwork(input)
+  const sim = resolveSimulationMeta(input)
+
+  const hardFail =
+    isRealJsFailure(input.jsChallenge) ||
+    isRealAdvancedFailure(input.advancedChallenge)
+
+  const decision: EventDecision = hardFail
+    ? 'BLOCK'
+    : mapDecision(String(input.decision))
+
   const challenged =
+    hardFail ||
     input.isChallenged === true ||
     decision === 'CHALLENGE' ||
     !!input.jsChallenge ||
@@ -357,18 +631,14 @@ export function buildSecurityEvent(
     input.routeDecision?.route === 'advanced_fingerprint_check' ||
     input.routeDecision?.route === 'rate_limit_with_challenge'
 
-  let challengePassed = input.challengePassed
-  if (challengePassed == null && input.jsChallenge) {
-    challengePassed = input.jsChallenge.passed
-  }
-  if (challengePassed == null && input.advancedChallenge) {
-    challengePassed = input.advancedChallenge.passed
-  }
+  const challengePassed = hardFail ? false : resolveChallengePassed(input)
 
   const anomaly =
     input.anomalyScore ??
+    sim.aiScore ??
     input.jsChallenge?.telemetry.localSuspicionScore ??
     input.advancedChallenge?.telemetry.localSuspicionScore ??
+    input.ipReputation?.networkRiskScore ??
     undefined
 
   const event: GatewaySecurityEvent = {
@@ -384,75 +654,119 @@ export function buildSecurityEvent(
     referer: input.referer ?? undefined,
     requestId: input.requestId || randomUUID(),
     anomalyScore: anomaly,
-    confidence: input.confidence ?? undefined,
-    reasonSummary: buildReasonSummary(input),
-    reasonDetails: buildReasonDetails(input),
+    confidence: input.confidence ?? geo.confidence ?? undefined,
+    reasonSummary: buildReasonSummary(input, geo),
+    reasonDetails: buildReasonDetails(input, geo),
     processingTimeMs: input.processingTimeMs,
     surgeDetected: input.surgeDetected,
     pathSensitive: input.pathSensitive,
     recommendation: input.recommendation ?? undefined,
-    countryCode: input.countryCode ?? undefined,
-    asn: input.asn ?? undefined,
-    ipType: (input.ipType as IpTypeValue) ?? undefined,
+    countryCode: geo.countryCode,
+    asn: geo.asn,
+    ipType: geo.ipType,
     isChallenged: challenged,
     challengeType: mapChallengeType(input),
     challengePassed: challengePassed ?? undefined,
     reputationEntryId: input.reputationEntryId ?? undefined,
   }
 
+  // ربط Run في الباك (Prisma simulationRunId) — إن دعمه backend.client
+  if (sim.runId) {
+    ;(event as GatewaySecurityEvent & { simulationRunId?: string }).simulationRunId =
+      sim.runId
+  }
+
   return event
 }
 
 // ------------------------------------------------------
-// سمعة مرآة (اختياري)
+// سمعة مرآة
 // ------------------------------------------------------
+
+const FP_RE = /^[A-Za-z0-9._:=+/\-]{4,512}$/
+
+function cleanFp(v: string | null | undefined): string | undefined {
+  return v && FP_RE.test(v) ? v : undefined
+}
+
+function cut(v: string | null | undefined, max: number): string | undefined {
+  return v ? String(v).slice(0, max) : undefined
+}
 
 async function maybeMirrorReputation(input: EventLoggerInput): Promise<void> {
   if (input.mirrorReputation === false) return
+
   const decision = mapDecision(String(input.decision))
-  const failedChallenge =
-    (input.jsChallenge && !input.jsChallenge.passed) ||
-    (input.advancedChallenge && !input.advancedChallenge.passed)
+  const jsFail = isRealJsFailure(input.jsChallenge)
+  const jsTimeout = jsFail && isJsExpired(input.jsChallenge)
+  const advFail = isRealAdvancedFailure(input.advancedChallenge)
 
-  if (decision !== 'BLOCK' && !failedChallenge) return
+  if (decision !== 'BLOCK' && !jsFail && !advFail) return
 
+  const geo = resolveGeoNetwork(input)
   const signals: ReputationSignal[] = []
 
-  if (decision === 'BLOCK') {
-    signals.push({
-      type: 'GATEWAY_BLOCK',
-      severity: 'HIGH',
-      confidence: 0.9,
-      note: input.reasonSummary || 'blocked_by_gateway',
-    })
-  }
-  if (input.jsChallenge && !input.jsChallenge.passed) {
-    signals.push({
-      type: 'JS_CHALLENGE_FAIL',
-      severity: 'MEDIUM',
-      confidence: 0.85,
-      anomalyScore: input.jsChallenge.telemetry.localSuspicionScore,
-      note: input.jsChallenge.telemetry.failReasons.join(','),
-    })
-  }
-  if (input.advancedChallenge && !input.advancedChallenge.passed) {
-    signals.push({
-      type: 'ADVANCED_FP_FAIL',
-      severity: 'HIGH',
-      confidence: 0.88,
-      anomalyScore: input.advancedChallenge.telemetry.localSuspicionScore,
-      note: input.advancedChallenge.telemetry.failCodes.join(','),
-    })
-  }
   if (input.rateLimit?.hardExceeded) {
     signals.push({
-      type: 'HARD_RATE_LIMIT',
+      type: 'HARD_LIMIT_EXCEEDED',
       severity: 'HIGH',
       confidence: 0.9,
     })
   }
 
-  if (signals.length === 0) return
+  if (input.ipReputation?.badIp) {
+    const kind = input.ipReputation.kind
+    const type =
+      kind === 'TOR'
+        ? 'TOR_EXIT_NODE'
+        : kind === 'VPN_PROXY'
+          ? 'VPN_PROXY_IP'
+          : kind === 'DATACENTER'
+            ? 'DATACENTER_IP'
+            : null
+    if (type) {
+      signals.push({
+        type,
+        severity: kind === 'TOR' ? 'CRITICAL' : 'HIGH',
+        confidence: Math.min(1, Math.max(0, input.ipReputation.confidence ?? 1)),
+        note: cut(input.ipReputation.reasons?.join(',') || kind, 200),
+      })
+    }
+  }
+
+  const failReason = (arr: string[] | undefined, fallback: string) =>
+    cut(arr?.[0] || fallback, 200)
+
+  const challengePayload =
+    jsFail && input.jsChallenge
+      ? {
+          type: 'JS_SILENT' as const,
+          passed: false,
+          durationMs: jsTimeout
+            ? undefined
+            : (input.jsChallenge.telemetry.solveDurationMs ?? undefined),
+          failureReason: failReason(
+            input.jsChallenge.telemetry.failReasons,
+            jsTimeout ? 'challenge_timeout' : input.jsChallenge.phase,
+          ),
+        }
+      : advFail && input.advancedChallenge
+        ? {
+            type: 'TLS_FINGERPRINT' as const,
+            passed: false,
+            failureReason: failReason(
+              input.advancedChallenge.telemetry.failCodes,
+              input.advancedChallenge.telemetry.verdict,
+            ),
+          }
+        : undefined
+
+  if (signals.length === 0 && !challengePayload) return
+
+  const cc =
+    geo.countryCode && /^[A-Za-z]{2}$/.test(geo.countryCode)
+      ? geo.countryCode
+      : undefined
 
   try {
     await applyReputation({
@@ -460,43 +774,43 @@ async function maybeMirrorReputation(input: EventLoggerInput): Promise<void> {
       serverId: input.serverId,
       ipAddress: input.ipAddress,
       signals,
-      deviceFingerprint: input.deviceFingerprint ?? undefined,
-      ja3Fingerprint: input.ja3 ?? undefined,
-      ja4Fingerprint: input.ja4 ?? undefined,
-      lastPath: input.path,
-      lastUserAgent: input.userAgent ?? undefined,
-      ipType: input.ipType ? String(input.ipType) : undefined,
-      challenge: input.jsChallenge
-        ? {
-            type: 'JS_SILENT',
-            passed: input.jsChallenge.passed,
-            durationMs: input.jsChallenge.telemetry.solveDurationMs ?? undefined,
-            failureReason: input.jsChallenge.telemetry.failReasons[0],
-          }
-        : input.advancedChallenge
-          ? {
-              type: 'TLS_FINGERPRINT',
-              passed: input.advancedChallenge.passed,
-              failureReason:
-                input.advancedChallenge.telemetry.failCodes[0],
-            }
-          : undefined,
-      idempotencyKey: input.requestId
-        ? `evt:${input.requestId}`
-        : undefined,
+      deviceFingerprint: cleanFp(input.deviceFingerprint),
+      ja3Fingerprint: cleanFp(input.ja3),
+      ja4Fingerprint: cleanFp(input.ja4),
+      lastPath: cut(input.path, 2048),
+      lastUserAgent: cut(input.userAgent, 512),
+      countryCode: cc,
+      asn: geo.asn && geo.asn >= 1 ? geo.asn : undefined,
+      asOrg: cut(geo.asOrg, 255),
+      ipType: geo.ipType,
+      challenge: challengePayload,
+      idempotencyKey: input.requestId ? `evt:${input.requestId}` : undefined,
     })
   } catch (err) {
-    console.error('[event-logger] reputation mirror failed', (err as Error).message)
+    const e = err as Error & {
+      details?: { errors?: unknown } & Record<string, unknown>
+    }
+    console.error(
+      '[event-logger] reputation mirror failed',
+      e.message,
+      JSON.stringify(e.details?.errors ?? e.details ?? null),
+    )
   }
+}
+
+function fireMirror(input: EventLoggerInput): void {
+  maybeMirrorReputation(input).catch((err) => {
+    console.error(
+      '[event-logger] reputation mirror crashed',
+      (err as Error).message,
+    )
+  })
 }
 
 // ------------------------------------------------------
 // API العامة
 // ------------------------------------------------------
 
-/**
- * سجّل حدثًا — غير حاجز (يُضاف للطابور)
- */
 export function logSecurityEvent(input: EventLoggerInput): EventLoggerResult {
   try {
     if (!input.organizationId || !input.serverId || !input.ipAddress) {
@@ -506,14 +820,18 @@ export function logSecurityEvent(input: EventLoggerInput): EventLoggerResult {
       }
     }
     const event = buildSecurityEvent(input)
+
+    if (queue.length >= QUEUE_HARD_CAP) {
+      queue.splice(0, queue.length - QUEUE_HARD_CAP + 1)
+    }
     queue.push(event)
+
     if (queue.length >= BATCH_MAX) {
       void flushQueue()
     } else {
       scheduleFlush()
     }
-    // سمعة في الخلفية
-    void maybeMirrorReputation(input)
+    fireMirror(input)
 
     return { queued: true }
   } catch (err) {
@@ -521,25 +839,19 @@ export function logSecurityEvent(input: EventLoggerInput): EventLoggerResult {
   }
 }
 
-/**
- * إرسال فوري (للاختبار أو قرارات حرجة)
- */
 export async function logSecurityEventImmediate(
   input: EventLoggerInput,
 ): Promise<EventLoggerResult> {
   try {
     const event = buildSecurityEvent(input)
     const created = await sendSecurityEvent(event)
-    void maybeMirrorReputation(input)
+    await maybeMirrorReputation(input)
     return { queued: false, sent: true, eventId: created.id }
   } catch (err) {
     return { queued: false, sent: false, error: (err as Error).message }
   }
 }
 
-/**
- * مساعدة من سياق app شائع
- */
 export function logFromGatewayContext(params: {
   organizationId: string
   serverId: string
@@ -563,7 +875,18 @@ export function logFromGatewayContext(params: {
   advancedChallenge?: AdvancedChallengeResult | null
   anomalyScore?: number | null
   ipType?: string | null
+  countryCode?: string | null
+  asn?: number | null
+  asOrg?: string | null
+  city?: string | null
+  region?: string | null
+  ipReputation?: IpReputationResult | null
   reputationEntryId?: string | null
+  mirrorReputation?: boolean
+  simulation?: SimulationContext | null
+  simulationRunId?: string | null
+  simulationPersona?: string | null
+  isSimulation?: boolean
 }): EventLoggerResult {
   return logSecurityEvent({
     organizationId: params.organizationId,
@@ -588,7 +911,18 @@ export function logFromGatewayContext(params: {
     advancedChallenge: params.advancedChallenge,
     anomalyScore: params.anomalyScore,
     ipType: params.ipType,
+    countryCode: params.countryCode,
+    asn: params.asn,
+    asOrg: params.asOrg,
+    city: params.city,
+    region: params.region,
+    ipReputation: params.ipReputation,
     reputationEntryId: params.reputationEntryId,
+    mirrorReputation: params.mirrorReputation,
+    simulation: params.simulation,
+    simulationRunId: params.simulationRunId,
+    simulationPersona: params.simulationPersona,
+    isSimulation: params.isSimulation,
   })
 }
 
