@@ -1,4 +1,8 @@
 // frontend/src/pages/landing/LandingLayout.tsx
+// ==================================================================
+// Zero Plus - Landing Layout (English)
+// Header + footer + shared background for public site pages
+// ==================================================================
 
 import { useEffect, useState, type ReactNode } from 'react'
 import { Link, NavLink, useLocation } from 'react-router-dom'

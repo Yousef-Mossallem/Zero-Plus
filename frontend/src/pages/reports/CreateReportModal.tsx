@@ -111,7 +111,7 @@ export default function CreateReportModal({
   return (
     <Modal
       open={open}
-      onClose={busy ? () => {} : onClose}
+      onClose={busy ? undefined : onClose}
       title="New report"
       description="The report is generated in the background. You'll see its status update live."
       icon={FilePlus2}

@@ -1,4 +1,8 @@
 // frontend/src/pages/landing/LandingPage.tsx
+// ==================================================================
+// Zero Plus - Landing Page (English) "/"
+// Hero • problem stats • features • pipeline • journey • CTA
+// ==================================================================
 
 import { Link } from 'react-router-dom'
 import {

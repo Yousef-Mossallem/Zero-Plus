@@ -1,4 +1,8 @@
 // frontend/src/pages/landing/SitePoliciesPage.tsx
+// ==================================================================
+// Zero Plus - Public Policies Page (English) "/legal"
+// Tabs: Privacy Policy • Terms of Service • Security & Data Isolation
+// ==================================================================
 
 import { useSearchParams } from 'react-router-dom'
 import { ShieldCheck, FileText, LockKeyhole } from 'lucide-react'

@@ -12,6 +12,10 @@
 // مهم:
 //   لو 401 حصل أثناء login/register → مش بنمسح الجلسة
 //   ولا بنبعت SESSION_EXPIRED (عشان منبوظش باقي الصفحات)
+//
+//   كمان: 401 برسالة "Biometric verification failed" معناه فشل البصمة
+//   (مثلاً وقت إضافة جهاز من صفحة Profile) مش انتهاء جلسة،
+//   فبرضه مش بنعمل logout.
 // ==================================================================
 
 import axios, { type InternalAxiosRequestConfig } from 'axios'
@@ -48,6 +52,9 @@ const LEGACY_TOKEN_KEY = 'zp_token'
  * لما الجلسة تنتهي أثناء استخدام التطبيق — مش أثناء محاولة دخول فاشلة.
  */
 export const SESSION_EXPIRED_EVENT = 'zp:session-expired'
+
+/** رسالة الباك لما التحقق بالبصمة يفشل (401 مش معناه انتهاء الجلسة) */
+const BIOMETRIC_FAILED_MESSAGE = 'Biometric verification failed'
 
 // ------------------------------------------------------------------
 // Read token
@@ -171,8 +178,14 @@ api.interceptors.response.use(
       (error.config?.baseURL as string | undefined)
 
     if (status === 401) {
+      const backendMessage = error.response?.data?.message as string | undefined
+
+      // 401 بييجي في حالتين: انتهاء الجلسة، وفشل البصمة.
+      // فشل البصمة مش معناه إن الجلسة خلصت → منعملش logout.
+      const isBiometricFailure = backendMessage === BIOMETRIC_FAILED_MESSAGE
+
       // فشل login/register بالبصمة → متعملش clear ولا redirect
-      if (!isPublicAuthRequest(requestUrl)) {
+      if (!isPublicAuthRequest(requestUrl) && !isBiometricFailure) {
         clearStoredAuth()
         window.dispatchEvent(new CustomEvent(SESSION_EXPIRED_EVENT))
       }

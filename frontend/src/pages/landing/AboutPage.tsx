@@ -1,4 +1,7 @@
 // frontend/src/pages/landing/AboutPage.tsx
+// ==================================================================
+// Zero Plus - About Page (English) "/about"
+// ==================================================================
 
 import { Link } from 'react-router-dom'
 import { Eye, Target, Scale, Scan, Users, EyeOff, Cpu, MessageSquareText } from 'lucide-react'

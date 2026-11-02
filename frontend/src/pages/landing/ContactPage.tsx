@@ -1,4 +1,7 @@
 // frontend/src/pages/landing/ContactPage.tsx
+// ==================================================================
+// Zero Plus - Contact Page (English) "/contact"
+// ==================================================================
 
 import { useState, type FormEvent } from 'react'
 import {

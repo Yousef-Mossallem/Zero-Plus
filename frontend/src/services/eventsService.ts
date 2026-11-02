@@ -81,6 +81,8 @@ export interface EventsQuery {
   isChallenged?: boolean
   challengePassed?: boolean
   reputationEntryId?: string
+  /** Simulation Lab: فلترة أحداث Run معيّن (reasonDetails.simulationRunId) */
+  simulationRunId?: string
   startDate?: string // ISO UTC
   endDate?: string // ISO UTC
   search?: string
