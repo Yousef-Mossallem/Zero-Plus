@@ -1,8 +1,8 @@
 // frontend/src/pages/notifications/NotificationItem.tsx
 // ==================================================================
-// صف إشعار واحد في صفحة الإشعارات
-//   - "جديد" (fresh) بلون مختلف + شريط جانبي + Badge
-//   - أيقونة حسب النوع، وبيّن النوع والشدة والوقت
+// إشعار واحد في التايم لاين
+//   - أيقونة على الخط الرأسي (rail) + كارت بالمحتوى
+//   - "جديد" (fresh) بحدود ملوّنة حسب الشدة + Badge
 //   - chips من الـ metadata (IP / Risk Score ...) لو موجودة
 // ==================================================================
 
@@ -11,7 +11,7 @@ import { Check } from 'lucide-react'
 import { Badge, Button } from '../../components/ui/kit'
 import type { AppNotification } from '../../services/notificationsService'
 import { SEVERITY_LABELS, metaFor, visualFor } from '../../utils/notificationMeta'
-import { cn, formatDateTime, timeAgo, truncate } from '../../utils/format'
+import { cn, formatDateTime, truncate } from '../../utils/format'
 
 /** أول 4 قيم بسيطة (نص/رقم/boolean) من الـ metadata */
 function metadataChips(metadata: AppNotification['metadata']): Array<[string, string]> {
@@ -20,6 +20,13 @@ function metadataChips(metadata: AppNotification['metadata']): Array<[string, st
     .filter(([, v]) => ['string', 'number', 'boolean'].includes(typeof v))
     .slice(0, 4)
     .map(([k, v]) => [k, truncate(String(v), 28)])
+}
+
+function clockTime(iso: string): string {
+  const d = new Date(iso)
+  return Number.isNaN(d.getTime())
+    ? ''
+    : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
 export default function NotificationItem({
@@ -42,35 +49,57 @@ export default function NotificationItem({
   return (
     <li
       style={{ animationDelay: `${Math.min(index, 10) * 40}ms` }}
-      className={cn(
-        'zp-anim-fade-up relative flex gap-4 border-b border-white/5 px-5 py-4 last:border-0',
-        highlighted ? 'bg-cyan-500/6' : 'hover:bg-white/2',
-      )}
+      className="zp-anim-fade-up relative flex gap-3 sm:gap-4"
     >
-      {/* الشريط الجانبي للجديد */}
-      {highlighted && (
-        <span className={cn('absolute inset-y-0 left-0 w-0.5', visual.accent)} />
-      )}
-
-      <span className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-xl', visual.iconCls)}>
-        <Icon className="h-5 w-5" />
+      {/* عقدة التايم لاين */}
+      <span
+        className={cn(
+          'relative z-10 mt-3 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border bg-[#0a0f1d]',
+          highlighted ? visual.ring : 'border-white/10',
+          visual.iconCls,
+        )}
+      >
+        <Icon className="h-4.5 w-4.5" />
+        {highlighted && (
+          <span className={cn('absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full ring-2 ring-[#0a0f1d]', visual.accent)} />
+        )}
       </span>
 
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <p dir="auto" className="text-sm font-semibold text-white">
-            {n.title}
-          </p>
-          {highlighted && <Badge tone="cyan">New</Badge>}
+      {/* الكارت */}
+      <div
+        className={cn(
+          'min-w-0 flex-1 rounded-2xl border p-4 backdrop-blur-xl transition',
+          highlighted
+            ? cn('bg-white/5 shadow-lg shadow-black/20', visual.ring)
+            : 'border-white/8 bg-white/2 hover:bg-white/4',
+        )}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <p dir="auto" className="text-sm font-semibold text-white">
+                {n.title}
+              </p>
+              {highlighted && <Badge tone="cyan">New</Badge>}
+            </div>
+            <p dir="auto" className="mt-1 text-sm leading-relaxed text-slate-400">
+              {n.message}
+            </p>
+          </div>
+          <time
+            dateTime={n.createdAt}
+            title={formatDateTime(n.createdAt)}
+            className="shrink-0 pt-0.5 font-mono text-xs text-slate-500"
+          >
+            {clockTime(n.createdAt)}
+          </time>
         </div>
 
-        <p dir="auto" className="mt-1 text-sm leading-relaxed text-slate-400">
-          {n.message}
-        </p>
-
-        <div className="mt-2.5 flex flex-wrap items-center gap-2">
+        <div className="mt-3 flex flex-wrap items-center gap-2">
           <Badge tone="slate">{meta.label}</Badge>
-          <Badge tone={visual.tone}>{SEVERITY_LABELS[n.severity] ?? `Level ${n.severity}`}</Badge>
+          <Badge tone={visual.tone} dot>
+            {SEVERITY_LABELS[n.severity] ?? `Level ${n.severity}`}
+          </Badge>
           {chips.map(([key, value]) => (
             <span
               key={key}
@@ -79,18 +108,12 @@ export default function NotificationItem({
               {key}: <span className="text-slate-200">{value}</span>
             </span>
           ))}
+          {!n.isRead && (
+            <Button size="sm" variant="ghost" icon={Check} className="ml-auto" onClick={() => onMarkRead(n.id)}>
+              Mark read
+            </Button>
+          )}
         </div>
-      </div>
-
-      <div className="flex shrink-0 flex-col items-end justify-between gap-2">
-        <time dateTime={n.createdAt} title={formatDateTime(n.createdAt)} className="text-xs text-slate-500">
-          {timeAgo(n.createdAt)}
-        </time>
-        {!n.isRead && (
-          <Button size="sm" variant="ghost" icon={Check} onClick={() => onMarkRead(n.id)}>
-            Mark read
-          </Button>
-        )}
       </div>
     </li>
   )

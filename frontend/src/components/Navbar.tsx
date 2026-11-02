@@ -8,17 +8,14 @@ import { useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard,
-  Activity,
   FlaskConical,
   ShieldAlert,
   FileText,
   Fingerprint,
-  Radar,
   Server,
   Building2,
   Bell,
   SlidersHorizontal,
-  User,
   LogOut,
   ChevronLeft,
   ChevronRight,
@@ -54,7 +51,6 @@ const NAV_GROUPS: NavGroup[] = [
     title: 'Overview',
     items: [
       { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
-      { label: 'Live Traffic', path: '/live-traffic', icon: Activity },
     ],
   },
   {
@@ -62,7 +58,6 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { label: 'Security Events', path: '/security-events', icon: ShieldAlert },
       { label: 'Reputation', path: '/reputation', icon: Fingerprint },
-      { label: 'Threat Intel', path: '/threat-intelligence', icon: Radar },
       { label: 'Simulation Lab', path: '/simulation', icon: FlaskConical },
     ],
   },
@@ -79,7 +74,6 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { label: 'Organization', path: '/organizations', icon: Building2 },
       { label: 'Notifications', path: '/notifications', icon: Bell },
-      { label: 'Profile', path: '/profile', icon: User },
     ],
   },
 ]

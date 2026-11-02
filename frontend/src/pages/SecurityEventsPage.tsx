@@ -2,6 +2,14 @@
 // ==================================================================
 // Zero Plus - Security Events Page
 // سجل كل حدث أمني وتفاصيله (مربوط بـ backend/modules/events)
+//
+// اللي بتعمله الصفحة:
+//   1) GET /events بفلاتر + ترتيب + Pagination (organizationId من الـ JWT)
+//   2) شريط إحصائيات: الإجمالي + متوسط الخطورة + عدد BLOCK + عدد CHALLENGE
+//   3) تابات للفلترة بالقرار (Allow / Monitor / Rate limit / Challenge / Block)
+//   4) فتح تفاصيل الحدث (GET /events/:id) في Drawer جانبي
+//   5) تحديث تلقائي اختياري كل 10 ثواني (لأن Socket.IO لسه متفعلش في الباك)
+//   6) توست للأخطاء والنسخ + ربط مع صفحة Reputation
 // ==================================================================
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -9,38 +17,34 @@ import { useSearchParams } from 'react-router-dom'
 import { Activity, Ban, Gauge, Radio, RefreshCw, Search, ShieldAlert, ShieldCheck, SlidersHorizontal, X } from 'lucide-react'
 import EventsTable from '../components/EventsTable'
 import { useToast } from '../components/ui/Toast'
-import { Badge, Button, Card, ErrorState, Field, PageHeader, PageShell, PaginationBar, SelectInput, StatCard, TextInput, Toggle } from '../components/ui/kit'
+import { TONE_ICON } from '../components/ui/tones'
+import { Badge, Button, Card, ErrorState, Field, PageHeader, PageShell, PaginationBar, SelectInput, Skeleton, TextInput, Toggle, type IconType, type Tone } from '../components/ui/kit'
 import { useDebounce } from '../hooks/useDebounce'
 import { parseApiError } from '../services/apiError'
 import { getEvents, type EventSortBy, type EventsQuery, type HttpMethod, type SecurityEvent } from '../services/eventsService'
 import { listServers, type Server } from '../services/serversService'
-import type { Decision, IpType } from '../services/types'
-import { formatNumber, localInputToIso } from '../utils/format'
+import type { IpType } from '../services/types'
+import { cn, formatNumber, localInputToIso } from '../utils/format'
 import { EventDrawer } from './events/EventDrawer'
 
-// ==================================================================
-// المتغيرات والأنواع الناقصة (كانت مفقودة وتم إضافتها هنا)
-// ==================================================================
-
+/** التحديث التلقائي (كان ناقص ومتعرّفش، وكان بيكسر زرار Live) */
 const AUTO_REFRESH_MS = 10_000
 
-const DECISIONS: Exclude<Decision, 'MONITOR'>[] = ['ALLOW', 'RATE_LIMIT', 'CHALLENGE', 'BLOCK']
+// ==================================================================
+// Filters helpers
+// ==================================================================
 
-const METHODS: HttpMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD']
-
-const IP_TYPES: IpType[] = ['RESIDENTIAL', 'MOBILE', 'DATACENTER', 'VPN_PROXY', 'TOR', 'UNKNOWN']
-
-interface Filters {
+type Filters = {
   search: string
   decision: string
   serverId: string
   method: string
   ipType: string
+  isChallenged: string
   minRisk: string
   maxRisk: string
   startDate: string
   endDate: string
-  isChallenged: string
   reputationEntryId: string
 }
 
@@ -50,18 +54,80 @@ const EMPTY_FILTERS: Filters = {
   serverId: '',
   method: '',
   ipType: '',
+  isChallenged: '',
   minRisk: '',
   maxRisk: '',
   startDate: '',
   endDate: '',
-  isChallenged: '',
   reputationEntryId: '',
 }
 
 function parseRisk(value: string): number | undefined {
-  if (!value.trim()) return undefined
-  const num = Number(value)
-  return isNaN(num) || num < 0 || num > 100 ? undefined : num
+  const trimmed = value.trim()
+  if (!trimmed) return undefined
+  const n = Number(trimmed)
+  if (!Number.isFinite(n) || n < 0 || n > 100) return undefined
+  return n
+}
+
+const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'] as const
+const IP_TYPES = ['RESIDENTIAL', 'MOBILE', 'DATACENTER', 'VPN_PROXY', 'TOR', 'UNKNOWN'] as const
+
+// تابات القرار
+const DECISION_TABS: { value: string; label: string; dot: string }[] = [
+  { value: '', label: 'All', dot: 'bg-cyan-400' },
+  { value: 'ALLOW', label: 'Allow', dot: 'bg-emerald-400' },
+  { value: 'MONITOR', label: 'Monitor', dot: 'bg-sky-400' },
+  { value: 'RATE_LIMIT', label: 'Rate limit', dot: 'bg-amber-400' },
+  { value: 'CHALLENGE', label: 'Challenge', dot: 'bg-indigo-400' },
+  { value: 'BLOCK', label: 'Block', dot: 'bg-rose-400' },
+]
+
+function riskBar(score: number): string {
+  if (score >= 80) return 'bg-rose-400'
+  if (score >= 60) return 'bg-orange-400'
+  if (score >= 31) return 'bg-amber-400'
+  return 'bg-emerald-400'
+}
+
+// ==================================================================
+// خلية إحصائية داخل الشريط
+// ==================================================================
+
+function Metric({
+  label,
+  value,
+  icon: Icon,
+  tone,
+  hint,
+  loading,
+  children,
+}: {
+  label: string
+  value: string
+  icon: IconType
+  tone: Tone
+  hint?: string
+  loading: boolean
+  children?: React.ReactNode
+}) {
+  return (
+    <div className="min-w-0 p-5">
+      <div className="flex items-center gap-2.5">
+        <span className={cn('flex h-8 w-8 shrink-0 items-center justify-center rounded-lg', TONE_ICON[tone])}>
+          <Icon className="h-4 w-4" />
+        </span>
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{label}</p>
+      </div>
+      {loading ? (
+        <Skeleton className="mt-3 h-8 w-20 rounded-md" />
+      ) : (
+        <p className="mt-2 truncate text-3xl font-bold tracking-tight tabular-nums text-white">{value}</p>
+      )}
+      {children}
+      {hint && !loading && <p className="mt-1 truncate text-xs text-slate-500">{hint}</p>}
+    </div>
+  )
 }
 
 // ==================================================================
@@ -73,6 +139,7 @@ export default function SecurityEventsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
 
   // ---------------- Filters / paging / sorting ----------------
+  // ممكن نيجي من صفحات تانية بـ ?ip=1.2.3.4 أو ?entry=<reputationEntryId>
   const [filters, setFilters] = useState<Filters>(() => ({
     ...EMPTY_FILTERS,
     search: searchParams.get('ip') ?? '',
@@ -107,6 +174,7 @@ export default function SecurityEventsPage() {
   const requestId = useRef(0)
 
   // ---------------- Build query ----------------
+  // الفلاتر المشتركة (من غير decision/paging/sort) عشان نستخدمها في العدّادات كمان
   const baseQuery = useMemo<EventsQuery>(() => {
     const min = parseRisk(debouncedMin)
     const max = parseRisk(debouncedMax)
@@ -151,6 +219,7 @@ export default function SecurityEventsPage() {
   )
 
   // ---------------- Load events ----------------
+  // silent=true للتحديث التلقائي: مفيش skeleton ولا توست متكرر
   const load = useCallback(
     async (silent = false) => {
       const id = ++requestId.current
@@ -166,6 +235,7 @@ export default function SecurityEventsPage() {
       } catch (err) {
         if (id !== requestId.current) return
         const { message } = parseApiError(err)
+        // في التحديث الصامت منزعجش المستخدم لو فيه بيانات معروضة أصلاً
         if (!silent || events.length === 0) {
           setError(message)
           toast.error('Failed to load security events', message)
@@ -174,6 +244,7 @@ export default function SecurityEventsPage() {
         if (id === requestId.current) setLoading(false)
       }
     },
+    // events.length عمدًا مش في الـ deps عشان مايعملش loop
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [query, toast],
   )
@@ -183,6 +254,7 @@ export default function SecurityEventsPage() {
   }, [load])
 
   // ---------------- Counters (BLOCK / CHALLENGE) ----------------
+  // طلبين خفيفين (limit=1): بناخد منهم pagination.total بس
   useEffect(() => {
     let cancelled = false
     Promise.allSettled([
@@ -219,7 +291,7 @@ export default function SecurityEventsPage() {
   // ---------------- Handlers ----------------
   const updateFilter = <K extends keyof Filters>(key: K, value: Filters[K]) => {
     setFilters((prev) => ({ ...prev, [key]: value }))
-    setPage(1)
+    setPage(1) // أي فلتر جديد يرجعنا لأول صفحة
   }
 
   const resetFilters = () => {
@@ -242,6 +314,13 @@ export default function SecurityEventsPage() {
   const minInvalid = filters.minRisk !== '' && parseRisk(filters.minRisk) === undefined
   const maxInvalid = filters.maxRisk !== '' && parseRisk(filters.maxRisk) === undefined
 
+  const firstLoad = loading && events.length === 0
+  // النسبة من الإجمالي بتبان بس لما مفيش فلتر قرار (لأن الإجمالي ساعتها بيتأثر بالقرار)
+  const share = (n: number | null): string | undefined =>
+    n !== null && !filters.decision && summary.totalEvents > 0
+      ? `${((n / summary.totalEvents) * 100).toFixed(1)}% of events`
+      : undefined
+
   // ==================================================================
   // Render
   // ==================================================================
@@ -255,7 +334,11 @@ export default function SecurityEventsPage() {
         actions={
           <>
             <label className="flex items-center gap-2.5 rounded-xl border border-white/10 bg-white/3 px-3.5 py-2 text-sm text-slate-300">
-              <Radio className={`h-4 w-4 ${live ? 'text-emerald-400' : 'text-slate-500'}`} />
+              <span className="relative flex h-2.5 w-2.5">
+                {live && <span className="zp-anim-pulse-ring absolute inline-flex h-full w-full rounded-full bg-emerald-400" />}
+                <span className={cn('relative inline-flex h-2.5 w-2.5 rounded-full', live ? 'bg-emerald-400' : 'bg-slate-600')} />
+              </span>
+              <Radio className={cn('h-4 w-4', live ? 'text-emerald-400' : 'text-slate-500')} />
               Live
               <Toggle checked={live} onChange={setLive} label="Auto refresh every 10 seconds" />
             </label>
@@ -266,46 +349,75 @@ export default function SecurityEventsPage() {
         }
       />
 
-      {/* ---------- Stats ---------- */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard
-          label="Total events"
-          value={formatNumber(summary.totalEvents)}
-          icon={Activity}
-          tone="cyan"
-          hint={hasActiveFilters ? 'Matching current filters' : 'All time'}
-          loading={loading && events.length === 0}
-          delay={0}
-        />
-        <StatCard
-          label="Average risk"
-          value={summary.averageRiskScore.toFixed(1)}
-          icon={Gauge}
-          tone="amber"
-          hint="Out of 100"
-          loading={loading && events.length === 0}
-          delay={60}
-        />
-        <StatCard
-          label="Blocked"
-          value={formatNumber(counts.block)}
-          icon={Ban}
-          tone="rose"
-          loading={counts.block === null}
-          delay={120}
-        />
-        <StatCard
-          label="Challenged"
-          value={formatNumber(counts.challenge)}
-          icon={ShieldCheck}
-          tone="indigo"
-          loading={counts.challenge === null}
-          delay={180}
-        />
+      {/* ---------- شريط الإحصائيات ---------- */}
+      <Card accent delay={60}>
+        <div className="grid grid-cols-2 divide-white/6 lg:grid-cols-4 lg:divide-x [&>*:nth-child(n+3)]:border-t [&>*:nth-child(n+3)]:border-white/6 lg:[&>*:nth-child(n+3)]:border-t-0">
+          <Metric
+            label="Total events"
+            value={formatNumber(summary.totalEvents)}
+            icon={Activity}
+            tone="cyan"
+            hint={hasActiveFilters ? 'Matching current filters' : 'All time'}
+            loading={firstLoad}
+          />
+          <Metric
+            label="Average risk"
+            value={summary.averageRiskScore.toFixed(1)}
+            icon={Gauge}
+            tone="amber"
+            loading={firstLoad}
+          >
+            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/8">
+              <div
+                className={cn('zp-anim-bar h-full rounded-full', riskBar(summary.averageRiskScore))}
+                style={{ width: `${Math.min(100, summary.averageRiskScore)}%` }}
+              />
+            </div>
+          </Metric>
+          <Metric
+            label="Blocked"
+            value={formatNumber(counts.block)}
+            icon={Ban}
+            tone="rose"
+            hint={share(counts.block)}
+            loading={counts.block === null}
+          />
+          <Metric
+            label="Challenged"
+            value={formatNumber(counts.challenge)}
+            icon={ShieldCheck}
+            tone="indigo"
+            hint={share(counts.challenge)}
+            loading={counts.challenge === null}
+          />
+        </div>
+      </Card>
+
+      {/* ---------- تابات القرار ---------- */}
+      <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+        {DECISION_TABS.map((t) => {
+          const active = filters.decision === t.value
+          return (
+            <button
+              key={t.label}
+              type="button"
+              onClick={() => updateFilter('decision', t.value)}
+              className={cn(
+                'flex shrink-0 items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition',
+                active
+                  ? 'border-cyan-400/40 bg-cyan-500/15 text-white shadow-lg shadow-cyan-500/10'
+                  : 'border-white/10 bg-white/3 text-slate-400 hover:border-white/20 hover:text-white',
+              )}
+            >
+              <span className={cn('h-2 w-2 rounded-full', t.dot)} />
+              {t.label}
+            </button>
+          )
+        })}
       </div>
 
       {/* ---------- Filters ---------- */}
-      <Card className="p-5" delay={120} accent>
+      <Card className="p-5" delay={120}>
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
           <div className="flex-1">
             <TextInput
@@ -316,33 +428,18 @@ export default function SecurityEventsPage() {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3 lg:flex">
-            <SelectInput
-              value={filters.decision}
-              onChange={(e) => updateFilter('decision', e.target.value)}
-              className="lg:w-40"
-            >
-              <option value="">All decisions</option>
-              {DECISIONS.map((d) => (
-                <option key={d} value={d} className="bg-[#0b1224]">
-                  {d.replace('_', ' ')}
-                </option>
-              ))}
-            </SelectInput>
-
-            <SelectInput
-              value={filters.serverId}
-              onChange={(e) => updateFilter('serverId', e.target.value)}
-              className="lg:w-48"
-            >
-              <option value="">All servers</option>
-              {servers.map((s) => (
-                <option key={s.id} value={s.id} className="bg-[#0b1224]">
-                  {s.domain}
-                </option>
-              ))}
-            </SelectInput>
-          </div>
+          <SelectInput
+            value={filters.serverId}
+            onChange={(e) => updateFilter('serverId', e.target.value)}
+            className="lg:w-56"
+          >
+            <option value="">All servers</option>
+            {servers.map((s) => (
+              <option key={s.id} value={s.id} className="bg-[#0b1224]">
+                {s.domain}
+              </option>
+            ))}
+          </SelectInput>
 
           <div className="flex gap-2">
             <Button

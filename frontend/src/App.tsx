@@ -3,7 +3,7 @@
 // بيغلّف التطبيق كله: الـ Router + استعادة الجلسة + صائد الأخطاء
 // ==================================================================
 
-import React, { useEffect, Component, ReactNode } from 'react'
+import { useEffect, Component, ReactNode } from 'react'
 import { BrowserRouter } from 'react-router-dom'
 
 import AppRouter from './router/AppRouter'
