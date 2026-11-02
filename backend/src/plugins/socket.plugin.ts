@@ -3,6 +3,8 @@
 // Zero Plus - Socket.IO Plugin
 // Real-time channel: Backend → Dashboard (per organization)
 // NOT on the visitor/Gateway hot path
+//
+// يشمل: إشعارات، أحداث أمنية، سيرفرات، تقارير، **محاكاة (Simulation Lab)**
 // ==================================================================
 
 import fp from 'fastify-plugin'
@@ -22,7 +24,10 @@ export interface SocketAuthUser {
   passkeyId?: string
 }
 
-/** Standard realtime event names used across the app */
+/**
+ * أسماء أحداث الـ realtime المستخدمة في التطبيق
+ * الفرونت يشترك بنفس الأسماء حرفيًا
+ */
 export const SocketEvents = {
   // server → client
   NOTIFICATION_NEW: 'notification:new',
@@ -32,13 +37,43 @@ export const SocketEvents = {
   REPUTATION_UPDATE: 'reputation:update',
   /** تقارير Gemini: created / GENERATING / READY / FAILED / deleted */
   REPORT_STATUS: 'report:status',
-  // client → server (optional light commands)
+
+  // ----- Simulation Lab -----
+  /** تحديث دوري لعدادات/حالة Run (totals, status, avgLatencyMs) */
+  SIMULATION_UPDATE: 'simulation:update',
+  /** Run بدأ / توقف / اكتمل / فشل */
+  SIMULATION_STATUS: 'simulation:status',
+
+  // client → server
   PING: 'ping',
   SUBSCRIBE_TRAFFIC: 'subscribe:traffic',
+  /** اختياري: متابعة Run معيّن (غرفة أضيق) */
+  SUBSCRIBE_SIMULATION: 'subscribe:simulation',
+  UNSUBSCRIBE_SIMULATION: 'unsubscribe:simulation',
 } as const
 
 export type SocketEventName =
   (typeof SocketEvents)[keyof typeof SocketEvents]
+
+/** شكل مقترح لحمولة simulation:update (الفرونت يقدر يعتمد عليه) */
+export interface SimulationUpdatePayload {
+  runId: string
+  organizationId: string
+  status: string
+  totals: {
+    sent: number
+    allowed: number
+    challenged: number
+    rateLimited: number
+    blocked: number
+    failed: number
+  }
+  avgLatencyMs?: number | null
+  errorMessage?: string | null
+  stoppedAt?: string | null
+  /** ISO */
+  at: string
+}
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -59,6 +94,13 @@ declare module 'fastify' {
       event: string,
       payload: unknown,
     ) => void
+    /**
+     * بث تحديث محاكاة للمنظمة (+ غرفة الـ Run إن وُجدت)
+     */
+    broadcastSimulationUpdate: (
+      organizationId: string,
+      payload: SimulationUpdatePayload,
+    ) => void
   }
 }
 
@@ -74,24 +116,25 @@ function userRoom(userId: string): string {
   return `user:${userId}`
 }
 
+function simulationRoom(runId: string): string {
+  return `simulation:${runId}`
+}
+
 // ------------------------------------------------------------------
 // Auth from handshake
 // ------------------------------------------------------------------
 
 function extractToken(socket: Socket): string | null {
-  // Preferred: auth.token (socket.io client: { auth: { token } })
   const fromAuth = socket.handshake.auth?.token
   if (typeof fromAuth === 'string' && fromAuth.trim()) {
     return fromAuth.replace(/^Bearer\s+/i, '').trim()
   }
 
-  // Fallback: Authorization header
   const header = socket.handshake.headers.authorization
   if (typeof header === 'string' && header.startsWith('Bearer ')) {
     return header.slice(7).trim()
   }
 
-  // Fallback: query ?token= (less ideal; useful for quick tests)
   const fromQuery = socket.handshake.query?.token
   if (typeof fromQuery === 'string' && fromQuery.trim()) {
     return fromQuery.trim()
@@ -105,11 +148,10 @@ function extractToken(socket: Socket): string | null {
 // ------------------------------------------------------------------
 
 const socketPlugin: FastifyPluginAsync = async (fastify: FastifyInstance) => {
-  // CORS: mirror frontend origin in production via env
   const frontendOrigin =
     process.env.FRONTEND_ORIGIN ??
     process.env.CORS_ORIGIN ??
-    true // reflect request origin in dev if unset
+    true
 
   const io = new SocketIOServer(fastify.server, {
     path: '/socket.io',
@@ -118,7 +160,6 @@ const socketPlugin: FastifyPluginAsync = async (fastify: FastifyInstance) => {
       methods: ['GET', 'POST'],
       credentials: true,
     },
-    // Dashboard is low-volume vs Gateway traffic
     transports: ['websocket', 'polling'],
     pingInterval: 25000,
     pingTimeout: 20000,
@@ -136,7 +177,6 @@ const socketPlugin: FastifyPluginAsync = async (fastify: FastifyInstance) => {
         return next(new Error('UNAUTHORIZED'))
       }
 
-      // Same secret/verify path as HTTP JWT plugin
       const payload = fastify.jwt.verify<SocketAuthUser>(token)
 
       if (!payload?.id || !payload?.organizationId) {
@@ -175,18 +215,40 @@ const socketPlugin: FastifyPluginAsync = async (fastify: FastifyInstance) => {
       'Socket connected',
     )
 
-    // Client can measure RTT
     socket.on(SocketEvents.PING, (ack?: (ts: number) => void) => {
       if (typeof ack === 'function') {
         ack(Date.now())
       }
     })
 
-    // Optional: client asks to flag interest in live traffic
-    // (room is already org-scoped; this is just a hook for future filtering)
     socket.on(SocketEvents.SUBSCRIBE_TRAFFIC, () => {
       void socket.join(`${oRoom}:traffic`)
     })
+
+    /**
+     * اشتراك في Run محاكاة معيّن
+     * payload: { runId: string }
+     */
+    socket.on(
+      SocketEvents.SUBSCRIBE_SIMULATION,
+      (payload: { runId?: string } | string) => {
+        const runId =
+          typeof payload === 'string' ? payload : payload?.runId
+        if (!runId || typeof runId !== 'string') return
+        // الغرفة عامة بالـ runId؛ البيانات أصلًا معزولة لأن البث من الباك بعد التحقق
+        void socket.join(simulationRoom(runId))
+      },
+    )
+
+    socket.on(
+      SocketEvents.UNSUBSCRIBE_SIMULATION,
+      (payload: { runId?: string } | string) => {
+        const runId =
+          typeof payload === 'string' ? payload : payload?.runId
+        if (!runId || typeof runId !== 'string') return
+        void socket.leave(simulationRoom(runId))
+      },
+    )
 
     socket.on('disconnect', (reason) => {
       fastify.log.info(
@@ -201,7 +263,7 @@ const socketPlugin: FastifyPluginAsync = async (fastify: FastifyInstance) => {
   })
 
   // ------------------------------------------------------------------
-  // Decorators for other modules (notifications, events, servers, reports, …)
+  // Decorators
   // ------------------------------------------------------------------
 
   fastify.decorate('io', io)
@@ -220,7 +282,41 @@ const socketPlugin: FastifyPluginAsync = async (fastify: FastifyInstance) => {
     },
   )
 
-  // Clean shutdown
+  fastify.decorate(
+    'broadcastSimulationUpdate',
+    (organizationId: string, payload: SimulationUpdatePayload) => {
+      const body = {
+        ...payload,
+        at: payload.at || new Date().toISOString(),
+      }
+      // كل أعضاء الشركة (صفحة المحاكاة / الداشبورد)
+      io.to(orgRoom(organizationId)).emit(
+        SocketEvents.SIMULATION_UPDATE,
+        body,
+      )
+      // من اشترك صراحة في الـ Run
+      if (payload.runId) {
+        io.to(simulationRoom(payload.runId)).emit(
+          SocketEvents.SIMULATION_UPDATE,
+          body,
+        )
+      }
+      // تغيير حالة نهائي/مهم
+      if (
+        payload.status === 'RUNNING' ||
+        payload.status === 'STOPPED' ||
+        payload.status === 'COMPLETED' ||
+        payload.status === 'FAILED' ||
+        payload.status === 'PENDING'
+      ) {
+        io.to(orgRoom(organizationId)).emit(
+          SocketEvents.SIMULATION_STATUS,
+          body,
+        )
+      }
+    },
+  )
+
   fastify.addHook('onClose', (_instance, done) => {
     void io.close()
     done()
@@ -231,6 +327,5 @@ const socketPlugin: FastifyPluginAsync = async (fastify: FastifyInstance) => {
 
 export default fp(socketPlugin, {
   name: 'socket',
-  // Ensure JWT is registered first
   dependencies: ['jwt'],
 })

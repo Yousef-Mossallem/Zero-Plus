@@ -6,16 +6,20 @@
 // الأنواع: RESIDENTIAL | MOBILE | DATACENTER | VPN_PROXY | TOR | UNKNOWN
 //
 // المصادر (طبقات، من الأرخص → الأغنى):
-//   1) نطاقات خاصة / محلية
-//   2) قوائم Tor exit (Redis كاش + fetch اختياري)
-//   3) ASN / بادئات datacenter معروفة (هيوريستك + كاش)
-//   4) Backend reputation lookup (إن وُجد)
-//   5) Geo (بلد/ASN) عبر مزود اختياري أو هيدرز الحافة
+//   1) كاش Redis غني (TTL طويل) — أسرع مسار
+//   2) نطاقات خاصة / محلية
+//   3) قوائم Tor exit (Redis)
+//   4) هيدرز الحافة (بلد/ASN بدون شبكة)
+//   5) Geo خارجي (ip-api) عند IP_GEO_LOOKUP=1
+//   6) Backend reputation (اختياري)
 //
-// لا يقرر ALLOW/BLOCK — يُصدّر نتيجة غنية للـ risk و AI.
+// كاش ذكي:
+//   - نتيجة فيها بلد/ASN/تصنيف مفيد → TTL طويل (توفير ip-api)
+//   - نتيجة فاشلة/فاضية → TTL قصير أو لا يُعتمد عليها
+//
+// لا يقرر ALLOW/BLOCK — يُصدّر نتيجة غنية للـ risk و AI و Events.
 // ======================================================
 
-import { createHash } from 'node:crypto'
 import { getRedis } from '../services/redis.client'
 import {
   lookupReputation,
@@ -102,16 +106,81 @@ export interface IpReputationInput {
 }
 
 // ------------------------------------------------------
-// كاش Redis
+// كاش Redis — ذكي
 // ------------------------------------------------------
 
 const CACHE_PREFIX = 'zp:iprep:'
-const CACHE_TTL_SEC = 600
+/** نتيجة غنية (بلد أو ASN أو تصنيف قوي) */
+const CACHE_TTL_RICH_SEC = Number(process.env.IP_REP_CACHE_TTL_SEC ?? 3600)
+/** نتيجة ضعيفة / فشل geo — لا نحبس أنفسنا طويلًا */
+const CACHE_TTL_POOR_SEC = Number(process.env.IP_REP_CACHE_POOR_TTL_SEC ?? 45)
+/** IP خاص / loopback */
+const CACHE_TTL_PRIVATE_SEC = 300
+
 const TOR_SET_KEY = 'zp:iprep:tor:exits'
 const TOR_META_KEY = 'zp:iprep:tor:meta'
 
 function cacheKey(ip: string, org?: string): string {
   return `${CACHE_PREFIX}${org || 'global'}:${ip}`
+}
+
+/** هل النتيجة تستحق إعادة الاستخدام فورًا بدون ip-api؟ */
+function isRichResult(r: IpReputationResult): boolean {
+  if (r.signals?.isPrivate || r.signals?.isLoopback) return true
+  if (r.geo?.countryCode) return true
+  if (r.asn?.asn != null) return true
+  if (r.kind === 'TOR' || r.kind === 'VPN_PROXY' || r.kind === 'DATACENTER') {
+    return true
+  }
+  if (r.kind === 'MOBILE' || r.kind === 'RESIDENTIAL') {
+    // بس لو فيه سند شبكة
+    return Boolean(r.asn?.asOrg || r.geo?.countryCode)
+  }
+  return false
+}
+
+function cacheTtlFor(r: IpReputationResult): number {
+  if (r.signals?.isPrivate || r.signals?.isLoopback) return CACHE_TTL_PRIVATE_SEC
+  return isRichResult(r) ? CACHE_TTL_RICH_SEC : CACHE_TTL_POOR_SEC
+}
+
+async function readCache(
+  ip: string,
+  org?: string,
+): Promise<IpReputationResult | null> {
+  try {
+    const raw = await getRedis().get(cacheKey(ip, org))
+    if (!raw) return null
+    const cached = JSON.parse(raw) as IpReputationResult
+    if (!cached || typeof cached !== 'object' || !cached.ip) return null
+    // كاش غني فقط — الفاضي يُتجاهل ويُعاد الحساب
+    if (!isRichResult(cached)) return null
+    return {
+      ...cached,
+      sources: [...(cached.sources || []), 'redis_cache'],
+      timingMs: 0,
+    }
+  } catch {
+    return null
+  }
+}
+
+async function writeCache(
+  ip: string,
+  org: string | undefined,
+  result: IpReputationResult,
+): Promise<void> {
+  try {
+    const ttl = cacheTtlFor(result)
+    await getRedis().set(
+      cacheKey(ip, org),
+      JSON.stringify(result),
+      'EX',
+      ttl,
+    )
+  } catch {
+    /* ignore */
+  }
 }
 
 // ------------------------------------------------------
@@ -120,7 +189,6 @@ function cacheKey(ip: string, org?: string): string {
 
 function normalizeIp(ip: string): string {
   const t = (ip || '').trim()
-  // IPv4-mapped IPv6
   if (t.startsWith('::ffff:')) return t.slice(7)
   return t
 }
@@ -161,9 +229,12 @@ function isPrivateOrLocal(ip: string): {
     return { private: true, loopback: true }
   }
   if (!isIPv4(ip)) {
-    // IPv6 unique local / link-local تقريب
     const lower = ip.toLowerCase()
-    if (lower.startsWith('fc') || lower.startsWith('fd') || lower.startsWith('fe80')) {
+    if (
+      lower.startsWith('fc') ||
+      lower.startsWith('fd') ||
+      lower.startsWith('fe80')
+    ) {
       return { private: true, loopback: false }
     }
     return { private: false, loopback: false }
@@ -182,36 +253,15 @@ function isPrivateOrLocal(ip: string): {
 }
 
 // ------------------------------------------------------
-// ASN / Datacenter / VPN هيوريستك (قابلة للتوسعة)
+// ASN / Datacenter / VPN هيوريستك
 // ------------------------------------------------------
 
-/** ASNs استضافة شائعة (عيّنة — زِد من threat intel) */
 const DATACENTER_ASN = new Set<number>([
-  16509, // Amazon
-  14618, // Amazon
-  15169, // Google
-  396982, // Google
-  8075, // Microsoft
-  13335, // Cloudflare (edge — غالبًا مش origin زائر)
-  14061, // DigitalOcean
-  63949, // Linode/Akamai
-  20473, // Choopa/Vultr
-  16276, // OVH
-  24940, // Hetzner
-  51167, // Contabo
-  62567, // DigitalOcean
-  136907, // Huawei Cloud
-  45090, // Tencent
-  37963, // Alibaba
-  31898, // Oracle
-  36351, // SoftLayer/IBM
-  60068, // CDN77
-  9009, // M247 (كثير VPN)
-  212238, // Datacamp
-  62240, // Clouvider
+  16509, 14618, 15169, 396982, 8075, 13335, 14061, 63949, 20473, 16276,
+  24940, 51167, 62567, 136907, 45090, 37963, 31898, 36351, 60068, 9009,
+  212238, 62240,
 ])
 
-/** كلمات في asOrg تدل على استضافة/VPN */
 const HOSTING_ORG_RE =
   /amazon|aws|google\s*cloud|microsoft|azure|digital\s*ocean|linode|akamai|ovh|hetzner|contabo|vultr|choopa|softlayer|ibm\s*cloud|oracle|alibaba|tencent|huawei\s*cloud|hostinger|godaddy|leaseweb|scaleway|upcloud|m247|datacamp|clouvider|colocrossing|psychz|quadranet|serverius|netcup|time4vps|vps|dedicated|cloud\s*provider|hosting/i
 
@@ -224,16 +274,7 @@ const MOBILE_ORG_RE =
 const RESIDENTIAL_ORG_RE =
   /telecom|broadband|cable|fiber|dsl|comcast|virgin\s*media|bt\s*group|deutsche\s*telekom|orange|vodafone|telecom\s*egypt|te\s*data|we\s*internet|etisalat|stc|zain|residential/i
 
-// بادئات IPv4 معروفة كـ cloud (عيّنة صغيرة)
-const DC_PREFIX_HINTS = [
-  '3.', // AWS أجزاء
-  '13.',
-  '18.',
-  '34.', // GCP أجزاء
-  '35.',
-  '52.',
-  '54.',
-]
+const DC_PREFIX_HINTS = ['3.', '13.', '18.', '34.', '35.', '52.', '54.']
 
 // ------------------------------------------------------
 // Tor exits
@@ -249,17 +290,12 @@ async function isTorExit(ip: string): Promise<boolean> {
   }
 }
 
-/**
- * تحديث قائمة Tor exit (اختياري — يستدعيه cron أو أول طلب)
- * المصدر الكلاسيكي: https://check.torproject.org/torbulkexitlist
- */
 export async function refreshTorExitList(): Promise<{ count: number }> {
   try {
     const r = getRedis()
     const meta = await r.get(TOR_META_KEY)
     if (meta) {
       const j = JSON.parse(meta) as { at: number }
-      // لا تحدّث أكثر من مرة كل 6 ساعات
       if (Date.now() - j.at < 6 * 3600_000) {
         const c = await r.scard(TOR_SET_KEY)
         return { count: c }
@@ -367,13 +403,20 @@ function geoFromHeaders(
   }
 }
 
+type ExternalGeo = {
+  geo: Partial<IpGeo>
+  asn: Partial<IpAsnInfo>
+  source?: string
+  proxyFlag?: boolean
+  hostingFlag?: boolean
+  mobileFlag?: boolean
+}
+
 /**
- * Geo خارجي اختياري (ipapi / ip-api / خدمة داخلية)
- * يُفعَّل عبر config أو ENV
+ * Geo خارجي — يُفعَّل بـ IP_GEO_LOOKUP=1
+ * يُستدعى فقط عند miss الكاش الغني
  */
-async function enrichGeoExternal(
-  ip: string,
-): Promise<{ geo: Partial<IpGeo>; asn: Partial<IpAsnInfo>; source?: string } | null> {
+async function enrichGeoExternal(ip: string): Promise<ExternalGeo | null> {
   const enabled =
     process.env.IP_GEO_LOOKUP === '1' ||
     (config as { ipReputation?: { geoLookup?: boolean } }).ipReputation
@@ -382,9 +425,13 @@ async function enrichGeoExternal(
   if (!isIPv4(ip) || isPrivateOrLocal(ip).private) return null
 
   try {
-    // ip-api.com مجاني للاستخدام غير التجاري — بدّل بمزودك
-    const url = `http://ip-api.com/json/${encodeURIComponent(ip)}?fields=status,country,countryCode,regionName,city,lat,lon,timezone,as,asname,org,mobile,proxy,hosting`
-    const res = await fetch(url, { signal: AbortSignal.timeout(2500) })
+    const url = `http://ip-api.com/json/${encodeURIComponent(
+      ip,
+    )}?fields=status,country,countryCode,regionName,city,lat,lon,timezone,as,asname,org,mobile,proxy,hosting`
+    const res = await fetch(url, {
+      signal: AbortSignal.timeout(2500),
+      headers: { 'user-agent': 'ZeroPlus-Gateway/1.0' },
+    })
     if (!res.ok) return null
     const j = (await res.json()) as Record<string, unknown>
     if (j.status !== 'success') return null
@@ -407,6 +454,9 @@ async function enrichGeoExternal(
         asOrg: (j.asname as string) || (j.org as string) || null,
         network: (j.org as string) || null,
       },
+      proxyFlag: j.proxy === true,
+      hostingFlag: j.hosting === true,
+      mobileFlag: j.mobile === true,
     }
   } catch {
     return null
@@ -427,7 +477,6 @@ function classifyKind(params: {
   ip: string
 }): { kind: IpKind; reasons: string[]; confidence: number } {
   const reasons: string[] = []
-  let confidence = 0.4
 
   if (params.tor) {
     reasons.push('tor_exit_list')
@@ -436,8 +485,7 @@ function classifyKind(params: {
 
   if (params.proxyFlag) {
     reasons.push('provider_proxy_flag')
-    confidence = 0.85
-    return { kind: 'VPN_PROXY', reasons, confidence }
+    return { kind: 'VPN_PROXY', reasons, confidence: 0.85 }
   }
 
   const org = params.asOrg || ''
@@ -453,19 +501,20 @@ function classifyKind(params: {
   ) {
     if (params.asn != null && DATACENTER_ASN.has(params.asn)) {
       reasons.push(`datacenter_asn:${params.asn}`)
-      confidence = 0.88
-    } else if (params.hostingFlag) {
-      reasons.push('provider_hosting_flag')
-      confidence = 0.85
-    } else {
-      reasons.push('as_org_hosting_keyword')
-      confidence = 0.72
+      return { kind: 'DATACENTER', reasons, confidence: 0.88 }
     }
-    return { kind: 'DATACENTER', reasons, confidence }
+    if (params.hostingFlag) {
+      reasons.push('provider_hosting_flag')
+      return { kind: 'DATACENTER', reasons, confidence: 0.85 }
+    }
+    reasons.push('as_org_hosting_keyword')
+    return { kind: 'DATACENTER', reasons, confidence: 0.72 }
   }
 
-  // تلميح بادئة
-  if (isIPv4(params.ip) && DC_PREFIX_HINTS.some((p) => params.ip.startsWith(p))) {
+  if (
+    isIPv4(params.ip) &&
+    DC_PREFIX_HINTS.some((p) => params.ip.startsWith(p))
+  ) {
     reasons.push('ipv4_prefix_cloud_hint')
     return { kind: 'DATACENTER', reasons, confidence: 0.55 }
   }
@@ -489,7 +538,10 @@ function classifyKind(params: {
   return { kind: 'RESIDENTIAL', reasons, confidence: 0.45 }
 }
 
-function networkRiskForKind(kind: IpKind, signals: IpReputationSignals): number {
+function networkRiskForKind(
+  kind: IpKind,
+  signals: IpReputationSignals,
+): number {
   let s = 0
   switch (kind) {
     case 'TOR':
@@ -535,21 +587,17 @@ export async function inspectIpReputation(
   const hints: string[] = []
   const sources: string[] = ['local_rules']
 
-  // كاش
-  try {
-    const raw = await getRedis().get(cacheKey(ip, input.organizationId))
-    if (raw) {
-      const cached = JSON.parse(raw) as IpReputationResult
-      return { ...cached, sources: [...cached.sources, 'redis_cache'] }
-    }
-  } catch {
-    /* ignore */
+  // —— 1) كاش غني فقط (توفير كامل لـ ip-api + backend على نفس الـ IP)
+  const cached = await readCache(ip, input.organizationId)
+  if (cached) {
+    return { ...cached, timingMs: Date.now() - start }
   }
 
   if (input.refreshTorList) {
     void refreshTorExitList()
   }
 
+  // —— 2) خاص / loopback — سريع + كاش قصير
   const loc = isPrivateOrLocal(ip)
   if (loc.private || loc.loopback) {
     const result: IpReputationResult = {
@@ -587,24 +635,43 @@ export async function inspectIpReputation(
       badIp: false,
       badIpContributionHint: 0,
     }
+    void writeCache(ip, input.organizationId, result)
     return result
   }
 
-  // Geo headers
+  // —— 3) هيدرز الحافة (مجانية، فورية)
   const fromHeaders = geoFromHeaders(input.headers)
   sources.push(...fromHeaders.sources)
   let geo = fromHeaders.geo
   let asn = fromHeaders.asn
 
-  // Tor
-  const tor = await isTorExit(ip)
+  // —— 4) Tor + Geo خارجي بالتوازي
+  const useBackend =
+    input.useBackend !== false && Boolean(input.organizationId)
+
+  const [tor, ext, backend] = await Promise.all([
+    isTorExit(ip),
+    // لو الهيدرز أصلًا فيها بلد+ASN غني، نقدر نتخطى ip-api لتوفير الحصص
+    geo.countryCode && asn.asn != null
+      ? Promise.resolve(null)
+      : enrichGeoExternal(ip),
+    useBackend && input.organizationId
+      ? lookupReputation({
+          organizationId: input.organizationId,
+          ipAddress: ip,
+          deviceFingerprint: input.deviceFingerprint ?? undefined,
+          ja3Fingerprint: input.ja3 ?? undefined,
+          ja4Fingerprint: input.ja4 ?? undefined,
+        }).catch(() => null)
+      : Promise.resolve(null),
+  ])
+
   if (tor) sources.push('tor_exit_redis')
 
-  // External geo (اختياري)
-  const ext = await enrichGeoExternal(ip)
   let proxyFlag = false
   let hostingFlag = false
   let mobileFlag = false
+
   if (ext) {
     sources.push(ext.source || 'external_geo')
     geo = {
@@ -621,26 +688,15 @@ export async function inspectIpReputation(
       asOrg: ext.asn.asOrg ?? asn.asOrg,
       network: ext.asn.network ?? asn.network,
     }
+    proxyFlag = Boolean(ext.proxyFlag)
+    hostingFlag = Boolean(ext.hostingFlag)
+    mobileFlag = Boolean(ext.mobileFlag)
   }
 
-  // Backend reputation
-  let backend: ReputationLookupData | null = null
-  const useBackend =
-    input.useBackend !== false && Boolean(input.organizationId)
-  if (useBackend && input.organizationId) {
-    try {
-      backend = await lookupReputation({
-        organizationId: input.organizationId,
-        ipAddress: ip,
-        deviceFingerprint: input.deviceFingerprint ?? undefined,
-        ja3Fingerprint: input.ja3 ?? undefined,
-        ja4Fingerprint: input.ja4 ?? undefined,
-      })
-      sources.push('backend_reputation')
-    } catch {
-      hints.push('backend_lookup_failed')
-    }
-  }
+  if (backend) sources.push('backend_reputation')
+  else if (useBackend) hints.push('backend_lookup_failed')
+
+  const backendData = backend as ReputationLookupData | null
 
   const signals: IpReputationSignals = {
     isPrivate: false,
@@ -650,10 +706,10 @@ export async function inspectIpReputation(
     isVpnLikely: false,
     isMobileLikely: false,
     isResidentialLikely: false,
-    backendKnownBotnet: backend?.effective.isKnownBotnet === true,
-    backendRiskPoints: backend?.effective.reputationRiskPoints ?? 0,
-    backendScore: backend?.found ? backend.effective.score : null,
-    backendBanned: backend?.effective.isCurrentlyBanned === true,
+    backendKnownBotnet: backendData?.effective.isKnownBotnet === true,
+    backendRiskPoints: backendData?.effective.reputationRiskPoints ?? 0,
+    backendScore: backendData?.found ? backendData.effective.score : null,
+    backendBanned: backendData?.effective.isCurrentlyBanned === true,
   }
 
   const classified = classifyKind({
@@ -686,7 +742,7 @@ export async function inspectIpReputation(
     (classified.kind === 'DATACENTER' && networkRiskScore >= 0.6) ||
     classified.kind === 'VPN_PROXY' ||
     classified.kind === 'TOR' ||
-    (signals.backendRiskPoints >= 10)
+    signals.backendRiskPoints >= 10
 
   const badIpContributionHint = Math.round(
     Math.min(30, networkRiskScore * 30 + (badIp ? 5 : 0)),
@@ -708,16 +764,8 @@ export async function inspectIpReputation(
     badIpContributionHint,
   }
 
-  try {
-    await getRedis().set(
-      cacheKey(ip, input.organizationId),
-      JSON.stringify(result),
-      'EX',
-      CACHE_TTL_SEC,
-    )
-  } catch {
-    /* ignore */
-  }
+  // كاش: غني → ساعة تقريبًا | فاضي → ثوانٍ قليلة
+  void writeCache(ip, input.organizationId, result)
 
   return result
 }
@@ -747,7 +795,6 @@ export function ipReputationForAi(
   }
 }
 
-/** مقارنة بسيطة: IP country vs توقع (مثلاً من حساب الشركة) */
 export function geoAnomalyHint(
   r: IpReputationResult,
   expectedCountry?: string | null,
