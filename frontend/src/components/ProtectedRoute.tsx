@@ -2,6 +2,10 @@
 // ==================================================================
 // Zero Plus - Protected Route
 // بيحمي أي صفحة محتاجة تسجيل دخول
+//
+// BYPASS_AUTH:
+//   - من .env: VITE_BYPASS_AUTH=true  → تخطي تسجيل الدخول (تطوير فقط)
+//   - غير مضبوط أو false             → الحماية الأصلية
 // ==================================================================
 
 import { useEffect } from 'react'
@@ -16,13 +20,10 @@ import {
 } from '../store/authStore'
 
 // ==================================================================
-// وضع التطوير
-// ------------------------------------------------------------------
-// true  = تخطي صفحة تسجيل الدخول أثناء التطوير
-// false = تشغيل الحماية الأصلية زي ما هي
+// وضع التطوير — لا تفعّله في الإنتاج
 // ==================================================================
 
-const BYPASS_AUTH = false
+const BYPASS_AUTH = import.meta.env.VITE_BYPASS_AUTH === 'false'
 
 // ==================================================================
 // Props
@@ -59,12 +60,10 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
   // ----------------------------------------------------------------
 
   if (!BYPASS_AUTH && (!isInitialized || isLoading)) {
-      const newLocal = "pointer-events-none absolute -left-40 top-1/4 h-80 w-[320px] rounded-full bg-cyan-500/10 blur-[100px]"
     return (
       <div className="relative flex min-h-screen w-full items-center justify-center overflow-hidden bg-[#05070f]">
-        {/* Background */}
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,var(--tw-gradient-stops))] from-[#0b1224] via-[#05070f] to-[#02040a]" />
-        <div className={newLocal} />
+        <div className="pointer-events-none absolute -left-40 top-1/4 h-80 w-[320px] rounded-full bg-cyan-500/10 blur-[100px]" />
         <div className="pointer-events-none absolute -right-40 bottom-1/4 h-70 w-70 rounded-full bg-indigo-600/10 blur-[90px]" />
 
         <div className="relative z-10 flex flex-col items-center gap-5">
@@ -82,8 +81,8 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
   }
 
   // ----------------------------------------------------------------
-  // مش مسجل دخول → يتحول لصفحة Login
-  // (في وضع التطوير BYPASS_AUTH بيتخطى الخطوة دي)
+  // مش مسجل دخول → Login
+  // (BYPASS_AUTH=true يتخطى الخطوة دي)
   // ----------------------------------------------------------------
 
   if (!BYPASS_AUTH && !isAuthenticated) {
@@ -97,7 +96,7 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
   }
 
   // ----------------------------------------------------------------
-  // مسجل دخول → يعرض الصفحة المطلوبة
+  // مسجل دخول (أو bypass) → الصفحة المطلوبة
   // ----------------------------------------------------------------
 
   return <>{children}</>

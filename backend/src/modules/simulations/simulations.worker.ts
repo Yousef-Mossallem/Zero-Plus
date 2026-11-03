@@ -355,7 +355,7 @@ function gatewayBaseUrl(): string {
   return (
     process.env.GATEWAY_URL ||
     process.env.ZERO_PLUS_GATEWAY_URL ||
-    'http://127.0.0.1:3000'
+    'http://yousef.com:3000'
   ).replace(/\/$/, '')
 }
 

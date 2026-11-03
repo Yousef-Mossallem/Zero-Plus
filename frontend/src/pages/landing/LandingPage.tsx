@@ -98,7 +98,7 @@ export default function LandingPage() {
       {/* Hero */}
       <section className="mx-auto grid max-w-7xl items-center gap-12 px-6 pb-20 pt-16 lg:grid-cols-2 lg:pt-24">
         <div className="space-y-7">
-          <h1 className="text-4xl font-bold leading-[1.25] tracking-tight text-white sm:text-5xl xl:text-6xl">
+          <h1 className="text-4xl font-bold leading-tight tracking-tight text-white sm:text-5xl xl:text-6xl">
             Protect your site from DDoS
             <span className="mt-2 block">
               <GradientText>with a guard that checks every visitor by reputation</GradientText>

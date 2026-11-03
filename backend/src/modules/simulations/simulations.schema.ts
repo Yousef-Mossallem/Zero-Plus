@@ -11,25 +11,38 @@
 import { z } from 'zod'
 
 // ------------------------------------------------------------------
+// Helper: يقبل الحروف الصغيرة والكبيرة (الفرونت بيبعت lowercase)
+// بيحوّل النص لحروف كبيرة قبل التحقق من الـ enum
+// ------------------------------------------------------------------
+
+const upperEnum = <T extends z.ZodTypeAny>(schema: T) =>
+  z.preprocess(
+    (v) => (typeof v === 'string' ? v.trim().toUpperCase() : v),
+    schema,
+  )
+
+// ------------------------------------------------------------------
 // Enums (نفس أسماء Prisma — String enum في Zod)
 // ------------------------------------------------------------------
 
-export const simulationPatternSchema = z.enum([
-  'REALISTIC_MIX',
-  'LEGIT_ONLY',
-  'LOGIN_FOCUS',
-  'RATE_STRESS',
-  'BOT_WAVE',
-  'BAN_RECOVERY',
-  'FULL_PIPELINE',
-  'CUSTOM',
-  // توافق قديم
-  'NORMAL',
-  'SUSPICIOUS_BURST',
-  'REPEATED_REQUESTS',
-  'UNUSUAL_BEHAVIOR',
-  'KNOWN_TEST_SOURCE',
-])
+export const simulationPatternSchema = upperEnum(
+  z.enum([
+    'REALISTIC_MIX',
+    'LEGIT_ONLY',
+    'LOGIN_FOCUS',
+    'RATE_STRESS',
+    'BOT_WAVE',
+    'BAN_RECOVERY',
+    'FULL_PIPELINE',
+    'CUSTOM',
+    // توافق قديم
+    'NORMAL',
+    'SUSPICIOUS_BURST',
+    'REPEATED_REQUESTS',
+    'UNUSUAL_BEHAVIOR',
+    'KNOWN_TEST_SOURCE',
+  ]),
+)
 
 export const simulationStatusSchema = z.enum([
   'PENDING',
@@ -39,7 +52,9 @@ export const simulationStatusSchema = z.enum([
   'FAILED',
 ])
 
-export const simulationIntensitySchema = z.enum(['LOW', 'MEDIUM', 'HIGH'])
+export const simulationIntensitySchema = upperEnum(
+  z.enum(['LOW', 'MEDIUM', 'HIGH']),
+)
 
 export const simulationPersonaSchema = z.enum([
   'legit_ok',

@@ -21,6 +21,7 @@ import {
   ChevronRight,
   Menu,
   X,
+  UserRound,
 } from 'lucide-react'
 
 // import Logo from './Logo'
@@ -74,6 +75,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { label: 'Organization', path: '/organizations', icon: Building2 },
       { label: 'Notifications', path: '/notifications', icon: Bell },
+      {label: "Profile" , path: '/profile' , icon : UserRound}
     ],
   },
 ]
@@ -88,6 +90,13 @@ export default function Navbar() {
   const user = useAuthStore(selectCurrentUser)
   const organization = useAuthStore(selectCurrentOrganization)
   const logout = useAuthStore((s) => s.logout)
+  const profileInitials = (user?.fullName ?? 'User')
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join('')
+    .toUpperCase()
 
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -184,21 +193,31 @@ export default function Navbar() {
 
       {/* User + Logout */}
       <div className="shrink-0 border-t border-white/6 p-3">
-        {!collapsed && (
-          <div className="mb-2 rounded-xl border border-white/5 bg-white/2  px-3 py-2.5">
-            <p className="truncate text-sm font-medium text-white">
-              {user?.fullName ?? 'User'}
-            </p>
-            <p className="truncate text-[11px] text-slate-500">
-              {organization?.name ?? 'Organization'}
-            </p>
-            {user?.role && (
-              <span className="mt-1.5 inline-block rounded-md bg-cyan-500/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-cyan-400">
-                {user.role}
-              </span>
-            )}
+        <div
+          className={`mb-2 flex items-center rounded-xl border border-white/5 bg-white/2 px-2 py-2.5 ${
+            collapsed ? 'justify-center' : 'gap-3 px-3'
+          }`}
+          title={collapsed ? user?.fullName ?? 'User' : undefined}
+        >
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-cyan-400/25 bg-cyan-500/10 text-xs font-bold text-cyan-300">
+            {profileInitials || 'U'}
           </div>
-        )}
+          {!collapsed && (
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium text-white">
+                {user?.fullName ?? 'User'}
+              </p>
+              <p className="truncate text-[11px] text-slate-500">
+                {organization?.name ?? 'Organization'}
+              </p>
+              {user?.role && (
+                <span className="mt-1.5 inline-block rounded-md bg-cyan-500/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-cyan-400">
+                  {user.role}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
 
         <button
           type="button"

@@ -102,11 +102,7 @@ function RecordCard({ rec, badge }: { rec: DnsRecordInstruction; badge?: string 
         )
       })}
 
-      {rec.note && (
-        <p dir="auto" className="mt-2 text-xs text-slate-500">
-          {rec.note}
-        </p>
-      )}
+      {rec.note && <p className="mt-2 text-xs text-slate-500">{rec.note}</p>}
     </div>
   )
 }
@@ -116,7 +112,9 @@ function CheckResult({ label, check }: { label: string; check: DnsCheckResult })
     <div
       className={cn(
         'rounded-xl border p-3.5',
-        check.verified ? 'border-emerald-400/25 bg-emerald-500/5' : 'border-rose-500/25 bg-rose-500/5',
+        check.verified
+          ? 'border-emerald-400/25 bg-emerald-500/5'
+          : 'border-rose-500/25 bg-rose-500/5',
       )}
     >
       <p className="flex items-center gap-2 text-sm font-medium text-white">
@@ -131,9 +129,7 @@ function CheckResult({ label, check }: { label: string; check: DnsCheckResult })
         </span>
       </p>
 
-      <p dir="auto" className="mt-1 text-xs text-slate-400">
-        {check.message}
-      </p>
+      <p className="mt-1 text-xs text-slate-400">{check.message}</p>
 
       {!check.verified && (
         <div dir="ltr" className="mt-2 space-y-1.5 font-mono text-[11px]">
@@ -320,44 +316,52 @@ export function DnsModal({
         </div>
       ) : loadFailed || !dns ? (
         <div className="flex flex-col items-center gap-3 rounded-xl border border-white/8 bg-white/3 p-6 text-center">
-          <p className="text-sm text-slate-400">Couldn&rsquo;t load the DNS instructions for this server.</p>
+          <p className="text-sm text-slate-400">
+            Couldn&rsquo;t load the DNS instructions for this server.
+          </p>
           <Button variant="ghost" icon={RefreshCw} onClick={() => setReloadKey((k) => k + 1)}>
             Try again
           </Button>
         </div>
       ) : (
-        <>
+        <div className="space-y-5">
           {/* ---------- Progress ---------- */}
           <div className="flex flex-wrap items-center gap-2">
-            <StatusChip ok={dnsVerified} label={dnsVerified ? 'Ownership verified' : 'Ownership pending'} />
-            <StatusChip ok={gatewayReachable} label={gatewayReachable ? 'Routing verified' : 'Routing pending'} />
+            <StatusChip
+              ok={dnsVerified}
+              label={dnsVerified ? 'Ownership verified' : 'Ownership pending'}
+            />
+            <StatusChip
+              ok={gatewayReachable}
+              label={gatewayReachable ? 'Routing verified' : 'Routing pending'}
+            />
           </div>
 
           {fullyActive && (
             <div className="flex items-start gap-2.5 rounded-xl border border-emerald-400/25 bg-emerald-500/5 p-4">
               <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />
               <p className="text-sm text-emerald-200/90">
-                Your domain is verified and routed through the Gateway. Capacity measurement runs in the background and
-                the numbers will appear on the server card shortly.
+                Your domain is verified and routed through the Gateway. Capacity measurement runs
+                in the background and the numbers will appear on the server card shortly.
               </p>
             </div>
           )}
 
           {/* ---------- Step 1: Ownership ---------- */}
-          <section className="space-y-2">
+          <section className="space-y-2.5">
             <h4 className="flex items-center gap-2 text-sm font-semibold text-white">
               <Badge tone="cyan">Step 1</Badge>
               Prove domain ownership
             </h4>
-            <p className="text-xs text-slate-500">
-              Add this TXT record in your DNS provider, wait for it to propagate, then click &ldquo;Verify ownership&rdquo;.
-              Keep it in place after verification.
+            <p className="text-xs leading-relaxed text-slate-500">
+              Add this TXT record in your DNS provider, wait for it to propagate, then click
+              &ldquo;Verify ownership&rdquo;. Keep it in place after verification.
             </p>
             <RecordCard rec={dns.ownership} />
           </section>
 
           {/* ---------- Step 2: Routing ---------- */}
-          <section className="space-y-2">
+          <section className="space-y-2.5">
             <h4 className="flex items-center gap-2 text-sm font-semibold text-white">
               <Badge tone="indigo">Step 2</Badge>
               Route your domain to the Gateway
@@ -366,14 +370,14 @@ export function DnsModal({
             {dns.routing.length === 0 ? (
               <div className="flex gap-2 rounded-xl border border-amber-400/20 bg-amber-500/5 p-4">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />
-                <p className="text-xs text-amber-200/90">
-                  Gateway routing isn&rsquo;t configured on the platform yet, so there are no routing records to show.
-                  Please contact support.
+                <p className="text-xs leading-relaxed text-amber-200/90">
+                  Gateway routing isn&rsquo;t configured on the platform yet, so there are no
+                  routing records to show. Please contact support.
                 </p>
               </div>
             ) : (
               <>
-                <p className="text-xs text-slate-500">
+                <p className="text-xs leading-relaxed text-slate-500">
                   {dns.routing.length > 1
                     ? 'Choose ONE of the options below (not both). Use CNAME for subdomains and A for root domains.'
                     : 'Add this record, then click “Verify routing”.'}
@@ -395,7 +399,7 @@ export function DnsModal({
           {dns.warnings.length > 0 && (
             <div className="space-y-1.5 rounded-xl border border-amber-400/20 bg-amber-500/5 p-4">
               {dns.warnings.map((w, i) => (
-                <p key={i} dir="auto" className="flex gap-2 text-xs text-amber-200/90">
+                <p key={i} className="flex gap-2 text-xs text-amber-200/90">
                   <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                   {w}
                 </p>
@@ -405,15 +409,15 @@ export function DnsModal({
 
           {/* ---------- How it works ---------- */}
           {dns.steps.length > 0 && (
-            <section className="space-y-2">
+            <section className="space-y-2.5">
               <h4 className="text-sm font-semibold text-white">How it works</h4>
-              <ol className="space-y-1.5 text-sm text-slate-400">
+              <ol className="space-y-2 text-sm text-slate-400">
                 {dns.steps.map((s, i) => (
-                  <li key={i} dir="auto" className="flex gap-2.5">
+                  <li key={i} className="flex gap-2.5">
                     <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/5 text-[11px] text-slate-300">
                       {i + 1}
                     </span>
-                    {s}
+                    <span className="leading-relaxed">{s}</span>
                   </li>
                 ))}
               </ol>
@@ -422,10 +426,12 @@ export function DnsModal({
 
           {/* ---------- Verification result ---------- */}
           {result && (result.ownership || result.routing) && (
-            <section className="zp-anim-fade-up space-y-2">
+            <section className="zp-anim-fade-up space-y-2.5">
               <h4 className="text-sm font-semibold text-white">Latest check</h4>
               {result.ownership && <CheckResult label="Ownership (TXT)" check={result.ownership} />}
-              {result.routing && <CheckResult label="Routing (CNAME / A)" check={result.routing} />}
+              {result.routing && (
+                <CheckResult label="Routing (CNAME / A)" check={result.routing} />
+              )}
             </section>
           )}
 
@@ -437,9 +443,11 @@ export function DnsModal({
           )}
 
           {!canManage && (
-            <p className="text-xs text-slate-600">Only Owners and Admins can run verification.</p>
+            <p className="text-xs text-slate-600">
+              Only Owners and Admins can run verification.
+            </p>
           )}
-        </>
+        </div>
       )}
     </Modal>
   )
