@@ -559,8 +559,8 @@ export function buildDnsInstructions(
   }
 
   const warnings: string[] = [
-    'احذف أي سجل A/CNAME قديم للدومين ده قبل إضافة سجل التوجيه، وإلا الترافيك هيفضل رايح للسيرفر الأصلي من غير حماية.',
-    'بعد التفعيل، اقفل السيرفر الأصلي على عناوين الـ Gateway فقط (Firewall). لو الـ IP الأصلي معروف للمهاجم هيهاجمه مباشرة ويتخطى الحماية.',
+    'Delete any old A/CNAME record for this domain before adding the routing record, otherwise traffic will keep going straight to the origin server without protection.',
+    'After activation, lock down the origin server to the Gateway addresses only (Firewall). If the attacker knows the origin IP, they will attack it directly and bypass the protection.',
   ]
 
   if (routing.length === 0) {
@@ -568,17 +568,16 @@ export function buildDnsInstructions(
       'إعدادات توجيه الـ Gateway (GATEWAY_CNAME_TARGET / GATEWAY_PUBLIC_IPS) غير مضبوطة في السيرفر.',
     )
   }
-
   return {
     domain,
     ownership,
     routing,
     steps: [
-      'أضف سجل TXT للتحقق من ملكية الدومين في لوحة الـ DNS عندك.',
-      'اضغط "تحقق" (step: ownership) بعد انتشار السجل (قد يستغرق دقائق).',
-      'وجّه الدومين للـ Gateway بسجل CNAME أو A (واحد منهم فقط).',
-      'اضغط "تحقق" (step: routing). لو نجح الترافيك بدأ يعدي على الحماية.',
-      'ابدأ بوضع MONITOR_ONLY لمراقبة القرارات، وبعدها حوّل لـ PROTECT.',
+      'Add a TXT record to verify domain ownership in your DNS panel.',
+      'Click "Verify" (step: ownership) after the record has propagated (it may take a few minutes).',
+      'Point the domain to the Gateway using a CNAME or A record (only one of them).',
+      'Click "Verify" (step: routing). If it succeeds, traffic will start flowing through the protection.',
+      'Start with MONITOR_ONLY mode to observe decisions, then switch to PROTECT.',
     ],
     warnings,
   }

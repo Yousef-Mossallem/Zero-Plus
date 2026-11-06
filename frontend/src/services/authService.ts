@@ -1,21 +1,27 @@
-// frontend/src/services/auth.service.ts
+// frontend/src/services/authService.ts
 // ==================================================================
 // Zero Plus - Authentication Service (WebAuthn / Passkeys)
 // ==================================================================
 //
 // يتوافق مع الباك:
-//   POST /auth/register/start
-//   POST /auth/register/finish
-//   POST /auth/login/start
-//   POST /auth/login/finish
-//   GET  /auth/me
+//   POST   /auth/register/start
+//   POST   /auth/register/finish
+//   POST   /auth/login/start
+//   POST   /auth/login/finish
+//   GET    /auth/me
+//   PATCH  /auth/profile
+//   GET    /auth/passkeys
+//   POST   /auth/passkeys/register/start
+//   POST   /auth/passkeys/register/finish
+//   DELETE /auth/passkeys
+//   POST   /auth/password
 //
 // ومع الـ Store:
 //   registerStart → startRegistration (browser) → registerFinish
 //   loginStart    → startAuthentication (browser) → loginFinish
 //
 // ملاحظة:
-//   استدعاء WebAuthn نفسه (نافذة البصمة) في الـ Store عبر
+//   استدعاء WebAuthn نفسه (نافذة البصمة) في الـ Store / الصفحات عبر
 //   @simplewebauthn/browser — الملف ده مسؤول عن HTTP فقط.
 // ==================================================================
 
@@ -334,6 +340,7 @@ export async function loginFinish(
 /**
  * GET /auth/me
  * الـ api interceptor بيضيف Authorization: Bearer <token>
+ * بيرجّع المستخدم + الشركة + الأجهزة في طلب واحد.
  */
 export async function getMe(): Promise<
   AuthUser & {
@@ -353,10 +360,30 @@ export async function getMe(): Promise<
   return response.data.data
 }
 
+/**
+ * PATCH /auth/profile → { fullName }
+ * الـ schema في الباك strict: أي حقل زيادة غير fullName بيرجّع 400.
+ */
+export async function updateProfile(fullName: string): Promise<AuthUser> {
+  const response = await api.patch<AuthApiResponse<AuthUser>>('/auth/profile', {
+    fullName,
+  })
+  return response.data.data
+}
+
+/**
+ * POST /auth/password → { newPassword }
+ * باسورد احتياطي فقط (مفيش route لدخول بالباسورد).
+ */
+export async function setPassword(newPassword: string): Promise<void> {
+  await api.post('/auth/password', { newPassword })
+}
+
 // ==================================================================
-// API — Passkeys management (اختياري للـ Profile)
+// API — Passkeys management (صفحة Profile)
 // ==================================================================
 
+/** GET /auth/passkeys — مرتبة بآخر استخدام، والأجهزة الملغية مش بترجع */
 export async function listPasskeys(): Promise<AuthPasskeySummary[]> {
   const response = await api.get<AuthApiResponse<AuthPasskeySummary[]>>(
     '/auth/passkeys',
@@ -364,13 +391,19 @@ export async function listPasskeys(): Promise<AuthPasskeySummary[]> {
   return response.data.data
 }
 
+/**
+ * POST /auth/passkeys/register/start
+ * لازم نبعت {} لأن Fastify بيرفض Content-Type JSON مع body فاضي.
+ */
 export async function addPasskeyStart(): Promise<RegisterStartResult> {
   const response = await api.post<AuthApiResponse<RegisterStartResult>>(
     '/auth/passkeys/register/start',
+    {},
   )
   return response.data.data
 }
 
+/** POST /auth/passkeys/register/finish */
 export async function addPasskeyFinish(data: {
   deviceName?: string
   credential: RegistrationResponseJSON
@@ -382,6 +415,11 @@ export async function addPasskeyFinish(data: {
   return response.data.data
 }
 
+/**
+ * DELETE /auth/passkeys → body: { passkeyId }
+ * passkeyId هو الـ id اللي في القائمة (مش credentialId).
+ * الحذف soft، ومينفعش تحذف آخر جهاز.
+ */
 export async function revokePasskey(passkeyId: string): Promise<void> {
   await api.delete('/auth/passkeys', {
     data: { passkeyId },
@@ -398,6 +436,8 @@ const authService = {
   loginStart,
   loginFinish,
   getMe,
+  updateProfile,
+  setPassword,
   listPasskeys,
   addPasskeyStart,
   addPasskeyFinish,

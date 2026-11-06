@@ -1,6 +1,7 @@
+// frontend/src/router/AppRouter.tsx
 // ==================================================================
 // Zero Plus - Application Router
-// كل صفحات النظام وتوزيعها على المسارات (Routes) - النسخة الأسطورية المدمجة
+// كل صفحات النظام وتوزيعها على المسارات (Routes) — نسخة مدمجة
 // ==================================================================
 
 import { Routes, Route, Navigate } from 'react-router-dom'
@@ -15,14 +16,14 @@ import ContactPage from '../pages/landing/ContactPage'
 import SitePoliciesPage from '../pages/landing/SitePoliciesPage'
 
 // ------------------------------------------------------------------
-// Auth Pages (صفحات المصادقة والتسجيل)
+// Auth Pages
 // ------------------------------------------------------------------
 
 import SignupPage from '../pages/SignupPage'
 import LoginPage from '../pages/LoginPage'
 
 // ------------------------------------------------------------------
-// Core Pages & Active Pages (الصفحات الرئيسية والجاهزة)
+// Core / Dashboard Pages
 // ------------------------------------------------------------------
 
 import DashboardPage from '../pages/DashboardPage'
@@ -33,31 +34,31 @@ import OrganizationsPage from '../pages/OrganizationsPage'
 import PoliciesPage from '../pages/PoliciesPage'
 import ReportsPage from '../pages/ReportsPage'
 import NotificationsPage from '../pages/NotificationsPage'
+import SimulationPage from '../pages/SimulationPage'
+import ProfilePage from '../pages/ProfilePage'
 
 // ------------------------------------------------------------------
-// Secondary Pages (المعلقة / هتتفعل فور توفر ملفاتها)
+// Secondary (تفعّل لما الملفات تبقى جاهزة)
 // ------------------------------------------------------------------
 
-// import SimulationPage from '../pages/SimulationPage'
 // import LiveTrafficPage from '../pages/LiveTrafficPage'
 // import ThreatIntelligencePage from '../pages/ThreatIntelligencePage'
-// import ProfilePage from '../pages/ProfilePage'
 
 // ------------------------------------------------------------------
-// Protected Route Wrapper (حماية المسارات)
+// Protected Route
 // ------------------------------------------------------------------
 
 import ProtectedRoute from '../components/ProtectedRoute'
 
 // ==================================================================
-// Router Component
+// Router
 // ==================================================================
 
 export default function AppRouter() {
   return (
     <Routes>
       {/* ============================================================
-          Public Routes (مفتوحة للكل بدون تسجيل دخول)
+          Public — الموقع العام + المصادقة
       ============================================================ */}
 
       <Route path="/" element={<LandingPage />} />
@@ -70,7 +71,7 @@ export default function AppRouter() {
       <Route path="/login" element={<LoginPage />} />
 
       {/* ============================================================
-          Protected Routes (محتاجة تسجيل دخول وتحقق من الـ Token)
+          Protected — محتاجة تسجيل دخول
       ============================================================ */}
 
       <Route
@@ -145,8 +146,6 @@ export default function AppRouter() {
         }
       />
 
-      {/* الصفحات المستقبلية / المعلقة حالياً (تتم إزالة التعليق عنها عند جاهزيتها) */}
-      {/*
       <Route
         path="/simulation"
         element={
@@ -155,6 +154,17 @@ export default function AppRouter() {
           </ProtectedRoute>
         }
       />
+
+      <Route
+        path="/profile"
+        element={
+          <ProtectedRoute>
+            <ProfilePage />
+          </ProtectedRoute>
+        }
+      />
+
+      {/*
       <Route
         path="/live-traffic"
         element={
@@ -171,23 +181,14 @@ export default function AppRouter() {
           </ProtectedRoute>
         }
       />
-      <Route
-        path="/profile"
-        element={
-          <ProtectedRoute>
-            <ProfilePage />
-          </ProtectedRoute>
-        }1
-      />
       */}
 
       {/* ============================================================
-          Default Redirect
-          أي مسار غير معروف → تحويل تلقائي لصفحة السيرفرات أو الداشبورد
-          (ProtectedRoute سيتكفل بتحويل غير المسجل لصفحة الـ login تلقائياً)
+          Fallback — مسار غير معروف
+          (ProtectedRoute يحوّل غير المسجّل لـ /login)
       ============================================================ */}
 
-      <Route path="*" element={<Navigate to="/servers" replace />} />
+      <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>
   )
 }

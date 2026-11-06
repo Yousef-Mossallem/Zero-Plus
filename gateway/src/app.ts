@@ -346,7 +346,7 @@ async function applySimulation(
     authError = (err as Error)?.message ?? "simulation_auth_error";
   }
 
-  if (auth && auth.valid) {
+  if (auth && auth.ok) {
     const sim = toSimulationContext(auth);
     if (sim) {
       ctx.simulation = sim;

@@ -1,10 +1,10 @@
 {
-  "_zeroplus-verify.mosalem.com": {
+  "_zeroplus-verify.yousef.com": {
     "TXT": [
-      "zeroplus-verify=fb66f69f-5e57-4492-a5ba-de98ab16dcbe"
+      "zeroplus-verify=8a6c2e1b-62e8-4ef5-a727-93dcf01bbe96"
     ]
   },
-  "mosalem.com": {
+  "yousef.com": {
     "CNAME": [
       "edge.zeroplus.test"
     ],
