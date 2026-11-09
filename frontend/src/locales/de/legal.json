@@ -1,0 +1,110 @@
+{
+  "hero": {
+    "titleLine": "Richtlinien",
+    "titleHighlight": "& Bedingungen",
+    "description": "Wir legen klar dar, wie wir mit Ihren Daten umgehen, was Sie von uns erwarten können und was wir von Ihnen erwarten."
+  },
+  "updated": "Zuletzt aktualisiert: Oktober 2026",
+  "privacy": {
+    "label": "Datenschutzerklärung",
+    "intro": "Diese Erklärung beschreibt, welche Daten Zero Plus erhebt, warum und wie wir sie schützen.",
+    "sections": [
+      {
+        "heading": "Daten, die wir erheben",
+        "points": [
+          "Kontodaten: Name, E-Mail, Name der Organisation und Benutzerrolle.",
+          "Daten geschützter Server: Domain, Adresse des Origin-Servers und Port.",
+          "Daten von Anfragen, die das Gateway passieren: IP-Adresse, Geräte-Fingerprint, TLS/JA3/JA4-Fingerprint, ungefähre Geolokalisierung und die getroffene Entscheidung."
+        ]
+      },
+      {
+        "heading": "Wie wir die Daten verwenden",
+        "points": [
+          "Für jede Anfrage über Erlauben, Blockieren oder zusätzliche Prüfungen entscheiden.",
+          "Ereignisse, Berichte und Warnungen im Dashboard Ihrer Organisation anzeigen.",
+          "Die Erkennungsgenauigkeit verbessern und Fehlalarme reduzieren."
+        ]
+      },
+      {
+        "heading": "Lazy Registration",
+        "body": "Wir legen für kein Gerät einen dauerhaften Eintrag an, es sei denn, es geht ein echtes schlechtes Ereignis von ihm aus. Ein Besucher, der keine Probleme verursacht, erhält kein Reputationsprofil."
+      },
+      {
+        "heading": "Dienste von Drittanbietern",
+        "body": "Wir verwenden die Gemini API ausschließlich, um Berichts- und Benachrichtigungstexte zu formulieren – also Daten zu einem bereits eingetretenen Ereignis (Angriffstyp, Schweregrad, IP) in einfache Sprache zu überführen. Gemini ist an keiner Sicherheitsentscheidung beteiligt."
+      },
+      {
+        "heading": "Ihre Rechte",
+        "body": "Sie können Auskunft über die Daten Ihrer Organisation, deren Berichtigung oder Löschung verlangen, indem Sie uns über die Kontaktseite oder unter example@example.com kontaktieren."
+      }
+    ]
+  },
+  "terms": {
+    "label": "Nutzungsbedingungen",
+    "intro": "Mit der Nutzung von Zero Plus stimmen Sie den folgenden Bedingungen zu.",
+    "sections": [
+      {
+        "heading": "Beschreibung des Dienstes",
+        "body": "Zero Plus ist ein SaaS-Reverse-Proxy zwischen den Besuchern Ihrer Website und Ihrem echten Server. Er prüft Anfragen und entscheidet, sie zu erlauben, zu blockieren oder zusätzlich zu verifizieren. Wir betreiben die Infrastruktur; Sie müssen keine Software installieren."
+      },
+      {
+        "heading": "Pflichten des Kunden",
+        "points": [
+          "Korrekte Konto- und Serverdaten angeben und Zugangsdaten vertraulich behandeln.",
+          "DNS-Einstellungen wie von uns vorgegeben ändern, damit der Datenverkehr über Zero Plus läuft.",
+          "Den direkten Zugriff auf den Origin-Server von außerhalb von Zero Plus verhindern; andernfalls kann der Schutz umgangen werden.",
+          "Verantwortung für die Benutzer, die Sie Ihrer Organisation hinzufügen, und deren Berechtigungen."
+        ]
+      },
+      {
+        "heading": "Zulässige Nutzung",
+        "points": [
+          "Die Nutzung des Dienstes zum Schutz illegaler Websites oder Dienste ist untersagt.",
+          "Der Versuch, den Dienst zu hacken, seine Grenzen zu umgehen oder auf Daten eines anderen Kunden zuzugreifen, ist untersagt.",
+          "Die Nutzung des Simulationslabors gegen Server, die Ihnen nicht gehören, ist untersagt."
+        ]
+      },
+      {
+        "heading": "Grenzen des Dienstes",
+        "body": "Wir tun alles, um den Schutz durchgehend und präzise zu halten, können aber nicht garantieren, jeden Angriff zu 100 % zu blockieren, und ein legitimer Besucher kann in seltenen Fällen irrtümlich blockiert werden. Das Dashboard bietet Werkzeuge, um solche Fälle zu prüfen."
+      },
+      {
+        "heading": "Kontosperrung und Änderungen",
+        "body": "Wir können ein Konto bei Verstoß gegen diese Bedingungen sperren. Sie können die Nutzung des Dienstes jederzeit beenden. Wir können diese Bedingungen von Zeit zu Zeit aktualisieren und informieren Sie vor Inkrafttreten über wesentliche Änderungen."
+      }
+    ]
+  },
+  "security": {
+    "label": "Sicherheit & Datenisolierung",
+    "intro": "Wie wir die Daten jedes Kunden schützen, was geteilt wird und was Ihre Umgebung nie verlässt.",
+    "sections": [
+      {
+        "heading": "Mandantentrennung (Tenant Isolation)",
+        "points": [
+          "Jeder Kunde hat eine logisch getrennte Datenumgebung, die sich nicht mit der eines anderen Kunden überschneidet.",
+          "Unabhängige Schlüssel pro Kunde; unbefugter Zugriff auf die Daten eines Unternehmens gewährt keinen Zugriff auf ein anderes.",
+          "Reputationsprotokoll und Blacklist jedes Unternehmens bleiben lokal in dessen Umgebung."
+        ]
+      },
+      {
+        "heading": "Föderiertes Bedrohungsgedächtnis (Federated Threat Memory)",
+        "body": "Wenn ein schlechtes Ereignis bestätigt wird, extrahieren wir nur den Fingerprint des angreifenden Geräts (z. B. TLS/JA3/JA4-Typ) ohne jede Identität und fügen ihn einem gemeinsamen Bedrohungsgedächtnis hinzu, damit andere Kunden gehärtet sind, bevor sie denselben Angriff erleben."
+      },
+      {
+        "heading": "Was geteilt wird und was nicht",
+        "points": [
+          "Geteilt: der bereinigte Bedrohungs-Fingerprint – nicht sensible Daten ohne Unternehmenskennung.",
+          "Niemals geteilt: Nutzerdaten, Serverdetails, vollständige Protokolle, Kontoinformationen."
+        ]
+      },
+      {
+        "heading": "Sicherheitsentscheidungen unabhängig von externen Diensten",
+        "body": "Erlauben- und Blockieren-Entscheidungen werden vollständig innerhalb der Zero Plus-Engine getroffen. Externe Dienste (z. B. Gemini) werden erst nach der Entscheidung nur zur Textformulierung genutzt; keine sensible Entscheidung hängt von der Antwort eines Dritten ab."
+      },
+      {
+        "heading": "Sicherheitslücke melden",
+        "body": "Wenn Sie eine Sicherheitslücke in Zero Plus entdecken, senden Sie bitte Details an security@example.com. Wir prüfen sie ernsthaft und antworten Ihnen."
+      }
+    ]
+  }
+}

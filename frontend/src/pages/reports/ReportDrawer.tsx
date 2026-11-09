@@ -10,6 +10,7 @@
 
 import { useEffect, useState } from 'react'
 import { CalendarRange, Cpu, FileText, Loader2, ShieldAlert, Trash2 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 import { useToast } from '../../components/ui/Toast'
 import { Button, Drawer, Modal, Skeleton } from '../../components/ui/kit'
@@ -31,6 +32,7 @@ export default function ReportDrawer({
   onClose: () => void
   onDeleted: (id: string) => void
 }) {
+  const { t } = useTranslation(['reports', 'common'])
   const toast = useToast()
   const [full, setFull] = useState<Report | null>(null)
   const [loading, setLoading] = useState(false)
@@ -53,7 +55,7 @@ export default function ReportDrawer({
       .catch((err) => {
         if (cancelled) return
         const { message, status: code } = parseApiError(err)
-        setError(code === 404 ? 'This report no longer exists.' : message)
+        setError(code === 404 ? t('reports:toast.deleted', 'This report no longer exists.') : message)
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
@@ -61,7 +63,7 @@ export default function ReportDrawer({
     return () => {
       cancelled = true
     }
-  }, [id, status])
+  }, [id, status, t])
 
   useEffect(() => {
     if (!id) setFull(null)
@@ -75,12 +77,12 @@ export default function ReportDrawer({
     setDeleting(true)
     try {
       const res = await deleteReport(current.id)
-      toast.success(res.message || 'Report deleted')
+      toast.success(res.message || t('reports:toast.deleteSuccess', 'Report deleted'))
       onDeleted(current.id)
       setConfirmOpen(false)
       onClose()
     } catch (err) {
-      toast.error('Could not delete the report', parseApiError(err).message)
+      toast.error(t('reports:toast.deleteFailed', 'Could not delete the report'), parseApiError(err).message)
     } finally {
       setDeleting(false)
     }
@@ -91,8 +93,8 @@ export default function ReportDrawer({
       <Drawer
         open={report !== null}
         onClose={onClose}
-        title={current?.title ?? 'Report'}
-        subtitle={current ? `${TYPE_META[current.type].label} · created ${formatDateTime(current.createdAt)}` : undefined}
+        title={current?.title ?? t('reports:drawer.title', 'Report details')}
+        subtitle={current ? `${TYPE_META[current.type].label} · ${t('reports:drawer.created', { date: formatDateTime(current.createdAt) })}` : undefined}
       >
         {current && (
           <div className="space-y-5">
@@ -107,9 +109,9 @@ export default function ReportDrawer({
             {/* ---------- إحصائيات ---------- */}
             <div className="grid grid-cols-3 gap-3">
               {[
-                { label: 'Events', value: formatNumber(current.eventCount), icon: ShieldAlert },
-                { label: 'Blocked', value: formatNumber(current.blockedCount), icon: ShieldAlert },
-                { label: 'Tokens', value: formatNumber(current.tokensUsed), icon: Cpu },
+                { label: t('reports:drawer.events', 'Events'), value: formatNumber(current.eventCount), icon: ShieldAlert },
+                { label: t('reports:drawer.blocked', 'Blocked'), value: formatNumber(current.blockedCount), icon: ShieldAlert },
+                { label: t('reports:drawer.tokens', 'Tokens'), value: formatNumber(current.tokensUsed), icon: Cpu },
               ].map((s) => (
                 <div key={s.label} className="rounded-xl border border-white/8 bg-white/3 p-3.5">
                   <p className="text-[11px] uppercase tracking-wider text-slate-500">{s.label}</p>
@@ -125,17 +127,19 @@ export default function ReportDrawer({
                   <Loader2 className="h-6 w-6 animate-spin" />
                 </span>
                 <p className="mt-4 text-sm font-semibold text-white">
-                  {current.status === 'PENDING' ? 'Waiting in the queue…' : 'Generating your report…'}
+                  {current.status === 'PENDING'
+                    ? t('reports:drawer.waitingTitlePending', 'Waiting in the queue…')
+                    : t('reports:drawer.waitingTitleGenerating', 'Generating your report…')}
                 </p>
                 <p className="mt-1 max-w-xs text-xs text-slate-400">
-                  This page updates by itself as soon as the report is ready. You can close it safely.
+                  {t('reports:drawer.waitingDesc', 'This page updates by itself as soon as the report is ready. You can close it safely.')}
                 </p>
               </div>
             ) : current.status === 'FAILED' ? (
               <div className="rounded-2xl border border-rose-500/30 bg-rose-500/8 p-5">
-                <p className="text-sm font-semibold text-rose-200">Generation failed</p>
+                <p className="text-sm font-semibold text-rose-200">{t('reports:drawer.failedTitle', 'Generation failed')}</p>
                 <p dir="auto" className="mt-1 text-sm text-rose-100/80">
-                  {current.errorMessage ?? 'The report could not be generated. Try creating it again.'}
+                  {current.errorMessage ?? t('reports:drawer.failedDesc', 'The report could not be generated. Try creating it again.')}
                 </p>
               </div>
             ) : loading && !full ? (
@@ -152,7 +156,7 @@ export default function ReportDrawer({
                 {current.summary && (
                   <div className="rounded-2xl border border-cyan-400/20 bg-cyan-500/5 p-4">
                     <p className="mb-1 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-cyan-300">
-                      <FileText className="h-3.5 w-3.5" /> Summary
+                      <FileText className="h-3.5 w-3.5" /> {t('reports:drawer.executiveSummary', 'Executive summary')}
                     </p>
                     <p dir="auto" className="text-sm leading-relaxed text-slate-200">{current.summary}</p>
                   </div>
@@ -168,7 +172,7 @@ export default function ReportDrawer({
 
             {canDelete && (
               <Button variant="danger" icon={Trash2} className="w-full" onClick={() => setConfirmOpen(true)}>
-                Delete report
+                {t('reports:drawer.deleteReport', 'Delete report')}
               </Button>
             )}
           </div>
@@ -178,14 +182,14 @@ export default function ReportDrawer({
       <Modal
         open={confirmOpen}
         onClose={deleting ? () => {} : () => setConfirmOpen(false)}
-        title="Delete this report?"
-        description="The report and its content are removed permanently."
+        title={t('reports:drawer.deleteConfirmTitle', 'Delete report?')}
+        description={t('reports:drawer.deleteConfirmDesc', { title: current?.title ?? '' })}
         icon={Trash2}
         tone="rose"
         footer={
           <>
-            <Button variant="ghost" onClick={() => setConfirmOpen(false)} disabled={deleting}>Cancel</Button>
-            <Button variant="danger" loading={deleting} onClick={() => void confirmDelete()}>Delete</Button>
+            <Button variant="ghost" onClick={() => setConfirmOpen(false)} disabled={deleting}>{t('common:actions.cancel', 'Cancel')}</Button>
+            <Button variant="danger" loading={deleting} onClick={() => void confirmDelete()}>{t('common:actions.delete', 'Delete')}</Button>
           </>
         }
       />

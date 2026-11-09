@@ -1,7 +1,7 @@
 // frontend/src/pages/policies/form.ts — بيانات الحقول + Validation + بناء الـ Patch (منطق صرف)
 
+import i18n from '../../i18n'
 import { type PolicyValues } from '../../services/policiesService'
-
 
 // ==================================================================
 // Field metadata (مطابقة لحدود policies.schema.ts)
@@ -25,20 +25,37 @@ export interface NumMeta {
   nullable?: boolean
 }
 
+function field(key: NumKey, min: number, max: number, unitKey?: string, nullable = false): NumMeta {
+  return {
+    get label() {
+      return i18n.t(`fields.${key}.label`, { ns: 'policies', defaultValue: key })
+    },
+    get hint() {
+      return i18n.t(`fields.${key}.hint`, { ns: 'policies', defaultValue: '' })
+    },
+    min,
+    max,
+    get unit() {
+      return unitKey ? i18n.t(`units.${unitKey}`, { ns: 'policies', defaultValue: unitKey }) : undefined
+    },
+    nullable,
+  }
+}
+
 export const NUM_META: Record<NumKey, NumMeta> = {
-  allowMaxScore: { label: 'Allow up to', hint: 'Scores up to this value are allowed.', min: 0, max: 99, unit: 'pts' },
-  rateLimitMaxScore: { label: 'Rate-limit up to', hint: 'Scores up to this value are rate limited.', min: 0, max: 99, unit: 'pts' },
-  challengeMaxScore: { label: 'Challenge up to', hint: 'Above this value the request is blocked.', min: 0, max: 99, unit: 'pts' },
-  passTokenTtlMinutes: { label: 'Clearance lifetime', hint: 'How long a visitor who passed the challenge stays cleared.', min: 1, max: 1440, unit: 'min' },
-  rateLimitRequests: { label: 'Soft limit — requests', hint: 'Requests allowed per IP inside the window.', min: 1, max: 100_000, unit: 'req' },
-  rateLimitWindowSec: { label: 'Soft limit — window', hint: 'Window length for the soft limit.', min: 1, max: 3600, unit: 'sec' },
-  maxRequestsPerIp: { label: 'Hard limit — requests', hint: 'Absolute maximum per IP inside the window.', min: 1, max: 1_000_000, unit: 'req' },
-  maxRequestsWindowSec: { label: 'Hard limit — window', hint: 'Window length for the hard limit.', min: 1, max: 3600, unit: 'sec' },
-  maxServerRps: { label: 'Server capacity override', hint: 'Leave empty to use the capacity detected for each server.', min: 1, max: 1_000_000, unit: 'req/s', nullable: true },
-  capacityWarnPercent: { label: 'Capacity warning at', hint: 'Notify when server load reaches this percentage.', min: 1, max: 100, unit: '%' },
-  autoBanAfterFails: { label: 'Auto-ban after failures', hint: 'Failed advanced checks before a device is banned.', min: 1, max: 20, unit: 'fails' },
-  temporaryBanMinutes: { label: 'Temporary ban length', hint: 'Duration of an automatic temporary ban.', min: 1, max: 10_080, unit: 'min' },
-  permanentBanScore: { label: 'Permanent ban score', hint: 'Reputation score (1–10) that triggers a permanent ban.', min: 1, max: 10, unit: 'score' },
+  allowMaxScore: field('allowMaxScore', 0, 99, 'pts'),
+  rateLimitMaxScore: field('rateLimitMaxScore', 0, 99, 'pts'),
+  challengeMaxScore: field('challengeMaxScore', 0, 99, 'pts'),
+  passTokenTtlMinutes: field('passTokenTtlMinutes', 1, 1440, 'min'),
+  rateLimitRequests: field('rateLimitRequests', 1, 100_000, 'req'),
+  rateLimitWindowSec: field('rateLimitWindowSec', 1, 3600, 'sec'),
+  maxRequestsPerIp: field('maxRequestsPerIp', 1, 1_000_000, 'req'),
+  maxRequestsWindowSec: field('maxRequestsWindowSec', 1, 3600, 'sec'),
+  maxServerRps: field('maxServerRps', 1, 1_000_000, 'rps', true),
+  capacityWarnPercent: field('capacityWarnPercent', 1, 100, 'percent'),
+  autoBanAfterFails: field('autoBanAfterFails', 1, 20, 'fails'),
+  temporaryBanMinutes: field('temporaryBanMinutes', 1, 10_080, 'min'),
+  permanentBanScore: field('permanentBanScore', 1, 10, 'score'),
 }
 
 // ==================================================================
@@ -69,7 +86,14 @@ export function parseInt10(text: string): number | undefined {
 }
 
 /** Validation: نفس قواعد الباك (حدود كل حقل + قواعد الترابط) */
-export function validate(draft: Draft): Partial<Record<NumKey, string>> {
+export function validate(
+  draft: Draft,
+  t?: (key: string, opts?: Record<string, unknown>) => string,
+): Partial<Record<NumKey, string>> {
+  const translate: (key: string, opts?: Record<string, unknown>) => string =
+    t ||
+    ((key: string, opts?: Record<string, unknown>): string =>
+      String(i18n.t(key as never, { ns: 'policies', ...opts } as never)))
   const errors: Partial<Record<NumKey, string>> = {}
 
   for (const key of NUM_KEYS) {
@@ -78,7 +102,10 @@ export function validate(draft: Draft): Partial<Record<NumKey, string>> {
     if (meta.nullable && text.trim() === '') continue
     const n = parseInt10(text)
     if (n === undefined || n < meta.min || n > meta.max) {
-      errors[key] = `Whole number between ${meta.min.toLocaleString('en-US')} and ${meta.max.toLocaleString('en-US')}`
+      errors[key] = translate('validation.between', {
+        min: meta.min.toLocaleString(i18n.language.startsWith('ar') ? 'ar-EG' : 'en-US'),
+        max: meta.max.toLocaleString(i18n.language.startsWith('ar') ? 'ar-EG' : 'en-US'),
+      })
     }
   }
 
@@ -87,10 +114,10 @@ export function validate(draft: Draft): Partial<Record<NumKey, string>> {
   const challenge = parseInt10(draft.challengeMaxScore)
 
   if (!errors.allowMaxScore && !errors.rateLimitMaxScore && allow! > rate!) {
-    errors.allowMaxScore = 'Must be ≤ the rate-limit threshold'
+    errors.allowMaxScore = translate('validation.allowLeRate')
   }
   if (!errors.rateLimitMaxScore && !errors.challengeMaxScore && rate! > challenge!) {
-    errors.rateLimitMaxScore = 'Must be ≤ the challenge threshold'
+    errors.rateLimitMaxScore = translate('validation.rateLeChallenge')
   }
 
   const softReq = parseInt10(draft.rateLimitRequests)
@@ -98,11 +125,13 @@ export function validate(draft: Draft): Partial<Record<NumKey, string>> {
   const hardReq = parseInt10(draft.maxRequestsPerIp)
   const hardWin = parseInt10(draft.maxRequestsWindowSec)
   if (
-    !errors.rateLimitRequests && !errors.rateLimitWindowSec &&
-    !errors.maxRequestsPerIp && !errors.maxRequestsWindowSec &&
+    !errors.rateLimitRequests &&
+    !errors.rateLimitWindowSec &&
+    !errors.maxRequestsPerIp &&
+    !errors.maxRequestsWindowSec &&
     hardReq! / hardWin! < softReq! / softWin!
   ) {
-    errors.maxRequestsPerIp = 'Hard limit rate must not be lower than the soft limit rate'
+    errors.maxRequestsPerIp = translate('validation.hardGeSoft')
   }
 
   return errors

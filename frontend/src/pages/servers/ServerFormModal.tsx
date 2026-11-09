@@ -1,7 +1,9 @@
 // frontend/src/pages/servers/ServerFormModal.tsx — Add / edit server
+// i18n: كل النصوص من servers.form و servers.validation (+ common.actions.cancel).
 
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { AlertTriangle, Globe, Info, Server as ServerIcon } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { useToast } from '../../components/ui/Toast'
 import { Button, Field, Modal, TextInput, Toggle } from '../../components/ui/kit'
 import {
@@ -12,7 +14,7 @@ import {
   type Server,
 } from '../../services/serversService'
 import { cn } from '../../utils/format'
-import { EMPTY_FORM, validateServerForm, type ServerForm } from './shared'
+import { EMPTY_FORM, validateServerForm, VALIDATION_PREFIX, type ServerForm } from './shared'
 
 // ==================================================================
 // Add / Edit modal
@@ -46,23 +48,23 @@ function extraValidate(form: ServerForm): Record<string, string> {
   const domain = form.domain.trim().toLowerCase()
   if (domain) {
     if (/^[a-z][a-z0-9+.-]*:\/\//.test(domain)) {
-      errs.domain = 'Enter the domain only, without http:// or https://'
+      errs.domain = 'validation.domain.noProtocol'
     } else if (/[\s/?#@\\]/.test(domain)) {
-      errs.domain = 'Enter the domain only (no paths, spaces or special characters)'
+      errs.domain = 'validation.domain.noPath'
     } else if (domain.startsWith('*.')) {
-      errs.domain = 'Wildcard domains are not supported. Add each subdomain separately'
+      errs.domain = 'validation.domain.wildcard'
     } else if (domain.includes(':')) {
-      errs.domain = 'Don’t include a port in the domain. Use the Port field'
+      errs.domain = 'validation.domain.hasPort'
     }
   }
 
   if (form.originIp.includes(':')) {
-    errs.originIp = 'IPv6 is not supported yet. Use an IPv4 address'
+    errs.originIp = 'validation.originIp.ipv6'
   }
 
   const port = form.originPort.trim()
   if (port !== '' && BLOCKED_PORTS.has(Number(port))) {
-    errs.originPort = 'This port is reserved for a non-web service and can’t be used as an origin'
+    errs.originPort = 'validation.originPort.reserved'
   }
 
   return errs
@@ -104,6 +106,7 @@ export function ServerFormModal({
   onSaved: (server: Server, dns?: DnsInstructions) => void
 }) {
   const toast = useToast()
+  const { t } = useTranslation(['servers', 'common'])
   const [form, setForm] = useState<ServerForm>(EMPTY_FORM)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState(false)
@@ -186,7 +189,7 @@ export function ServerFormModal({
         if (input.mode !== server.mode) patch.mode = input.mode
 
         if (Object.keys(patch).length === 0) {
-          toast.info('Nothing to update', 'No fields were changed')
+          toast.info(t('form.toast.nothing'), t('form.toast.noChange'))
           setBusy(false)
           return
         }
@@ -194,23 +197,23 @@ export function ServerFormModal({
         const res = await updateServer(server.id, patch)
 
         if (res.changes.length === 0) {
-          toast.info('Nothing to update', 'The values are the same as the current ones')
+          toast.info(t('form.toast.nothing'), t('form.toast.same'))
         } else {
-          toast.success('Server updated', input.domain)
+          toast.success(t('form.toast.updated'), input.domain)
         }
 
         // The backend tells us what the change reset
         if (res.resets.includes('dnsVerification')) {
-          toast.info('DNS verification was reset', 'Add the new TXT record and verify again.')
+          toast.info(t('form.toast.dnsReset'), t('form.toast.dnsResetDesc'))
         }
         if (res.resets.includes('originReachability')) {
-          toast.info('Origin checks were reset', 'Health and capacity numbers will be measured again.')
+          toast.info(t('form.toast.originReset'), t('form.toast.originResetDesc'))
         }
 
         onSaved(res.server, res.dns)
       } else {
         const res = await createServer(input)
-        toast.success('Server added', 'Follow the DNS steps to activate protection.')
+        toast.success(t('form.toast.added'), t('form.toast.addedDesc'))
         onSaved(res.server, res.dns)
       }
 
@@ -226,7 +229,7 @@ export function ServerFormModal({
       }
       setErrors(fieldMap)
 
-      toast.error(server ? 'Could not update server' : 'Could not add server', info.message)
+      toast.error(server ? t('form.toast.updateFailed') : t('form.toast.addFailed'), info.message)
     } finally {
       setBusy(false)
     }
@@ -239,24 +242,28 @@ export function ServerFormModal({
     }
   }
 
+  const resolveError = (errKey?: string) => {
+    if (!errKey) return undefined
+    if (errKey.startsWith(VALIDATION_PREFIX)) {
+      return t(errKey as never)
+    }
+    return errKey
+  }
+
   return (
     <Modal
       open={open}
       onClose={busy ? () => {} : onClose}
-      title={server ? 'Edit server' : 'Add protected server'}
-      description={
-        server
-          ? 'Changing the domain requires verifying DNS ownership again.'
-          : 'Traffic for this domain will pass through the Zero Plus Gateway.'
-      }
+      title={server ? t('form.editTitle') : t('form.addTitle')}
+      description={server ? t('form.editDesc') : t('form.addDesc')}
       icon={ServerIcon}
       footer={
         <>
           <Button variant="ghost" onClick={onClose} disabled={busy}>
-            Cancel
+            {t('actions.cancel', { ns: 'common' })}
           </Button>
           <Button variant="primary" loading={busy} onClick={() => void submit()}>
-            {server ? 'Save changes' : 'Add server'}
+            {server ? t('form.save') : t('form.add')}
           </Button>
         </>
       }
@@ -264,11 +271,15 @@ export function ServerFormModal({
       <div className="space-y-4" onKeyDown={onKeyDown}>
         {errors[FORM_ERROR_KEY] && (
           <div className="rounded-xl border border-rose-500/25 bg-rose-500/6 px-4 py-3 text-sm text-rose-200">
-            {errors[FORM_ERROR_KEY]}
+            {resolveError(errors[FORM_ERROR_KEY])}
           </div>
         )}
 
-        <Field label="Domain" error={errors.domain} hint="e.g. shop.example.com — no http:// and no port">
+        <Field
+          label={t('form.domain.label')}
+          error={resolveError(errors.domain)}
+          hint={t('form.domain.hint')}
+        >
           <TextInput
             icon={Globe}
             value={form.domain}
@@ -284,7 +295,11 @@ export function ServerFormModal({
 
         <div className="grid grid-cols-3 gap-3">
           <div className="col-span-2">
-            <Field label="Origin IP" error={errors.originIp} hint="The real server’s IPv4 address">
+            <Field
+              label={t('form.originIp.label')}
+              error={resolveError(errors.originIp)}
+              hint={t('form.originIp.hint')}
+            >
               <TextInput
                 icon={ServerIcon}
                 value={form.originIp}
@@ -298,7 +313,7 @@ export function ServerFormModal({
               />
             </Field>
           </div>
-          <Field label="Port" error={errors.originPort}>
+          <Field label={t('form.port')} error={resolveError(errors.originPort)}>
             <TextInput
               inputMode="numeric"
               value={form.originPort}
@@ -311,12 +326,20 @@ export function ServerFormModal({
           </Field>
         </div>
 
-        <Field label="Mode" error={errors.mode}>
+        <Field label={t('form.mode.label')} error={resolveError(errors.mode)}>
           <div className="grid grid-cols-2 gap-2">
             {(
               [
-                { value: 'PROTECT', title: 'Protect', hint: 'Block and rate-limit' },
-                { value: 'MONITOR_ONLY', title: 'Monitor only', hint: 'Log decisions, enforce nothing' },
+                {
+                  value: 'PROTECT',
+                  title: t('form.mode.protect.title'),
+                  hint: t('form.mode.protect.hint'),
+                },
+                {
+                  value: 'MONITOR_ONLY',
+                  title: t('form.mode.monitor.title'),
+                  hint: t('form.mode.monitor.hint'),
+                },
               ] as const
             ).map((m) => (
               <button
@@ -325,7 +348,7 @@ export function ServerFormModal({
                 disabled={busy}
                 onClick={() => set('mode', m.value)}
                 className={cn(
-                  'rounded-xl border px-4 py-3 text-left transition',
+                  'rounded-xl border px-4 py-3 text-start transition',
                   form.mode === m.value
                     ? 'border-cyan-400/40 bg-cyan-500/10'
                     : 'border-white/10 bg-white/3 hover:border-white/20',
@@ -340,15 +363,15 @@ export function ServerFormModal({
           </div>
           {!server && (
             <p className="mt-2 text-xs text-slate-500">
-              Tip: start with Monitor only to review decisions, then switch to Protect.
+              {t('form.tip')}
             </p>
           )}
         </Field>
 
         <div className="flex items-center justify-between gap-3 rounded-xl border border-white/8 bg-white/3 px-4 py-3">
           <div>
-            <p className="text-sm font-medium text-white">Origin uses HTTPS</p>
-            <p className="text-xs text-slate-500">Turn off if the origin only speaks plain HTTP.</p>
+            <p className="text-sm font-medium text-white">{t('form.https.title')}</p>
+            <p className="text-xs text-slate-500">{t('form.https.hint')}</p>
           </div>
           <Toggle
             checked={form.sslEnabled}
@@ -357,25 +380,23 @@ export function ServerFormModal({
               set('sslEnabled', v)
             }}
             disabled={busy}
-            label="Origin uses HTTPS"
+            label={t('form.https.title')}
           />
         </div>
 
         {/* What this edit will cause (from the backend’s behaviour) */}
         {pending?.domain && (
           <Notice tone="amber">
-            A new verification token will be issued and DNS ownership must be verified again before protection works
-            for the new domain.
+            {t('form.notice.domain')}
           </Notice>
         )}
         {pending?.origin && (
           <Notice tone="cyan">
-            Changing the origin resets reachability, response times and capacity numbers. Capacity is measured again
-            for the new origin.
+            {t('form.notice.origin')}
           </Notice>
         )}
         {pending?.ssl && !pending.origin && (
-          <Notice tone="cyan">Changing the HTTPS setting triggers a new measurement.</Notice>
+          <Notice tone="cyan">{t('form.notice.ssl')}</Notice>
         )}
       </div>
     </Modal>

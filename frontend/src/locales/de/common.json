@@ -1,0 +1,18 @@
+{
+  "actions": {
+    "save": "Speichern",
+    "cancel": "Abbrechen",
+    "delete": "Löschen",
+    "search": "Suchen",
+    "close": "Schließen",
+    "back": "Zurück",
+    "tryAgain": "Erneut versuchen"
+  },
+  "status": {
+    "loading": "Wird geladen...",
+    "empty": "Noch keine Daten"
+  },
+  "language": {
+    "label": "Sprache"
+  }
+}

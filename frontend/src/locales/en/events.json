@@ -1,0 +1,118 @@
+{
+  "page": {
+    "title": "Security Events",
+    "subtitle": "Every request the Gateway inspected, with the decision and the reasons behind it.",
+    "live": "Live",
+    "liveLabel": "Auto refresh every 10 seconds",
+    "refresh": "Refresh"
+  },
+  "stats": {
+    "total": "Total events",
+    "matching": "Matching current filters",
+    "allTime": "All time",
+    "avgRisk": "Average risk",
+    "blocked": "Blocked",
+    "challenged": "Challenged",
+    "share": "{{pct}}% of events"
+  },
+  "decision": {
+    "all": "All",
+    "ALLOW": "Allow",
+    "MONITOR": "Monitor",
+    "RATE_LIMIT": "Rate limit",
+    "CHALLENGE": "Challenge",
+    "BLOCK": "Block"
+  },
+  "filters": {
+    "search": "Search IP, path, user agent, request ID, reason…",
+    "allServers": "All servers",
+    "more": "More",
+    "clear": "Clear",
+    "method": "Method",
+    "ipType": "IP type",
+    "challenge": "Challenge",
+    "any": "Any",
+    "challenged": "Challenged",
+    "notChallenged": "Not challenged",
+    "minRisk": "Min risk",
+    "maxRisk": "Max risk",
+    "range": "0–100",
+    "from": "From",
+    "to": "To",
+    "repFilter": "Filtered by reputation entry",
+    "removeRepFilter": "Remove reputation filter",
+    "clearFilters": "Clear filters"
+  },
+  "ipTypes": {
+    "RESIDENTIAL": "Residential",
+    "MOBILE": "Mobile",
+    "DATACENTER": "Datacenter",
+    "VPN_PROXY": "VPN / Proxy",
+    "TOR": "Tor",
+    "UNKNOWN": "Unknown"
+  },
+  "table": {
+    "columns": {
+      "time": "Time",
+      "ip": "IP",
+      "request": "Request",
+      "server": "Server",
+      "risk": "Risk",
+      "decision": "Decision",
+      "challenge": "Challenge"
+    },
+    "passed": "Passed",
+    "failed": "Failed",
+    "pending": "Pending",
+    "empty": {
+      "title": "No security events found",
+      "description": "Nothing matches the current filters. Events appear here once the Gateway starts processing traffic."
+    }
+  },
+  "toast": {
+    "loadFailed": "Failed to load security events",
+    "copied": "{{label}} copied",
+    "copyFailed": "Copy failed",
+    "copyBlocked": "Your browser blocked clipboard access",
+    "detailsFailed": "Failed to load event details"
+  },
+  "drawer": {
+    "title": "Event details",
+    "sections": {
+      "request": "Request",
+      "network": "Network",
+      "detection": "Detection",
+      "signals": "Signals & reason details",
+      "reputation": "Device reputation"
+    },
+    "fields": {
+      "ipAddress": "IP address",
+      "method": "Method",
+      "path": "Path",
+      "server": "Server",
+      "requestId": "Request ID",
+      "referer": "Referer",
+      "userAgent": "User agent",
+      "country": "Country",
+      "asn": "ASN",
+      "ipType": "IP type",
+      "stage": "Decided at stage",
+      "processing": "Processing time",
+      "anomaly": "AI anomaly score",
+      "confidence": "AI confidence",
+      "challenge": "Challenge",
+      "notChallenged": "Not challenged"
+    },
+    "copyIp": "Copy IP",
+    "rep": {
+      "score": "Score {{score}}/10 · {{type}}",
+      "notBanned": "Not banned",
+      "open": "Open in Reputation",
+      "none": "No reputation entry linked to this event."
+    },
+    "banStatus": {
+      "TEMPORARY": "Temporary",
+      "PERMANENT": "Permanent"
+    }
+  }
+}

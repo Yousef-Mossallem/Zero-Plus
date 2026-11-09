@@ -23,7 +23,7 @@ import {
 // وضع التطوير — لا تفعّله في الإنتاج
 // ==================================================================
 
-const BYPASS_AUTH = import.meta.env.VITE_BYPASS_AUTH === 'false'
+const BYPASS_AUTH = import.meta.env.VITE_BYPASS_AUTH === 'true'
 
 // ==================================================================
 // Props

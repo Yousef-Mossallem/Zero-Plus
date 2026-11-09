@@ -1,0 +1,165 @@
+{
+  "home": {
+    "hero": {
+      "titleLine": "Schützen Sie Ihre Website vor DDoS",
+      "titleHighlight": "mit einem Wächter, der jeden Besucher nach Reputation prüft",
+      "description": "Zero Plus sitzt als Reverse-Proxy zwischen Besuchern und Ihrem echten Server. Es behandelt nicht alle gleich: Es baut ein Gedächtnis für bekannte Geräte auf und entscheidet schnell, wer direkt durchkommt und wer eine tiefere Prüfung braucht.",
+      "learnMore": "Mehr über das Projekt",
+      "ctaStart": "Schutz jetzt starten",
+      "ctaDashboard": "Zum Dashboard"
+    },
+    "demo": {
+      "title": "Engine-Entscheidungen (Beispiel)",
+      "active": "Schutz aktiv",
+      "allow": "Erlauben",
+      "block": "Blockieren",
+      "rows": {
+        "newVisitor": "Neuer Besucher · JS Challenge bestanden",
+        "lowReputation": "Gerätereputation 2 · leichte Prüfung",
+        "datacenterIp": "Rechenzentrums-IP · verdächtiger JA3-Fingerprint",
+        "federated": "Bekannter Fingerprint aus dem föderierten Gedächtnis"
+      }
+    },
+    "stats": {
+      "title": "Das Problem wächst jedes Jahr",
+      "description": "Jedes billige, unsichere IoT-Gerät in einem Haushalt kann ohne Wissen des Besitzers zur Waffe für Dritte werden. Herkömmliche Lösungen sind entweder sehr teuer oder nerven Besucher mit CAPTCHAs.",
+      "items": {
+        "attacks": "DDoS-Angriffe, die Cloudflare 2025 beobachtet hat",
+        "increase": "Anstieg der Angriffe gegenüber dem Vorjahr",
+        "largest": "Größter aufgezeichneter Angriff der Internetgeschichte (Dez. 2025)",
+        "passRate": "der legitimen Besucher bestehen eine leichte, schnelle Prüfung"
+      }
+    },
+    "features": {
+      "title": "Was bietet Zero Plus?",
+      "description": "Intelligenterer Schutz mit weniger Ressourcen und klarer, nachvollziehbarer Logik statt Blackbox.",
+      "items": {
+        "tiered": {
+          "title": "Gestufte Erkennung",
+          "desc": "Neue Geräte erhalten eine leichte Prüfung, Geräte mit schlechter Historie eine tiefere. Aufwendige Prüfungen werden nur dort eingesetzt, wo sie nötig sind."
+        },
+        "reputation": {
+          "title": "Reputationswert 1–10",
+          "desc": "Kumulative Reputation pro Gerät, die nur auf echten schlechten Ereignissen basiert – so erhalten neue Geräte eine faire Chance."
+        },
+        "silent": {
+          "title": "Stille Verifizierung (ohne CAPTCHA)",
+          "desc": "Eine JS Challenge läuft im Browser, ohne echte Besucher zu stören, und wird strenger, je größer der Verdacht ist."
+        },
+        "federated": {
+          "title": "Föderiertes Bedrohungsgedächtnis",
+          "desc": "Der erste betroffene Kunde härtet sofort alle anderen, indem nur der Fingerprint des Angreifergeräts geteilt wird – keine sensiblen Daten."
+        },
+        "isolation": {
+          "title": "Strikte Mandantentrennung",
+          "desc": "Jedes Unternehmen lebt in einer eigenen Datenumgebung mit eigenen Schlüsseln. Ein Einbruch bei einem Mandanten greift nicht auf andere über."
+        },
+        "reports": {
+          "title": "Menschenlesbare Berichte",
+          "desc": "Klare Textzusammenfassungen zu jedem Sicherheitsereignis statt nur Rohzahlen – plus Sofortwarnungen bei dringenden Vorfällen."
+        }
+      }
+    },
+    "pipeline": {
+      "title": "Neun Stufen, jeweils eine Aufgabe",
+      "description": "Jede Anfrage durchläuft aufeinanderfolgende Stufen. Jede Stufe befördert nur diejenigen, die es verdienen, auf die nächste Ebene – so bleiben aufwendige Prüfungen selten und gezielt.",
+      "roles": {
+        "intake": "Klassifiziert die Anfrage: neues Gerät oder bekannte Historie?",
+        "baseline": "Stille JS Challenge für Erstbesucher",
+        "ipScanner": "Erkennt Datenverkehr aus Rechenzentren",
+        "similarity": "Vergleicht IP, Geräte-Fingerprint und Standort mit der Historie",
+        "deep": "Tieferer Abgleich, wenn eine erste Ähnlichkeit gefunden wird",
+        "fingerprint": "TLS/JA3/JA4-Prüfungen nur für verdächtige Geräte",
+        "orchestrator": "Leitet sichere Anfragen an Ihre Origin-Server weiter",
+        "dashboard": "Oberfläche, die sich am Arbeitsablauf jedes Nutzers orientiert",
+        "isolation": "Datenisolierung und gemeinsame Immunität gegen Bedrohungen"
+      }
+    },
+    "flow": {
+      "title": "Wie ändert sich der Anfrageweg?",
+      "description": "Keine Software zu installieren. Nur DNS ändern – die Infrastruktur betreiben wir.",
+      "before": "Vor Zero Plus",
+      "after": "Nach Zero Plus",
+      "internet": "Internet",
+      "server": "Firmenserver",
+      "direct": "Jeder erreicht Sie direkt"
+    },
+    "steps": {
+      "title": "Vom Konto zum Schutz in fünf Schritten",
+      "items": {
+        "create": { "title": "Konto erstellen", "desc": "Eine Organisation wird mit einem Admin-Benutzer angelegt." },
+        "addServer": { "title": "Server hinzufügen", "desc": "Geben Sie Domain, Origin-Server-Adresse und Port ein." },
+        "dns": { "title": "DNS aktualisieren", "desc": "Wir geben Ihnen die Einträge, damit Ihre Domain auf Zero Plus zeigt." },
+        "verify": { "title": "Wir prüfen die Einrichtung", "desc": "Wir bestätigen, dass Gateway und Origin erreichbar sind." },
+        "live": { "title": "Schutz ist aktiv", "desc": "Der gesamte Datenverkehr läuft über Zero Plus, bevor er Ihren Server erreicht." }
+      }
+    },
+    "cta": {
+      "title": "Bereit, Ihren Server zu schützen?",
+      "description": "Erstellen Sie ein Konto und fügen Sie Ihren ersten geschützten Server hinzu – oder kontaktieren Sie uns bei Fragen.",
+      "contact": "Kontakt aufnehmen"
+    }
+  },
+  "about": {
+    "hero": {
+      "titleLine": "Schutz neu gedacht",
+      "titleHighlight": "auf die intelligentere Art",
+      "description": "Zero Plus will DDoS-Schutz für kleine und mittlere Unternehmen zugänglich und transparent machen – ohne Enterprise-Kosten und ohne Besucher zu nerven."
+    },
+    "vision": {
+      "title": "Unsere Vision",
+      "text": "Dass jeder Dienst im Internet auch während eines Angriffs weiterläuft und ein echter Besucher die Seite reibungslos erreicht, als wäre nichts geschehen."
+    },
+    "mission": {
+      "title": "Unsere Mission",
+      "text": "Abgestuften, intelligenten Schutz bieten: Wer es verdient, bekommt Vertrauen, wer Verdacht erregt, wird tief geprüft, und Immunität wird zwischen Kunden geteilt, ohne die Privatsphäre von irgendjemandem zu gefährden."
+    },
+    "why": {
+      "title": "Warum wir Zero Plus gebaut haben",
+      "p1": "DDoS-Angriffe sind längst kein Randthema mehr. Cloudflare beobachtete 2025 rund 47,1 Millionen Angriffe – ein Anstieg von 121 % gegenüber dem Vorjahr – und im Dezember 2025 wurde mit 31,4 Tbps der größte Angriff der Geschichte verzeichnet.",
+      "p2": "Was es noch schlimmer macht: Diese Angriffe stützen sich nicht mehr nur auf kompromittierte PCs, sondern auf IoT-Geräte – Smart-TVs, Kameras, unsichere Router – in ganz normalen Haushalten, deren Besitzer nicht ahnen, dass sie missbraucht werden.",
+      "p3": "Kleine Unternehmen haben zwei Optionen: teure globale Lösungen oder CAPTCHA-lastige Systeme, die Nutzer frustrieren und manchmal echte Besucher versehentlich blockieren. Zero Plus ist ein dritter Weg: Schutz, der nach Reputation prüft und dadurch für legitime Besucher schnell und leicht bleibt."
+    },
+    "principles": {
+      "title": "Prinzipien, auf denen wir aufbauen",
+      "items": {
+        "clear": {
+          "title": "Klare Logik statt Blackbox",
+          "desc": "Erlauben- oder Blockieren-Entscheidungen durchlaufen bekannte Stufen mit jeweils einer Aufgabe. Sie können nachvollziehen und prüfen, warum eine Entscheidung getroffen wurde."
+        },
+        "fair": {
+          "title": "Faire Chance für jedes neue Gerät",
+          "desc": "Wir registrieren ein Gerät nur, wenn ein echtes schlechtes Ereignis auftritt (Lazy Registration). Ein neues Gerät ist unschuldig, bis das Gegenteil bewiesen ist."
+        },
+        "heavy": {
+          "title": "Aufwendige Prüfungen nur bei Bedarf",
+          "desc": "Tiefere Prüfungen (z. B. TLS/JA3/JA4) werden nur bei einem kleinen verdächtigen Anteil eingesetzt – das spart Ressourcen und hält die Latenz niedrig."
+        },
+        "privacy": {
+          "title": "Datenschutz ohne Kompromisse",
+          "desc": "Die Daten jedes Unternehmens bleiben in seiner isolierten Umgebung. Geteilt wird nur ein Bedrohungs-Fingerprint ohne jegliche Identität."
+        }
+      }
+    },
+    "deciders": {
+      "title": "Wer entscheidet, und wer erklärt?",
+      "description": "Eine klare Trennung zwischen der Sicherheitsentscheidung und ihrer Formulierung in einfacher Sprache – so hängt keine sensible Entscheidung von einem externen Dienst ab.",
+      "engine": {
+        "title": "Zero Plus KI-Engine",
+        "desc": "Die Entscheidungs-Engine wird vollständig vom Projekt gebaut und betrieben. Sie entscheidet für jede Anfrage über Erlauben, Blockieren oder zusätzliche Prüfungen – allein anhand der Anfrage selbst (IP, Geräte-Fingerprint, Reputation, TLS) und ohne externen Cloud-Dienst."
+      },
+      "gemini": {
+        "title": "Gemini API",
+        "desc": "Sie trifft keine Sicherheitsentscheidung. Ihre Rolle beginnt nach der Entscheidung: Ereignisdaten in einen klaren Satz oder Absatz zu verwandeln, der auf der Berichtsseite und in Benachrichtigungstexten erscheint."
+      }
+    },
+    "stack": {
+      "title": "Technologie-Stack",
+      "iot": "ESP32 + MicroPython zur Simulation legitimer und angreifender Geräte"
+    },
+    "cta": {
+      "question": "Haben Sie eine Frage zum Projekt oder möchten Sie den Schutz testen?",
+      "contact": "Kontakt aufnehmen"
+    }
+  }
+}

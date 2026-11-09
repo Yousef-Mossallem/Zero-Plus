@@ -1,0 +1,31 @@
+{
+  "hero": {
+    "titleLine": "我们期待",
+    "titleHighlight": "与您联系",
+    "description": "关于 Zero Plus 的任何疑问、试用申请或技术咨询——请随时留言，我们将尽快为您解答。"
+  },
+  "info": {
+    "email": "电子邮箱",
+    "phone": "联系电话",
+    "address": "办公地址",
+    "response": "回复时间",
+    "addressValue": "埃及·开罗",
+    "responseValue": "一个工作日内"
+  },
+  "form": {
+    "title": "给我们发送留言",
+    "success": "已成功收到您的留言。我们很快会通过邮箱与您取得联系。",
+    "name": { "label": "姓名", "placeholder": "您的全名" },
+    "email": { "label": "工作邮箱", "placeholder": "you@company.com" },
+    "subject": { "label": "主题", "placeholder": "例如：关于服务器集群防护的咨询" },
+    "message": { "label": "详细内容", "placeholder": "请在此输入您的需求或咨询细节..." },
+    "sending": "发送中...",
+    "send": "发送留言"
+  },
+  "validation": {
+    "name": { "required": "请输入姓名" },
+    "email": { "required": "请输入工作邮箱", "invalid": "邮箱格式不正确" },
+    "subject": { "required": "请输入咨询主题" },
+    "message": { "tooShort": "留言内容至少需要 10 个字符" }
+  }
+}

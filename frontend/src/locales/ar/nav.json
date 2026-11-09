@@ -1,0 +1,53 @@
+{
+  "brand": { "tagline": "بوابة الأمان" },
+  "groups": {
+    "overview": "نظرة عامة",
+    "security": "الأمان",
+    "infrastructure": "البنية التحتية",
+    "workspace": "مساحة العمل"
+  },
+  "items": {
+    "dashboard": "لوحة التحكم",
+    "securityEvents": "الأحداث الأمنية",
+    "reputation": "السمعة",
+    "simulation": "معمل المحاكاة",
+    "servers": "السيرفرات",
+    "policies": "السياسات",
+    "reports": "التقارير",
+    "organization": "المؤسسة",
+    "notifications": "الإشعارات",
+    "profile": "الملف الشخصي"
+  },
+  "user": {
+    "fallback": "مستخدم",
+    "organizationFallback": "مؤسسة"
+  },
+  "signOut": "تسجيل الخروج",
+  "landing": {
+    "links": {
+      "home": "الرئيسية",
+      "about": "من نحن",
+      "contact": "تواصل معنا",
+      "policies": "السياسات"
+    },
+    "auth": {
+      "dashboard": "لوحة التحكم",
+      "login": "تسجيل الدخول",
+      "signup": "إنشاء حساب"
+    },
+    "menu": "القائمة",
+    "footer": {
+      "tagline": "حماية ذكية متعددة الطبقات من هجمات DDoS مصممة للشركات الصغيرة والمتوسطة.",
+      "pages": "الصفحات",
+      "legal": "القانونية",
+      "contact": "تواصل",
+      "address": "القاهرة، مصر",
+      "rights": "© {{year}} Zero Plus. جميع الحقوق محفوظة.",
+      "legalLinks": {
+        "privacy": "سياسة الخصوصية",
+        "terms": "شروط الخدمة",
+        "security": "الأمان وعزل البيانات"
+      }
+    }
+  }
+}

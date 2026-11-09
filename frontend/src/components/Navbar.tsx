@@ -2,10 +2,13 @@
 // ==================================================================
 // Zero Plus - Navigation (Command Sidebar)
 // منظم • احترافي • مناسب لعدد صفحات كبير
+// i18n: النصوص من قسم nav، والشريط بيتقلب لليمين تلقائياً في العربي
+// (start/end بدل left/right + عكس أسهم الطي).
 // ==================================================================
 
 import { useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import {
   LayoutDashboard,
   FlaskConical,
@@ -26,6 +29,7 @@ import {
 
 // import Logo from './Logo'
 import NotificationBell from './NotificationBell'
+import LanguageSwitcher from './LanguageSwitcher'
 import {
   useAuthStore,
   selectCurrentUser,
@@ -34,51 +38,41 @@ import {
 
 // ==================================================================
 // Nav Config
+// بنخزن مفاتيح الترجمة (بتوصف الوظيفة) والمكوّن هو اللي يترجمها
 // ==================================================================
 
-type NavItem = {
-  label: string
-  path: string
-  icon: React.ComponentType<{ className?: string }>
-}
-
-type NavGroup = {
-  title: string
-  items: NavItem[]
-}
-
-const NAV_GROUPS: NavGroup[] = [
+const NAV_GROUPS = [
   {
-    title: 'Overview',
+    titleKey: 'overview',
     items: [
-      { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
+      { labelKey: 'dashboard', path: '/dashboard', icon: LayoutDashboard },
     ],
   },
   {
-    title: 'Security',
+    titleKey: 'security',
     items: [
-      { label: 'Security Events', path: '/security-events', icon: ShieldAlert },
-      { label: 'Reputation', path: '/reputation', icon: Fingerprint },
-      { label: 'Simulation Lab', path: '/simulation', icon: FlaskConical },
+      { labelKey: 'securityEvents', path: '/security-events', icon: ShieldAlert },
+      { labelKey: 'reputation', path: '/reputation', icon: Fingerprint },
+      { labelKey: 'simulation', path: '/simulation', icon: FlaskConical },
     ],
   },
   {
-    title: 'Infrastructure',
+    titleKey: 'infrastructure',
     items: [
-      { label: 'Servers', path: '/servers', icon: Server },
-      { label: 'Policies', path: '/policies', icon: SlidersHorizontal },
-      { label: 'Reports', path: '/reports', icon: FileText },
+      { labelKey: 'servers', path: '/servers', icon: Server },
+      { labelKey: 'policies', path: '/policies', icon: SlidersHorizontal },
+      { labelKey: 'reports', path: '/reports', icon: FileText },
     ],
   },
   {
-    title: 'Workspace',
+    titleKey: 'workspace',
     items: [
-      { label: 'Organization', path: '/organizations', icon: Building2 },
-      { label: 'Notifications', path: '/notifications', icon: Bell },
-      {label: "Profile" , path: '/profile' , icon : UserRound}
+      { labelKey: 'organization', path: '/organizations', icon: Building2 },
+      { labelKey: 'notifications', path: '/notifications', icon: Bell },
+      { labelKey: 'profile', path: '/profile', icon: UserRound },
     ],
   },
-]
+] as const
 
 // ==================================================================
 // Component
@@ -86,10 +80,13 @@ const NAV_GROUPS: NavGroup[] = [
 
 export default function Navbar() {
   const navigate = useNavigate()
+  const { t } = useTranslation('nav')
 
   const user = useAuthStore(selectCurrentUser)
   const organization = useAuthStore(selectCurrentOrganization)
   const logout = useAuthStore((s) => s.logout)
+
+  const userName = user?.fullName ?? t('user.fallback')
   const profileInitials = (user?.fullName ?? 'User')
     .split(/\s+/)
     .filter(Boolean)
@@ -124,37 +121,38 @@ export default function Navbar() {
         {/* <Logo className="h-8 w-8 shrink-0" /> */}
         {!collapsed && (
           <div className="min-w-0">
-            <p className="truncate text-sm font-bold tracking-tight text-white">
+            <p className="truncate text-sm font-bold tracking-tight text-white" dir="ltr">
               Zero<span className="text-cyan-400">Plus</span>
             </p>
             <p className="truncate text-[10px] font-medium uppercase tracking-[0.18em] text-slate-500">
-              Security Gateway
+              {t('brand.tagline')}
             </p>
           </div>
         )}
         {/* جرس الإشعارات + badge غير المقروء (لحظي) */}
-        <NotificationBell className={collapsed ? '' : 'ml-auto'} />
+        <NotificationBell className={collapsed ? '' : 'ms-auto'} />
       </div>
 
       {/* Groups */}
       <nav className="flex-1 overflow-y-auto px-3 py-4 scrollbar-thin">
         <div className="space-y-6">
           {NAV_GROUPS.map((group) => (
-            <div key={group.title}>
+            <div key={group.titleKey}>
               {!collapsed && (
                 <p className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-600">
-                  {group.title}
+                  {t(`groups.${group.titleKey}`)}
                 </p>
               )}
               <ul className="space-y-1">
                 {group.items.map((item) => {
                   const Icon = item.icon
+                  const label = t(`items.${item.labelKey}`)
                   return (
                     <li key={item.path}>
                       <NavLink
                         to={item.path}
                         onClick={onNavigate}
-                        title={collapsed ? item.label : undefined}
+                        title={collapsed ? label : undefined}
                         className={({ isActive }) =>
                           `
                           group relative flex items-center gap-3 rounded-xl px-3 py-2.5
@@ -170,15 +168,16 @@ export default function Navbar() {
                       >
                         {({ isActive }) => (
                           <>
+                            {/* شريط الصفحة النشطة: بيبقى على بداية السطر (شمال/يمين) */}
                             {isActive && (
-                              <span className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-cyan-400" />
+                              <span className="absolute start-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-cyan-400" />
                             )}
                             <Icon
                               className={`h-4.5 w-4.5 shrink-0 ${
                                 isActive ? 'text-cyan-400' : 'text-slate-500 group-hover:text-slate-300'
                               }`}
                             />
-                            {!collapsed && <span className="truncate">{item.label}</span>}
+                            {!collapsed && <span className="truncate">{label}</span>}
                           </>
                         )}
                       </NavLink>
@@ -193,22 +192,25 @@ export default function Navbar() {
 
       {/* User + Logout */}
       <div className="shrink-0 border-t border-white/6 p-3">
+        {/* زر اللغة (مخفي لما الشريط مطوي لأنه ضيق) */}
+        {!collapsed && <LanguageSwitcher className="mb-2 w-full" />}
+
         <div
           className={`mb-2 flex items-center rounded-xl border border-white/5 bg-white/2 px-2 py-2.5 ${
             collapsed ? 'justify-center' : 'gap-3 px-3'
           }`}
-          title={collapsed ? user?.fullName ?? 'User' : undefined}
+          title={collapsed ? userName : undefined}
         >
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-cyan-400/25 bg-cyan-500/10 text-xs font-bold text-cyan-300">
             {profileInitials || 'U'}
           </div>
           {!collapsed && (
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium text-white">
-                {user?.fullName ?? 'User'}
+              <p dir="auto" className="truncate text-sm font-medium text-white">
+                {userName}
               </p>
-              <p className="truncate text-[11px] text-slate-500">
-                {organization?.name ?? 'Organization'}
+              <p dir="auto" className="truncate text-[11px] text-slate-500">
+                {organization?.name ?? t('user.organizationFallback')}
               </p>
               {user?.role && (
                 <span className="mt-1.5 inline-block rounded-md bg-cyan-500/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-cyan-400">
@@ -222,7 +224,7 @@ export default function Navbar() {
         <button
           type="button"
           onClick={handleLogout}
-          title={collapsed ? 'Sign out' : undefined}
+          title={collapsed ? t('signOut') : undefined}
           className={`
             flex w-full items-center gap-3 rounded-xl px-3 py-2.5
             text-sm font-medium text-slate-400
@@ -231,8 +233,8 @@ export default function Navbar() {
             ${collapsed ? 'justify-center' : ''}
           `}
         >
-          <LogOut className="h-4.5 w-4.5 shrink-0" />
-          {!collapsed && <span>Sign out</span>}
+          <LogOut className="h-4.5 w-4.5 shrink-0 rtl:rotate-180" />
+          {!collapsed && <span>{t('signOut')}</span>}
         </button>
       </div>
     </div>
@@ -245,8 +247,8 @@ export default function Navbar() {
       {/* ============================================================ */}
       <aside
         className={`
-          fixed left-0 top-0 z-40 hidden h-screen
-          border-r border-white/6 bg-[#070b14]/95 backdrop-blur-xl
+          fixed start-0 top-0 z-40 hidden h-screen
+          border-e border-white/6 bg-[#070b14]/95 backdrop-blur-xl
           transition-all duration-300 ease-out
           lg:flex lg:flex-col
           ${sidebarWidth}
@@ -254,20 +256,20 @@ export default function Navbar() {
       >
         <NavContent />
 
-        {/* Collapse toggle */}
+        {/* Collapse toggle: السهمين بيتعكسوا في العربي */}
         <button
           type="button"
           onClick={() => setCollapsed((v) => !v)}
           className="
-            absolute -right-3 top-20 z-50 flex h-6 w-6 items-center justify-center
+            absolute -end-3 top-20 z-50 flex h-6 w-6 items-center justify-center
             rounded-full border border-white/10 bg-[#0c1220] text-slate-400
             shadow-lg transition hover:border-cyan-500/30 hover:text-cyan-300
           "
         >
           {collapsed ? (
-            <ChevronRight className="h-3.5 w-3.5" />
+            <ChevronRight className="h-3.5 w-3.5 rtl:rotate-180" />
           ) : (
-            <ChevronLeft className="h-3.5 w-3.5" />
+            <ChevronLeft className="h-3.5 w-3.5 rtl:rotate-180" />
           )}
         </button>
       </aside>
@@ -278,10 +280,10 @@ export default function Navbar() {
       {/* ============================================================ */}
       {/* Mobile Top Bar                                               */}
       {/* ============================================================ */}
-      <div className="fixed left-0 right-0 top-0 z-40 flex h-14 items-center justify-between border-b border-white/6 bg-[#070b14]/95 px-4 backdrop-blur-xl lg:hidden">
+      <div className="fixed inset-x-0 top-0 z-40 flex h-14 items-center justify-between border-b border-white/6 bg-[#070b14]/95 px-4 backdrop-blur-xl lg:hidden">
         <div className="flex items-center gap-2.5">
           {/* <Logo className="h-7 w-7" /> */}
-          <span className="text-sm font-bold text-white">
+          <span className="text-sm font-bold text-white" dir="ltr">
             Zero<span className="text-cyan-400">Plus</span>
           </span>
         </div>
@@ -291,6 +293,7 @@ export default function Navbar() {
           <button
             type="button"
             onClick={() => setMobileOpen(true)}
+            aria-label={t('landing.menu')}
             className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 text-slate-300 transition hover:bg-white/5"
           >
             <Menu className="h-5 w-5" />
@@ -305,11 +308,11 @@ export default function Navbar() {
             className="absolute inset-0 bg-black/60 backdrop-blur-sm"
             onClick={() => setMobileOpen(false)}
           />
-          <aside className="absolute left-0 top-0 flex h-full w-70 flex-col border-r border-white/6 bg-[#070b14] shadow-2xl">
+          <aside className="absolute start-0 top-0 flex h-full w-70 flex-col border-e border-white/6 bg-[#070b14] shadow-2xl">
             <div className="flex h-14 items-center justify-between border-b border-white/6 px-4">
               <div className="flex items-center gap-2.5">
                 {/* <Logo className="h-7 w-7" /> */}
-                <span className="text-sm font-bold text-white">
+                <span className="text-sm font-bold text-white" dir="ltr">
                   Zero<span className="text-cyan-400">Plus</span>
                 </span>
               </div>

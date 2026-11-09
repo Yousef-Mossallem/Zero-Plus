@@ -10,10 +10,14 @@
 //   4) فتح تفاصيل الحدث (GET /events/:id) في Drawer جانبي
 //   5) تحديث تلقائي اختياري كل 10 ثواني (لأن Socket.IO لسه متفعلش في الباك)
 //   6) توست للأخطاء والنسخ + ربط مع صفحة Reputation
+//
+// i18n: كل النصوص من قسم events. رسالة توست التحميل بتتطلب عن طريق tRef
+// عشان تغيير اللغة ما يعيدش تحميل الأحداث (دالة load مش بتعتمد على t).
 // ==================================================================
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { Activity, Ban, Gauge, Radio, RefreshCw, Search, ShieldAlert, ShieldCheck, SlidersHorizontal, X } from 'lucide-react'
 import EventsTable from '../components/EventsTable'
 import { useToast } from '../components/ui/Toast'
@@ -73,15 +77,15 @@ function parseRisk(value: string): number | undefined {
 const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'] as const
 const IP_TYPES = ['RESIDENTIAL', 'MOBILE', 'DATACENTER', 'VPN_PROXY', 'TOR', 'UNKNOWN'] as const
 
-// تابات القرار
-const DECISION_TABS: { value: string; label: string; dot: string }[] = [
-  { value: '', label: 'All', dot: 'bg-cyan-400' },
-  { value: 'ALLOW', label: 'Allow', dot: 'bg-emerald-400' },
-  { value: 'MONITOR', label: 'Monitor', dot: 'bg-sky-400' },
-  { value: 'RATE_LIMIT', label: 'Rate limit', dot: 'bg-amber-400' },
-  { value: 'CHALLENGE', label: 'Challenge', dot: 'bg-indigo-400' },
-  { value: 'BLOCK', label: 'Block', dot: 'bg-rose-400' },
-]
+// تابات القرار: المفتاح بيتترجم (decision.<key>) والنقطة لون
+const DECISION_TABS = [
+  { value: '', key: 'all', dot: 'bg-cyan-400' },
+  { value: 'ALLOW', key: 'ALLOW', dot: 'bg-emerald-400' },
+  { value: 'MONITOR', key: 'MONITOR', dot: 'bg-sky-400' },
+  { value: 'RATE_LIMIT', key: 'RATE_LIMIT', dot: 'bg-amber-400' },
+  { value: 'CHALLENGE', key: 'CHALLENGE', dot: 'bg-indigo-400' },
+  { value: 'BLOCK', key: 'BLOCK', dot: 'bg-rose-400' },
+] as const
 
 function riskBar(score: number): string {
   if (score >= 80) return 'bg-rose-400'
@@ -136,7 +140,15 @@ function Metric({
 
 export default function SecurityEventsPage() {
   const toast = useToast()
+  const { t } = useTranslation('events')
   const [searchParams, setSearchParams] = useSearchParams()
+
+  // نسخة ثابتة من t لاستخدامها جوه load من غير ما تتسبب في إعادة التحميل
+  const tRef = useRef(t)
+  tRef.current = t
+
+  // مفاتيح ديناميكية (نوع IP) فبنستخدم نسخة غير مقيّدة بالأنواع
+  const ts = t as unknown as (key: string, opts?: object) => string
 
   // ---------------- Filters / paging / sorting ----------------
   // ممكن نيجي من صفحات تانية بـ ?ip=1.2.3.4 أو ?entry=<reputationEntryId>
@@ -224,7 +236,6 @@ export default function SecurityEventsPage() {
     async (silent = false) => {
       const id = ++requestId.current
       if (!silent) setLoading(true)
-
       try {
         const res = await getEvents(query)
         if (id !== requestId.current) return
@@ -238,7 +249,7 @@ export default function SecurityEventsPage() {
         // في التحديث الصامت منزعجش المستخدم لو فيه بيانات معروضة أصلاً
         if (!silent || events.length === 0) {
           setError(message)
-          toast.error('Failed to load security events', message)
+          toast.error(tRef.current('toast.loadFailed'), message)
         }
       } finally {
         if (id === requestId.current) setLoading(false)
@@ -313,12 +324,12 @@ export default function SecurityEventsPage() {
   const hasActiveFilters = Object.values(filters).some((v) => v !== '')
   const minInvalid = filters.minRisk !== '' && parseRisk(filters.minRisk) === undefined
   const maxInvalid = filters.maxRisk !== '' && parseRisk(filters.maxRisk) === undefined
-
   const firstLoad = loading && events.length === 0
+
   // النسبة من الإجمالي بتبان بس لما مفيش فلتر قرار (لأن الإجمالي ساعتها بيتأثر بالقرار)
   const share = (n: number | null): string | undefined =>
     n !== null && !filters.decision && summary.totalEvents > 0
-      ? `${((n / summary.totalEvents) * 100).toFixed(1)}% of events`
+      ? t('stats.share', { pct: ((n / summary.totalEvents) * 100).toFixed(1) })
       : undefined
 
   // ==================================================================
@@ -329,8 +340,8 @@ export default function SecurityEventsPage() {
     <PageShell>
       <PageHeader
         icon={ShieldAlert}
-        title="Security Events"
-        subtitle="Every request the Gateway inspected, with the decision and the reasons behind it."
+        title={t('page.title')}
+        subtitle={t('page.subtitle')}
         actions={
           <>
             <label className="flex items-center gap-2.5 rounded-xl border border-white/10 bg-white/3 px-3.5 py-2 text-sm text-slate-300">
@@ -339,11 +350,15 @@ export default function SecurityEventsPage() {
                 <span className={cn('relative inline-flex h-2.5 w-2.5 rounded-full', live ? 'bg-emerald-400' : 'bg-slate-600')} />
               </span>
               <Radio className={cn('h-4 w-4', live ? 'text-emerald-400' : 'text-slate-500')} />
-              Live
-              <Toggle checked={live} onChange={setLive} label="Auto refresh every 10 seconds" />
+              {t('page.live')}
+              <Toggle checked={live} onChange={setLive} label={t('page.liveLabel')} />
             </label>
-            <Button icon={RefreshCw} loading={loading && events.length > 0} onClick={() => void load()}>
-              Refresh
+            <Button
+              icon={RefreshCw}
+              loading={loading && events.length > 0}
+              onClick={() => void load()}
+            >
+              {t('page.refresh')}
             </Button>
           </>
         }
@@ -353,15 +368,15 @@ export default function SecurityEventsPage() {
       <Card accent delay={60}>
         <div className="grid grid-cols-2 divide-white/6 lg:grid-cols-4 lg:divide-x [&>*:nth-child(n+3)]:border-t [&>*:nth-child(n+3)]:border-white/6 lg:[&>*:nth-child(n+3)]:border-t-0">
           <Metric
-            label="Total events"
+            label={t('stats.total')}
             value={formatNumber(summary.totalEvents)}
             icon={Activity}
             tone="cyan"
-            hint={hasActiveFilters ? 'Matching current filters' : 'All time'}
+            hint={hasActiveFilters ? t('stats.matching') : t('stats.allTime')}
             loading={firstLoad}
           />
           <Metric
-            label="Average risk"
+            label={t('stats.avgRisk')}
             value={summary.averageRiskScore.toFixed(1)}
             icon={Gauge}
             tone="amber"
@@ -375,7 +390,7 @@ export default function SecurityEventsPage() {
             </div>
           </Metric>
           <Metric
-            label="Blocked"
+            label={t('stats.blocked')}
             value={formatNumber(counts.block)}
             icon={Ban}
             tone="rose"
@@ -383,7 +398,7 @@ export default function SecurityEventsPage() {
             loading={counts.block === null}
           />
           <Metric
-            label="Challenged"
+            label={t('stats.challenged')}
             value={formatNumber(counts.challenge)}
             icon={ShieldCheck}
             tone="indigo"
@@ -395,13 +410,13 @@ export default function SecurityEventsPage() {
 
       {/* ---------- تابات القرار ---------- */}
       <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
-        {DECISION_TABS.map((t) => {
-          const active = filters.decision === t.value
+        {DECISION_TABS.map((tab) => {
+          const active = filters.decision === tab.value
           return (
             <button
-              key={t.label}
+              key={tab.key}
               type="button"
-              onClick={() => updateFilter('decision', t.value)}
+              onClick={() => updateFilter('decision', tab.value)}
               className={cn(
                 'flex shrink-0 items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition',
                 active
@@ -409,8 +424,8 @@ export default function SecurityEventsPage() {
                   : 'border-white/10 bg-white/3 text-slate-400 hover:border-white/20 hover:text-white',
               )}
             >
-              <span className={cn('h-2 w-2 rounded-full', t.dot)} />
-              {t.label}
+              <span className={cn('h-2 w-2 rounded-full', tab.dot)} />
+              {t(`decision.${tab.key}` as never)}
             </button>
           )
         })}
@@ -424,7 +439,7 @@ export default function SecurityEventsPage() {
               icon={Search}
               value={filters.search}
               onChange={(e) => updateFilter('search', e.target.value)}
-              placeholder="Search IP, path, user agent, request ID, reason…"
+              placeholder={t('filters.search')}
             />
           </div>
 
@@ -433,7 +448,7 @@ export default function SecurityEventsPage() {
             onChange={(e) => updateFilter('serverId', e.target.value)}
             className="lg:w-56"
           >
-            <option value="">All servers</option>
+            <option value="">{t('filters.allServers')}</option>
             {servers.map((s) => (
               <option key={s.id} value={s.id} className="bg-[#0b1224]">
                 {s.domain}
@@ -447,11 +462,11 @@ export default function SecurityEventsPage() {
               variant={showAdvanced ? 'primary' : 'outline'}
               onClick={() => setShowAdvanced((v) => !v)}
             >
-              More
+              {t('filters.more')}
             </Button>
             {hasActiveFilters && (
               <Button icon={X} variant="ghost" onClick={resetFilters}>
-                Clear
+                {t('filters.clear')}
               </Button>
             )}
           </div>
@@ -460,9 +475,9 @@ export default function SecurityEventsPage() {
         {/* فلاتر متقدمة */}
         {showAdvanced && (
           <div className="zp-anim-fade-in mt-5 grid grid-cols-1 gap-4 border-t border-white/6 pt-5 sm:grid-cols-2 lg:grid-cols-4">
-            <Field label="Method">
+            <Field label={t('filters.method')}>
               <SelectInput value={filters.method} onChange={(e) => updateFilter('method', e.target.value)}>
-                <option value="">Any</option>
+                <option value="">{t('filters.any')}</option>
                 {METHODS.map((m) => (
                   <option key={m} value={m} className="bg-[#0b1224]">
                     {m}
@@ -471,30 +486,30 @@ export default function SecurityEventsPage() {
               </SelectInput>
             </Field>
 
-            <Field label="IP type">
+            <Field label={t('filters.ipType')}>
               <SelectInput value={filters.ipType} onChange={(e) => updateFilter('ipType', e.target.value)}>
-                <option value="">Any</option>
-                {IP_TYPES.map((t) => (
-                  <option key={t} value={t} className="bg-[#0b1224]">
-                    {t.replace('_', ' / ')}
+                <option value="">{t('filters.any')}</option>
+                {IP_TYPES.map((ip) => (
+                  <option key={ip} value={ip} className="bg-[#0b1224]">
+                    {ts(`ipTypes.${ip}`)}
                   </option>
                 ))}
               </SelectInput>
             </Field>
 
-            <Field label="Challenge">
+            <Field label={t('filters.challenge')}>
               <SelectInput
                 value={filters.isChallenged}
                 onChange={(e) => updateFilter('isChallenged', e.target.value)}
               >
-                <option value="">Any</option>
-                <option value="true" className="bg-[#0b1224]">Challenged</option>
-                <option value="false" className="bg-[#0b1224]">Not challenged</option>
+                <option value="">{t('filters.any')}</option>
+                <option value="true" className="bg-[#0b1224]">{t('filters.challenged')}</option>
+                <option value="false" className="bg-[#0b1224]">{t('filters.notChallenged')}</option>
               </SelectInput>
             </Field>
 
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Min risk" error={minInvalid ? '0–100' : undefined}>
+              <Field label={t('filters.minRisk')} error={minInvalid ? t('filters.range') : undefined}>
                 <TextInput
                   type="number"
                   min={0}
@@ -505,7 +520,7 @@ export default function SecurityEventsPage() {
                   placeholder="0"
                 />
               </Field>
-              <Field label="Max risk" error={maxInvalid ? '0–100' : undefined}>
+              <Field label={t('filters.maxRisk')} error={maxInvalid ? t('filters.range') : undefined}>
                 <TextInput
                   type="number"
                   min={0}
@@ -518,14 +533,15 @@ export default function SecurityEventsPage() {
               </Field>
             </div>
 
-            <Field label="From">
+            <Field label={t('filters.from')}>
               <TextInput
                 type="datetime-local"
                 value={filters.startDate}
                 onChange={(e) => updateFilter('startDate', e.target.value)}
               />
             </Field>
-            <Field label="To">
+
+            <Field label={t('filters.to')}>
               <TextInput
                 type="datetime-local"
                 value={filters.endDate}
@@ -536,12 +552,12 @@ export default function SecurityEventsPage() {
             {filters.reputationEntryId && (
               <div className="flex items-end sm:col-span-2">
                 <Badge tone="cyan" className="normal-case">
-                  Filtered by reputation entry
+                  {t('filters.repFilter')}
                   <button
                     type="button"
                     onClick={() => updateFilter('reputationEntryId', '')}
-                    className="ml-1 hover:text-white"
-                    aria-label="Remove reputation filter"
+                    className="ms-1 hover:text-white"
+                    aria-label={t('filters.removeRepFilter')}
                   >
                     <X className="h-3 w-3" />
                   </button>
@@ -568,11 +584,12 @@ export default function SecurityEventsPage() {
               emptyAction={
                 hasActiveFilters ? (
                   <Button icon={X} onClick={resetFilters}>
-                    Clear filters
+                    {t('filters.clearFilters')}
                   </Button>
                 ) : undefined
               }
             />
+
             {(pagination.total > 0 || loading) && (
               <PaginationBar
                 page={page}

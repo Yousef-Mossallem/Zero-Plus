@@ -1,0 +1,118 @@
+{
+  "page": {
+    "title": "الأحداث الأمنية",
+    "subtitle": "كل طلب فحصته البوابة، مع القرار وأسبابه.",
+    "live": "مباشر",
+    "liveLabel": "تحديث تلقائي كل 10 ثوانٍ",
+    "refresh": "تحديث"
+  },
+  "stats": {
+    "total": "إجمالي الأحداث",
+    "matching": "مطابقة للفلاتر الحالية",
+    "allTime": "كل الفترات",
+    "avgRisk": "متوسط الخطورة",
+    "blocked": "المحظور",
+    "challenged": "الخاضع للتحدي",
+    "share": "{{pct}}% من الأحداث"
+  },
+  "decision": {
+    "all": "الكل",
+    "ALLOW": "سماح",
+    "MONITOR": "مراقبة",
+    "RATE_LIMIT": "تقييد المعدل",
+    "CHALLENGE": "تحدٍّ",
+    "BLOCK": "حظر"
+  },
+  "filters": {
+    "search": "ابحث في IP أو المسار أو User Agent أو معرّف الطلب أو السبب…",
+    "allServers": "كل السيرفرات",
+    "more": "المزيد",
+    "clear": "مسح",
+    "method": "الطريقة",
+    "ipType": "نوع IP",
+    "challenge": "التحدي",
+    "any": "أي",
+    "challenged": "خاضع للتحدي",
+    "notChallenged": "بدون تحدٍّ",
+    "minRisk": "أدنى خطورة",
+    "maxRisk": "أعلى خطورة",
+    "range": "0–100",
+    "from": "من",
+    "to": "إلى",
+    "repFilter": "مفلتر حسب سجل السمعة",
+    "removeRepFilter": "إزالة فلتر السمعة",
+    "clearFilters": "مسح الفلاتر"
+  },
+  "ipTypes": {
+    "RESIDENTIAL": "سكني",
+    "MOBILE": "جوال",
+    "DATACENTER": "مركز بيانات",
+    "VPN_PROXY": "VPN / وكيل",
+    "TOR": "Tor",
+    "UNKNOWN": "غير معروف"
+  },
+  "table": {
+    "columns": {
+      "time": "الوقت",
+      "ip": "IP",
+      "request": "الطلب",
+      "server": "السيرفر",
+      "risk": "الخطورة",
+      "decision": "القرار",
+      "challenge": "التحدي"
+    },
+    "passed": "اجتاز",
+    "failed": "فشل",
+    "pending": "قيد الانتظار",
+    "empty": {
+      "title": "لا توجد أحداث أمنية",
+      "description": "لا شيء يطابق الفلاتر الحالية. تظهر الأحداث هنا بمجرد أن تبدأ البوابة بمعالجة الحركة."
+    }
+  },
+  "toast": {
+    "loadFailed": "تعذّر تحميل الأحداث الأمنية",
+    "copied": "تم نسخ {{label}}",
+    "copyFailed": "فشل النسخ",
+    "copyBlocked": "حظر المتصفح الوصول إلى الحافظة",
+    "detailsFailed": "تعذّر تحميل تفاصيل الحدث"
+  },
+  "drawer": {
+    "title": "تفاصيل الحدث",
+    "sections": {
+      "request": "الطلب",
+      "network": "الشبكة",
+      "detection": "الكشف",
+      "signals": "الإشارات وتفاصيل السبب",
+      "reputation": "سمعة الجهاز"
+    },
+    "fields": {
+      "ipAddress": "عنوان IP",
+      "method": "الطريقة",
+      "path": "المسار",
+      "server": "السيرفر",
+      "requestId": "معرّف الطلب",
+      "referer": "المُحيل (Referer)",
+      "userAgent": "User Agent",
+      "country": "الدولة",
+      "asn": "ASN",
+      "ipType": "نوع IP",
+      "stage": "مرحلة القرار",
+      "processing": "زمن المعالجة",
+      "anomaly": "درجة الشذوذ (AI)",
+      "confidence": "ثقة الذكاء الاصطناعي",
+      "challenge": "التحدي",
+      "notChallenged": "بدون تحدٍّ"
+    },
+    "copyIp": "نسخ IP",
+    "rep": {
+      "score": "الدرجة {{score}}/10 · {{type}}",
+      "notBanned": "غير محظور",
+      "open": "فتح في السمعة",
+      "none": "لا يوجد سجل سمعة مرتبط بهذا الحدث."
+    },
+    "banStatus": {
+      "TEMPORARY": "مؤقت",
+      "PERMANENT": "دائم"
+    }
+  }
+}

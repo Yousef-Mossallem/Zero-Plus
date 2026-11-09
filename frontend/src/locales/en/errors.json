@@ -1,0 +1,15 @@
+{
+  "boundary": {
+    "title": "A runtime error occurred while running the interface (Runtime Error)",
+    "intro": "Your app stopped instead of showing a blank screen. This is the error:",
+    "hint": "Open the browser Console (F12) for more details, and double-check the import paths in AppRouter."
+  },
+  "validation": {
+    "email": {
+      "required": "Work email is required",
+      "tooShort": "Email is too short",
+      "tooLong": "Email is too long",
+      "invalid": "Invalid email format"
+    }
+  }
+}

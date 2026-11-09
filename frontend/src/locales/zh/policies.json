@@ -1,0 +1,109 @@
+{
+  "page": {
+    "title": "安全防护策略",
+    "subtitle": "精细调优安全网关如何将风险评分转化为针对您企业的防护决策。",
+    "reload": "重新加载",
+    "reset": "恢复默认策略",
+    "readOnly": "您当前的角色仅拥有只读权限。请联系所有者 (Owner)、管理员 (Admin) 或分析师 (Analyst) 调整此配置。"
+  },
+  "zones": {
+    "allow": "放行",
+    "rateLimit": "限流",
+    "challenge": "质询",
+    "block": "拦截"
+  },
+  "sections": {
+    "thresholds": {
+      "title": "风险评分阈值",
+      "desc": "网络请求的风险指数 (0–100) 决定了系统采取的处理动作。"
+    },
+    "challenges": {
+      "title": "人机验证与质询",
+      "desc": "针对网关初判存疑的访客启用静默人机验证。",
+      "silentJs": "静默 JS 挑战",
+      "silentJsHint": "在浏览器后台隐形运行，有效过滤基础爬虫与简易脚本。",
+      "challengeAll": "质询所有首次访问者",
+      "challengeAllHint": "每位首访用户需经过一次静默校验，通过后发放免检凭证。"
+    },
+    "ai": {
+      "title": "AI 异常行为检测",
+      "desc": "基于请求模式与时序特征的行为模型，为综合风险评分提供研判参考。",
+      "useAi": "启用 AI 异常评分加权",
+      "useAiHint": "关闭时，防御决策将完全基于规则匹配与信誉库记录。",
+      "note": "AI 评分仅作为研判信号之一。最终的拦截决策始终由核心风险引擎与上述阈值决定。"
+    },
+    "rateLimiting": {
+      "title": "请求速率限制 (Rate Limiting)",
+      "desc": "单 IP 维度的请求频次管控。软限制实施限流延时，硬限制彻底阻断溢出流量。",
+      "banOnHard": "突破硬限制直接封禁",
+      "banOnHardHint": "当设备请求量超过硬限制阈值时，自动对其执行封禁处罚。"
+    },
+    "autoBans": {
+      "title": "自动化惩戒与封禁",
+      "desc": "针对多次违规与高危攻击者的自动封禁规则与时长设定。"
+    },
+    "capacity": {
+      "title": "源站抗载能力",
+      "desc": "在源站服务器面临超载风险前提前预警与削峰。"
+    }
+  },
+  "fields": {
+    "allowMaxScore": { "label": "放行上限分值", "hint": "风险分低于或等于该值的请求将被直接放行。" },
+    "rateLimitMaxScore": { "label": "限流上限分值", "hint": "风险分处于此区间内的请求将受到平滑限流。" },
+    "challengeMaxScore": { "label": "质询上限分值", "hint": "风险分高于此阈值的请求将被立即阻断拦截。" },
+    "passTokenTtlMinutes": { "label": "验证免检有效期", "hint": "访客成功通过 JS 质询后保留放行凭据的有效时长。" },
+    "rateLimitRequests": { "label": "软限制 — 请求数", "hint": "时间窗口内单个 IP 允许通过的最大请求量。" },
+    "rateLimitWindowSec": { "label": "软限制 — 监控窗口", "hint": "软限制统计滑动时间窗口大小（秒）。" },
+    "maxRequestsPerIp": { "label": "硬限制 — 请求数", "hint": "时间窗口内单个 IP 绝不允许超过的绝对峰值。" },
+    "maxRequestsWindowSec": { "label": "硬限制 — 监控窗口", "hint": "硬限制统计滑动时间窗口大小（秒）。" },
+    "maxServerRps": { "label": "手动指定源站容量", "hint": "留空则自动采用基准探测所测得的服务器容量。" },
+    "capacityWarnPercent": { "label": "容量预警水位线", "hint": "当服务器实际承载负荷达到此百分比时触发告警通知。" },
+    "autoBanAfterFails": { "label": "连续失败封禁阈值", "hint": "设备高级校验连续失败达到此频次后自动施加封禁。" },
+    "temporaryBanMinutes": { "label": "临时封禁时长", "hint": "系统触发自动临时封禁的惩戒持续时间（分钟）。" },
+    "permanentBanScore": { "label": "永久封禁信誉阈值", "hint": "设备累积信誉分 (1–10) 恶化至此级别时触发永久封禁。" }
+  },
+  "defaultSuffix": "默认值: {{val}}",
+  "auto": "自动",
+  "units": {
+    "pts": "分",
+    "min": "分钟",
+    "req": "次",
+    "sec": "秒",
+    "rps": "次/秒",
+    "percent": "%",
+    "fails": "次失败",
+    "score": "分"
+  },
+  "validation": {
+    "between": "必须为介于 {{min}} 到 {{max}} 之间的整数",
+    "allowLeRate": "必须 ≤ 限流阈值",
+    "rateLeChallenge": "必须 ≤ 质询阈值",
+    "hardGeSoft": "硬限制的请求速率不得低于软限制的速率"
+  },
+  "bar": {
+    "unsaved_one": "{{count}} 项未保存更改",
+    "unsaved_other": "{{count}} 项未保存更改",
+    "fixErrors": "请先修正高亮显示的错误项以进行保存",
+    "review": "核对更改并保存以立即应用至网关",
+    "discard": "放弃更改",
+    "save": "保存策略"
+  },
+  "toast": {
+    "loadFailed": "加载策略配置失败",
+    "forbidden": "您没有修改防护策略的权限",
+    "saveFailed": "保存策略失败",
+    "resetFailed": "恢复默认策略失败",
+    "updated_one": "已成功更新 {{count}} 项策略设置",
+    "updated_other": "已成功更新 {{count}} 项策略设置"
+  },
+  "resetModal": {
+    "title": "确认重置所有策略至默认值？",
+    "description": "所有安全与限流参数都将恢复为官方推荐默认配置，并立即同步至安全网关生效。",
+    "confirm": "确认全部重置"
+  },
+  "lastChanges": {
+    "title": "最近已保存的修改项",
+    "dismiss": "关闭"
+  },
+  "updatedAt": "策略最近更新于 {{time}}"
+}

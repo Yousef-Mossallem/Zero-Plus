@@ -14,7 +14,7 @@
 // فتعليم "مقروء" هنا بيأثر على كل أعضاء الشركة.
 // ==================================================================
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   Bell,
   BellRing,
@@ -27,6 +27,7 @@ import {
   WifiOff,
   X,
 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 import { useToast } from '../components/ui/Toast'
 import {
@@ -43,48 +44,43 @@ import {
 } from '../components/ui/kit'
 import { useDebounce } from '../hooks/useDebounce'
 import type { NotificationsQuery } from '../services/notificationsService'
-import useNotificationStore, { type ConnectionStatus } from '../store/notificationStore'
+import useNotificationStore from '../store/notificationStore'
 import { NOTIFICATION_TYPES, TYPE_META, type NotificationType } from '../utils/notificationMeta'
 import type { AppNotification } from '../services/notificationsService'
 import { cn, formatDate, formatNumber } from '../utils/format'
 import NotificationItem from './notifications/NotificationItem'
 
-const CONNECTION_LABEL: Record<ConnectionStatus, { text: string; hint: string }> = {
-  connected: { text: 'Live', hint: 'Real-time updates are on' },
-  connecting: { text: 'Connecting…', hint: 'Reaching the server' },
-  disconnected: { text: 'Offline', hint: 'Retrying automatically' },
-  unauthorized: { text: 'Signed out', hint: 'Session rejected by the socket' },
-  idle: { text: 'Idle', hint: 'Not connected' },
-}
-
-const SEVERITY_OPTIONS: { value: string; label: string }[] = [
-  { value: '', label: 'Any' },
-  { value: '2', label: 'Notice+' },
-  { value: '3', label: 'Important+' },
-  { value: '4', label: 'Critical+' },
-]
-
 /** تجميع الإشعارات حسب اليوم (Today / Yesterday / تاريخ) مع الحفاظ على الترتيب */
-function groupByDay(items: AppNotification[]): { label: string; items: AppNotification[] }[] {
+function groupByDay(
+  items: AppNotification[],
+  todayLabel: string,
+  yesterdayLabel: string,
+): { label: string; items: AppNotification[] }[] {
   const today = new Date().toDateString()
   const yesterday = new Date(Date.now() - 86_400_000).toDateString()
-  const groups: { key: string; label: string; items: AppNotification[] }[] = []
+  const map = new Map<string, AppNotification[]>()
+
   for (const n of items) {
     const key = new Date(n.createdAt).toDateString()
-    let g = groups[groups.length - 1]
-    if (!g || g.key !== key) {
-      g = { key, label: key === today ? 'Today' : key === yesterday ? 'Yesterday' : formatDate(n.createdAt), items: [] }
-      groups.push(g)
-    }
-    g.items.push(n)
+    const arr = map.get(key)
+    if (arr) arr.push(n)
+    else map.set(key, [n])
   }
-  return groups
+
+  return Array.from(map.entries()).map(([key, list]) => ({
+    label: key === today ? todayLabel : key === yesterday ? yesterdayLabel : formatDate(list[0]!.createdAt),
+    items: list,
+  }))
 }
 
+// ==================================================================
+// Page
+// ==================================================================
+
 export default function NotificationsPage() {
+  const { t } = useTranslation(['notifications', 'common'])
   const toast = useToast()
 
-  // ---------------- Store ----------------
   const items = useNotificationStore((s) => s.items)
   const pagination = useNotificationStore((s) => s.pagination)
   const unreadCount = useNotificationStore((s) => s.unreadCount)
@@ -92,18 +88,19 @@ export default function NotificationsPage() {
   const loaded = useNotificationStore((s) => s.loaded)
   const error = useNotificationStore((s) => s.error)
   const connection = useNotificationStore((s) => s.connection)
-  const freshIds = useNotificationStore((s) => s.freshIds)
   const soundEnabled = useNotificationStore((s) => s.soundEnabled)
+  const freshIds = useNotificationStore((s) => s.freshIds)
 
   // ---------------- Filters ----------------
   const [search, setSearch] = useState('')
-  const [type, setType] = useState('')
+  const [type, setType] = useState<NotificationType | ''>('')
   const [severity, setSeverity] = useState('')
   const [unreadOnly, setUnreadOnly] = useState(false)
   const [page, setPage] = useState(1)
   const [limit, setLimit] = useState(20)
   const debouncedSearch = useDebounce(search)
 
+  // ---------------- Query ----------------
   const query = useMemo<NotificationsQuery>(
     () => ({
       page,
@@ -116,57 +113,22 @@ export default function NotificationsPage() {
     [page, limit, unreadOnly, type, severity, debouncedSearch],
   )
 
-  // ---------------- Lifecycle ----------------
-  // الصفحة مفتوحة: الإشعار اللي يوصل دلوقتي بيتعلّم مقروء تلقائيًا
+  // ---------------- Page lifecycle: freshIds + pageOpen ----------------
   useEffect(() => {
-    const { setPageOpen, clearFresh } = useNotificationStore.getState()
-    setPageOpen(true)
+    useNotificationStore.getState().setPageOpen(true)
     return () => {
-      setPageOpen(false)
-      clearFresh()
-    }
-  }, [])
-
-  // كل تغيير في الفلاتر = طلب جديد. أول نجاح = تعليم الكل مقروء (مرة واحدة)
-  const autoMarked = useRef(false)
-  useEffect(() => {
-    const run = async () => {
       const store = useNotificationStore.getState()
-      const ok = await store.fetchList(query)
-
-      if (!ok) {
-        toast.error('Failed to load notifications', useNotificationStore.getState().error ?? undefined)
-        return
-      }
-      if (autoMarked.current) return
-      autoMarked.current = true
-
-      // نسجّل الغير مقروء قبل ما نعلّمه، عشان يفضل مميز بلون مختلف
-      const unreadIds = useNotificationStore
-        .getState()
-        .items.filter((n) => !n.isRead)
-        .map((n) => n.id)
-      store.markFresh(unreadIds)
-
-      if (useNotificationStore.getState().unreadCount > 0 || unreadIds.length > 0) {
-        const marked = await store.markAllRead()
-        if (!marked) toast.error('Could not mark notifications as read')
-      }
+      store.setPageOpen(false)
+      store.clearFresh()
     }
-    void run()
-    // toast ثابت
-  }, [query, toast])
-
-  // تحديث "منذ كذا" كل 30 ثانية
-  const [, setTick] = useState(0)
-  useEffect(() => {
-    const t = setInterval(() => setTick((n) => n + 1), 30_000)
-    return () => clearInterval(t)
   }, [])
 
-  // ---------------- Handlers ----------------
-  const hasFilters = Boolean(search || type || severity || unreadOnly)
+  useEffect(() => {
+    void useNotificationStore.getState().fetchList(query)
+  }, [query])
+
   const resetPage = () => setPage(1)
+  const hasFilters = Boolean(search || type || severity || unreadOnly)
 
   const clearFilters = () => {
     setSearch('')
@@ -178,7 +140,7 @@ export default function NotificationsPage() {
 
   const handleMarkAll = async () => {
     const ok = await useNotificationStore.getState().markAllRead()
-    if (ok) toast.success('All notifications marked as read')
+    if (ok) toast.success(t('page.markedAll'))
     else toast.error('Could not mark notifications as read')
   }
 
@@ -187,10 +149,27 @@ export default function NotificationsPage() {
     if (!ok) toast.error('Could not mark the notification as read')
   }
 
-  const conn = CONNECTION_LABEL[connection]
+  const conn = useMemo(
+    () => ({
+      text: t(`connection.${connection}` as never),
+      hint: t(`connection.${connection}Hint` as never),
+    }),
+    [connection, t],
+  )
+
+  const severityOptions = useMemo(
+    () => [
+      { value: '', label: t('filters.anySeverity') },
+      { value: '2', label: t('filters.sev2') },
+      { value: '3', label: t('filters.sev3') },
+      { value: '4', label: t('filters.sev4') },
+    ],
+    [t],
+  )
+
   const live = connection === 'connected'
   const fresh = new Set(freshIds)
-  const groups = useMemo(() => groupByDay(items), [items])
+  const groups = useMemo(() => groupByDay(items, t('days.today'), t('days.yesterday')), [items, t])
   const firstLoad = loading && items.length === 0
 
   const chip = (active: boolean) =>
@@ -209,15 +188,15 @@ export default function NotificationsPage() {
     <PageShell>
       <PageHeader
         icon={Bell}
-        title="Notifications"
-        subtitle="Security alerts and system updates, as they happen."
+        title={t('page.title')}
+        subtitle={t('page.subtitle')}
         actions={
           <>
             <Button icon={RefreshCw} loading={loading && items.length > 0} onClick={() => void useNotificationStore.getState().fetchList()}>
-              Refresh
+              {t('page.refresh')}
             </Button>
             <Button variant="primary" icon={CheckCheck} disabled={unreadCount === 0} onClick={() => void handleMarkAll()}>
-              Mark all read
+              {t('page.markAllRead')}
             </Button>
           </>
         }
@@ -247,22 +226,22 @@ export default function NotificationsPage() {
                 size="sm"
                 variant="ghost"
                 icon={soundEnabled ? Volume2 : VolumeX}
-                aria-label={soundEnabled ? 'Mute notification sound' : 'Unmute notification sound'}
-                title={soundEnabled ? 'Mute notification sound' : 'Unmute notification sound'}
+                aria-label={soundEnabled ? t('page.soundOff') : t('page.soundOn')}
+                title={soundEnabled ? t('page.soundOff') : t('page.soundOn')}
                 onClick={() => useNotificationStore.getState().setSoundEnabled(!soundEnabled)}
               />
             </div>
 
             <div className="mt-4 flex items-end justify-between border-t border-white/5 pt-4">
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Unread</p>
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{t('page.unreadOnly')}</p>
                 {!loaded && loading ? (
                   <div className="zp-skeleton mt-1 h-8 w-12 rounded-md" />
                 ) : (
                   <p className="text-3xl font-bold tracking-tight text-white">{formatNumber(unreadCount)}</p>
                 )}
               </div>
-              <div className="text-right">
+              <div className="text-end">
                 <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
                   {hasFilters ? 'Matching' : 'Total'}
                 </p>
@@ -280,7 +259,7 @@ export default function NotificationsPage() {
                 setSearch(e.target.value)
                 resetPage()
               }}
-              placeholder="Search…"
+              placeholder={t('page.search')}
             />
 
             <div>
@@ -295,22 +274,22 @@ export default function NotificationsPage() {
                   }}
                 >
                   <BellRing className="h-4 w-4" />
-                  All types
+                  {t('page.allTypes')}
                 </button>
-                {NOTIFICATION_TYPES.map((t) => {
-                  const TypeIcon = TYPE_META[t].icon
+                {NOTIFICATION_TYPES.map((tItem) => {
+                  const TypeIcon = TYPE_META[tItem].icon
                   return (
                     <button
-                      key={t}
+                      key={tItem}
                       type="button"
-                      className={chip(type === t)}
+                      className={chip(type === tItem)}
                       onClick={() => {
-                        setType(type === t ? '' : t)
+                        setType(type === tItem ? '' : tItem)
                         resetPage()
                       }}
                     >
                       <TypeIcon className="h-4 w-4" />
-                      {TYPE_META[t].label}
+                      {TYPE_META[tItem].label}
                     </button>
                   )
                 })}
@@ -320,7 +299,7 @@ export default function NotificationsPage() {
             <div>
               <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Severity</p>
               <div className="grid grid-cols-2 gap-1.5">
-                {SEVERITY_OPTIONS.map((o) => (
+                {severityOptions.map((o) => (
                   <button
                     key={o.label}
                     type="button"
@@ -337,20 +316,20 @@ export default function NotificationsPage() {
             </div>
 
             <label className="flex items-center justify-between text-sm text-slate-300">
-              Unread only
+              {t('page.unreadOnly')}
               <Toggle
                 checked={unreadOnly}
                 onChange={(v) => {
                   setUnreadOnly(v)
                   resetPage()
                 }}
-                label="Unread only"
+                label={t('page.unreadOnly')}
               />
             </label>
 
             {hasFilters && (
               <Button icon={X} variant="ghost" className="w-full" onClick={clearFilters}>
-                Clear filters
+                {t('page.clearFilters')}
               </Button>
             )}
           </Card>
@@ -375,16 +354,16 @@ export default function NotificationsPage() {
             <Card>
               <EmptyState
                 icon={Bell}
-                title={hasFilters ? 'No notifications match these filters' : "You're all caught up"}
+                title={hasFilters ? t('page.emptyTitle') : t('page.emptyTitleNone')}
                 description={
                   hasFilters
-                    ? 'Try widening the filters.'
-                    : 'Attack alerts, new blocks and server updates will show up here the moment they happen.'
+                    ? t('page.emptyDesc')
+                    : t('page.emptyDescNone')
                 }
                 action={
                   hasFilters ? (
                     <Button icon={X} onClick={clearFilters}>
-                      Clear filters
+                      {t('page.clearFilters')}
                     </Button>
                   ) : undefined
                 }
@@ -402,7 +381,7 @@ export default function NotificationsPage() {
                     </div>
                     <ul className="relative space-y-3">
                       {/* الخط الرأسي */}
-                      <span className="absolute bottom-6 left-5 top-6 w-px bg-white/8" />
+                      <span className="absolute bottom-6 start-5 top-6 w-px bg-white/8" />
                       {g.items.map((n) => (
                         <NotificationItem
                           key={n.id}

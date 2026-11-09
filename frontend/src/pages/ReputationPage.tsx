@@ -15,25 +15,74 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { ArrowDown, ArrowUp, Ban, Bot, CheckCircle2, Clock, Fingerprint, RefreshCw, Search, ShieldCheck, SlidersHorizontal, Unlock, Users, X } from 'lucide-react'
+import {
+  ArrowDown,
+  ArrowUp,
+  Ban,
+  Bot,
+  CheckCircle2,
+  Clock,
+  Fingerprint,
+  RefreshCw,
+  Search,
+  ShieldCheck,
+  SlidersHorizontal,
+  Unlock,
+  Users,
+  X,
+} from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { useToast } from '../components/ui/Toast'
-import { Badge, Button, Card, EmptyState, ErrorState, PageHeader, PageShell, PaginationBar, SelectInput, Skeleton, StatCard, TextInput } from '../components/ui/kit'
+import {
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  ErrorState,
+  PageHeader,
+  PageShell,
+  PaginationBar,
+  SelectInput,
+  Skeleton,
+  StatCard,
+  TextInput,
+} from '../components/ui/kit'
 import { useDebounce } from '../hooks/useDebounce'
 import { parseApiError } from '../services/apiError'
-import { banEntry, getReputationStats, listReputation, resetEntry, setAllowlist, unbanEntry, type ActionResult, type ReputationEntry, type ReputationQuery, type ReputationSortBy, type ReputationStats } from '../services/reputationService'
+import {
+  banEntry,
+  getReputationStats,
+  listReputation,
+  resetEntry,
+  setAllowlist,
+  unbanEntry,
+  type ActionResult,
+  type ReputationEntry,
+  type ReputationQuery,
+  type ReputationSortBy,
+  type ReputationStats,
+} from '../services/reputationService'
 import type { BanStatus, IpType } from '../services/types'
 import { selectUserRole, useAuthStore } from '../store/authStore'
 import { cn, formatNumber, timeAgo } from '../utils/format'
-import { ACTION_ROLES, BAND_META, BAND_ORDER, BanBadge, IP_TYPES, ScorePips, isCurrentlyBanned } from './reputation/shared'
+import {
+  ACTION_ROLES,
+  BAND_META,
+  BAND_ORDER,
+  BanBadge,
+  IP_TYPES,
+  ScorePips,
+  isCurrentlyBanned,
+} from './reputation/shared'
 import { ActionModal, type ActionKind } from './reputation/ActionModal'
 import { EntryDrawer } from './reputation/EntryDrawer'
-
 
 // ==================================================================
 // Page
 // ==================================================================
 
 export default function ReputationPage() {
+  const { t } = useTranslation(['reputation', 'common'])
   const toast = useToast()
   const [searchParams] = useSearchParams()
   const role = useAuthStore(selectUserRole)
@@ -95,11 +144,11 @@ export default function ReputationPage() {
       if (id !== requestId.current) return
       const { message } = parseApiError(err)
       setError(message)
-      toast.error('Failed to load reputation entries', message)
+      toast.error(t('toast.loadFailed'), message)
     } finally {
       if (id === requestId.current) setLoading(false)
     }
-  }, [query, toast])
+  }, [query, t, toast])
 
   const loadStats = useCallback(async () => {
     try {
@@ -149,7 +198,7 @@ export default function ReputationPage() {
       return true
     } catch (err) {
       const { message, status } = parseApiError(err)
-      toast.error(status === 403 ? 'Not allowed' : 'Action failed', message)
+      toast.error(status === 403 ? t('toast.notAllowed') : t('toast.actionFailed'), message)
       return false
     } finally {
       setBusyId(null)
@@ -180,8 +229,8 @@ export default function ReputationPage() {
     <PageShell>
       <PageHeader
         icon={Fingerprint}
-        title="Device Reputation"
-        subtitle="Every device the Gateway has seen, with its trust score and ban status."
+        title={t('page.title')}
+        subtitle={t('page.subtitle')}
         actions={
           <Button
             icon={RefreshCw}
@@ -191,32 +240,60 @@ export default function ReputationPage() {
               void loadStats()
             }}
           >
-            Refresh
+            {t('page.refresh')}
           </Button>
         }
       />
 
       {/* ---------- Stats ---------- */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Tracked devices" value={formatNumber(stats?.total)} icon={Users} tone="cyan" loading={!stats} delay={0} />
-        <StatCard label="Currently banned" value={formatNumber(bannedCount)} icon={Ban} tone="rose" loading={!stats} delay={60}
-          hint={stats ? `${stats.byBanStatus.PERMANENT} permanent` : undefined} />
-        <StatCard label="High risk" value={formatNumber(riskyCount)} icon={Clock} tone="amber" loading={!stats} delay={120}
-          hint="Score 7 – 10" />
-        <StatCard label="Known botnets" value={formatNumber(stats?.knownBotnets)} icon={Bot} tone="indigo" loading={!stats} delay={180}
-          hint={stats ? `${stats.allowlisted} trusted devices` : undefined} />
+        <StatCard
+          label={t('stats.tracked')}
+          value={formatNumber(stats?.total)}
+          icon={Users}
+          tone="cyan"
+          loading={!stats}
+          delay={0}
+        />
+        <StatCard
+          label={t('stats.banned')}
+          value={formatNumber(bannedCount)}
+          icon={Ban}
+          tone="rose"
+          loading={!stats}
+          delay={60}
+          hint={stats ? t('stats.permanent', { count: stats.byBanStatus.PERMANENT }) : undefined}
+        />
+        <StatCard
+          label={t('stats.highRisk')}
+          value={formatNumber(riskyCount)}
+          icon={Clock}
+          tone="amber"
+          loading={!stats}
+          delay={120}
+          hint={t('stats.highRiskHint')}
+        />
+        <StatCard
+          label={t('stats.botnets')}
+          value={formatNumber(stats?.knownBotnets)}
+          icon={Bot}
+          tone="indigo"
+          loading={!stats}
+          delay={180}
+          hint={stats ? t('stats.trustedHint', { count: stats.allowlisted }) : undefined}
+        />
       </div>
 
       {/* ---------- Score distribution ---------- */}
       <Card className="p-5" delay={150}>
         <div className="mb-3 flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-white">Score distribution</h3>
-          <span className="text-xs text-slate-500">All tracked devices</span>
+          <h3 className="text-sm font-semibold text-white">{t('distribution.title')}</h3>
+          <span className="text-xs text-slate-500">{t('distribution.subtitle')}</span>
         </div>
         {!stats ? (
           <Skeleton className="h-3 w-full rounded-full" />
         ) : stats.total === 0 ? (
-          <p className="text-sm text-slate-600">No devices tracked yet.</p>
+          <p className="text-sm text-slate-600">{t('distribution.empty')}</p>
         ) : (
           <>
             <div className="flex h-3 w-full overflow-hidden rounded-full bg-white/6">
@@ -257,37 +334,65 @@ export default function ReputationPage() {
                 setSearch(e.target.value)
                 resetPage()
               }}
-              placeholder="Search IP, fingerprint, JA3/JA4, country…"
+              placeholder={t('filters.search')}
             />
           </div>
           <div className="grid grid-cols-2 gap-3 lg:flex">
-            <SelectInput value={banStatus} onChange={(e) => { setBanStatus(e.target.value); resetPage() }} className="lg:w-40">
-              <option value="">All ban states</option>
-              <option value="NONE" className="bg-[#0b1224]">Not banned</option>
-              <option value="TEMPORARY" className="bg-[#0b1224]">Temporary</option>
-              <option value="PERMANENT" className="bg-[#0b1224]">Permanent</option>
+            <SelectInput
+              value={banStatus}
+              onChange={(e) => {
+                setBanStatus(e.target.value)
+                resetPage()
+              }}
+              className="lg:w-40"
+            >
+              <option value="">{t('filters.allBans')}</option>
+              <option value="NONE" className="bg-[#0b1224]">{t('filters.notBanned')}</option>
+              <option value="TEMPORARY" className="bg-[#0b1224]">{t('filters.temp')}</option>
+              <option value="PERMANENT" className="bg-[#0b1224]">{t('filters.perm')}</option>
             </SelectInput>
-            <SelectInput value={ipType} onChange={(e) => { setIpType(e.target.value); resetPage() }} className="lg:w-40">
-              <option value="">All IP types</option>
-              {IP_TYPES.map((t) => (
-                <option key={t} value={t} className="bg-[#0b1224]">{t.replace('_', ' / ')}</option>
+            <SelectInput
+              value={ipType}
+              onChange={(e) => {
+                setIpType(e.target.value)
+                resetPage()
+              }}
+              className="lg:w-40"
+            >
+              <option value="">{t('filters.allIpTypes')}</option>
+              {IP_TYPES.map((typ) => (
+                <option key={typ} value={typ} className="bg-[#0b1224]">{typ.replace('_', ' / ')}</option>
               ))}
             </SelectInput>
-            <SelectInput value={flag} onChange={(e) => { setFlag(e.target.value); resetPage() }} className="lg:w-40">
-              <option value="">Any flag</option>
-              <option value="allowlisted" className="bg-[#0b1224]">Trusted</option>
-              <option value="botnet" className="bg-[#0b1224]">Known botnet</option>
-              <option value="manual" className="bg-[#0b1224]">Manual ban</option>
+            <SelectInput
+              value={flag}
+              onChange={(e) => {
+                setFlag(e.target.value)
+                resetPage()
+              }}
+              className="lg:w-40"
+            >
+              <option value="">{t('filters.anyFlag')}</option>
+              <option value="allowlisted" className="bg-[#0b1224]">{t('filters.trusted')}</option>
+              <option value="botnet" className="bg-[#0b1224]">{t('filters.botnet')}</option>
+              <option value="manual" className="bg-[#0b1224]">{t('filters.manualBan')}</option>
             </SelectInput>
-            <SelectInput value={minScore} onChange={(e) => { setMinScore(e.target.value); resetPage() }} className="lg:w-36">
-              <option value="">Any score</option>
+            <SelectInput
+              value={minScore}
+              onChange={(e) => {
+                setMinScore(e.target.value)
+                resetPage()
+              }}
+              className="lg:w-36"
+            >
+              <option value="">{t('filters.anyScore')}</option>
               {[3, 5, 7, 9].map((n) => (
-                <option key={n} value={n} className="bg-[#0b1224]">Score ≥ {n}</option>
+                <option key={n} value={n} className="bg-[#0b1224]">{t('filters.scoreGte', { n })}</option>
               ))}
             </SelectInput>
           </div>
           {hasFilters && (
-            <Button icon={X} variant="ghost" onClick={clearFilters}>Clear</Button>
+            <Button icon={X} variant="ghost" onClick={clearFilters}>{t('filters.clear')}</Button>
           )}
         </div>
       </Card>
@@ -303,15 +408,18 @@ export default function ReputationPage() {
                 <thead>
                   <tr className="border-b border-white/6">
                     {[
-                      { label: 'Device', sort: null },
-                      { label: 'Score', sort: 'score' as const },
-                      { label: 'Ban status', sort: 'bannedUntil' as const },
-                      { label: 'Failed', sort: 'failedChecksCount' as const },
-                      { label: 'Requests', sort: 'totalRequests' as const },
-                      { label: 'Last seen', sort: 'lastSeenAt' as const },
+                      { label: t('table.device'), sort: null },
+                      { label: t('table.score'), sort: 'score' as const },
+                      { label: t('table.banStatus'), sort: 'bannedUntil' as const },
+                      { label: t('table.failed'), sort: 'failedChecksCount' as const },
+                      { label: t('table.requests'), sort: 'totalRequests' as const },
+                      { label: t('table.lastSeen'), sort: 'lastSeenAt' as const },
                       { label: '', sort: null },
                     ].map((col) => (
-                      <th key={col.label || 'actions'} className="px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                      <th
+                        key={col.label || 'actions'}
+                        className="px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500"
+                      >
                         {col.sort ? (
                           <button
                             type="button"
@@ -358,8 +466,8 @@ export default function ReputationPage() {
                           <p className="font-mono text-sm text-white">{entry.ipAddress}</p>
                           <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500">
                             <span>{[entry.countryCode, entry.ipType.replace('_', '/')].filter(Boolean).join(' · ')}</span>
-                            {entry.isAllowlisted && <Badge tone="emerald">Trusted</Badge>}
-                            {entry.isKnownBotnet && <Badge tone="rose">Botnet</Badge>}
+                            {entry.isAllowlisted && <Badge tone="emerald">{t('filters.trusted')}</Badge>}
+                            {entry.isKnownBotnet && <Badge tone="rose">{t('filters.botnet')}</Badge>}
                           </div>
                         </td>
                         <td className="px-5 py-3.5"><ScorePips score={entry.score} band={entry.scoreBand} /></td>
@@ -373,7 +481,7 @@ export default function ReputationPage() {
                               <button
                                 type="button"
                                 disabled={busy}
-                                title={banned ? 'Lift ban' : 'Ban device'}
+                                title={banned ? t('table.liftBan') : t('table.banDevice')}
                                 onClick={() => setModal({ kind: banned ? 'unban' : 'ban', entry })}
                                 className={cn(
                                   'rounded-lg p-2 disabled:opacity-40',
@@ -385,7 +493,7 @@ export default function ReputationPage() {
                               <button
                                 type="button"
                                 disabled={busy}
-                                title={entry.isAllowlisted ? 'Remove trust' : 'Mark as trusted'}
+                                title={entry.isAllowlisted ? t('table.removeTrust') : t('table.markTrusted')}
                                 onClick={() => toggleAllow(entry)}
                                 className="rounded-lg p-2 text-slate-400 hover:bg-white/5 hover:text-cyan-300 disabled:opacity-40"
                               >
@@ -403,9 +511,9 @@ export default function ReputationPage() {
               {!loading && entries.length === 0 && (
                 <EmptyState
                   icon={SlidersHorizontal}
-                  title={hasFilters ? 'No devices match these filters' : 'No devices tracked yet'}
-                  description={hasFilters ? 'Try widening the filters.' : 'Devices appear here as soon as the Gateway reports signals about them.'}
-                  action={hasFilters ? <Button icon={X} onClick={clearFilters}>Clear filters</Button> : undefined}
+                  title={hasFilters ? t('table.emptyTitle') : t('table.emptyTitleNone')}
+                  description={hasFilters ? t('table.emptyDesc') : t('table.emptyDescNone')}
+                  action={hasFilters ? <Button icon={X} onClick={clearFilters}>{t('filters.clearFilters')}</Button> : undefined}
                 />
               )}
             </div>
@@ -424,7 +532,6 @@ export default function ReputationPage() {
           </>
         )}
       </Card>
-
 
       <EntryDrawer
         entry={selected}

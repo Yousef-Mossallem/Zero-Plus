@@ -1,0 +1,92 @@
+{
+  "page": {
+    "title": "Dashboard",
+    "subtitle": "Live-Übersicht über Datenverkehr, Bedrohungen und Serverstatus.",
+    "allServers": "Alle Server",
+    "refresh": "Aktualisieren",
+    "noAccess": "Sie haben keinen Zugriff auf das Dashboard",
+    "noAccessDesc": "Das Dashboard steht Eigentümern, Administratoren und Analysten zur Verfügung. Bitten Sie einen Eigentümer um Rollenanpassung.",
+    "updatedAt": "Aktualisiert {{time}} · aktualisiert alle 45 Sekunden"
+  },
+  "overview": {
+    "totalRequests": "Gesamtanfragen · {{range}}",
+    "unread_one": "{{count}} ungelesene Benachrichtigung →",
+    "unread_other": "{{count}} ungelesene Benachrichtigungen →",
+    "avgRisk": "Durchschn. Risikowert",
+    "outOf": "von 100",
+    "segments": {
+      "allowed": "Erlaubt",
+      "monitored": "Überwacht",
+      "challenged": "Herausgefordert",
+      "rateLimited": "Ratenbegrenzt",
+      "blocked": "Blockiert"
+    }
+  },
+  "kpi": {
+    "activeBans": "Aktive Sperren",
+    "permanent": "{{count}} permanent",
+    "criticalEntries": "Kritische Einträge",
+    "newBans": "{{count}} neue Sperren im Zeitraum",
+    "challengePass": "Challenge-Erfolgsrate",
+    "passedOf": "{{passed}} von {{total}} bestanden",
+    "serversOnline": "Server online",
+    "serverHealth": "{{degraded}} beeinträchtigt · {{offline}} offline"
+  },
+  "surge": {
+    "title": "Verkehrsspitze erkannt",
+    "desc_one": "{{count}} Anstiegs-Signal in {{range}}. Überprüfen Sie den Verlauf und ziehen Sie Richtlinien an.",
+    "desc_other": "{{count}} Anstiegs-Signale in {{range}}. Überprüfen Sie den Verlauf und ziehen Sie Richtlinien an."
+  },
+  "timeline": {
+    "title": "Verkehrsverlauf",
+    "noData": "Keine Datenpunkte in diesem Zeitraum.",
+    "series": {
+      "total": "Gesamt",
+      "allowed": "Erlaubt",
+      "blocked": "Blockiert",
+      "challenged": "Herausgefordert",
+      "rateLimited": "Ratenbegrenzt"
+    }
+  },
+  "top": {
+    "title": "Top-Quellen",
+    "tabs": {
+      "ip": "IPs",
+      "path": "Pfade",
+      "country": "Länder",
+      "asn": "ASN",
+      "ipType": "IP-Typ",
+      "stage": "Stufe"
+    },
+    "empty": "Keine Daten für diese Aufschlüsselung.",
+    "avgRisk": "Durchschnittsrisiko {{score}}",
+    "share": "{{pct}}% des Verkehrs"
+  },
+  "servers": {
+    "title": "Geschützte Server",
+    "allServers": "Alle Server anzeigen →",
+    "empty": "Noch keine Server hinzugefügt.",
+    "safeCapacity": "Sichere Kapazität",
+    "quality": "Qualität",
+    "lastHour": "Letzte Stunde",
+    "load": "Auslastung",
+    "blocked": "/ {{count}} blockiert",
+    "notMeasured": "Nicht gemessen",
+    "protect": "Schützen",
+    "monitor": "Nur überwachen",
+    "checked": "geprüft {{time}}"
+  },
+  "threatMap": {
+    "title": "Geografische Verteilung",
+    "subtitle": "Anfragen gruppiert nach Herkunftsland",
+    "empty": "Keine geografischen Daten verfügbar.",
+    "unknown": "Unbekanntes Land: {{count}} Anfragen",
+    "blockedPct": "{{pct}}% blockiert",
+    "levels": {
+      "critical": "Kritisch",
+      "high": "Hoch",
+      "medium": "Mittel",
+      "low": "Niedrig"
+    }
+  }
+}

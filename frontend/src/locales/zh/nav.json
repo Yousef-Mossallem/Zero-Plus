@@ -1,0 +1,53 @@
+{
+  "brand": { "tagline": "安全网关" },
+  "groups": {
+    "overview": "总览",
+    "security": "安全防护",
+    "infrastructure": "基础设施",
+    "workspace": "工作区"
+  },
+  "items": {
+    "dashboard": "仪表盘",
+    "securityEvents": "安全事件",
+    "reputation": "信誉库",
+    "simulation": "攻击模拟实验室",
+    "servers": "受保护服务器",
+    "policies": "安全策略",
+    "reports": "安全报告",
+    "organization": "组织管理",
+    "notifications": "通知中心",
+    "profile": "个人设置"
+  },
+  "user": {
+    "fallback": "用户",
+    "organizationFallback": "组织"
+  },
+  "signOut": "退出登录",
+  "landing": {
+    "links": {
+      "home": "首页",
+      "about": "关于我们",
+      "contact": "联系我们",
+      "policies": "安全准则"
+    },
+    "auth": {
+      "dashboard": "控制台",
+      "login": "登录",
+      "signup": "注册"
+    },
+    "menu": "菜单",
+    "footer": {
+      "tagline": "专为中小企业打造的智能多层 DDoS 防护与安全网关。",
+      "pages": "页面导航",
+      "legal": "法律条款",
+      "contact": "联系方式",
+      "address": "埃及·开罗",
+      "rights": "© {{year}} Zero Plus. 保留所有权利。",
+      "legalLinks": {
+        "privacy": "隐私政策",
+        "terms": "服务条款",
+        "security": "安全与数据隔离"
+      }
+    }
+  }
+}

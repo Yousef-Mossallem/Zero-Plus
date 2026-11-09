@@ -1,0 +1,63 @@
+{
+  "page": {
+    "title": "Notifications",
+    "subtitle": "Real-time security alerts and activity feed.",
+    "markAllRead": "Mark all as read",
+    "markedAll": "All notifications marked as read",
+    "refresh": "Refresh",
+    "sound": "Notification sound",
+    "soundOn": "Sound on",
+    "soundOff": "Sound muted",
+    "search": "Search notifications…",
+    "allTypes": "All notification types",
+    "unreadOnly": "Unread only",
+    "clearFilters": "Clear filters",
+    "emptyTitle": "No notifications match these filters",
+    "emptyTitleNone": "No notifications yet",
+    "emptyDesc": "Try adjusting the filters.",
+    "emptyDescNone": "Security alerts and system notices will appear here in real time."
+  },
+  "days": {
+    "today": "Today",
+    "yesterday": "Yesterday"
+  },
+  "status": {
+    "new": "New",
+    "markRead": "Mark as read"
+  },
+  "types": {
+    "DDOS_START": "Attack / surge",
+    "NEW_BLOCK": "New block",
+    "CRITICAL_REPUTATION": "Critical reputation",
+    "SERVER_CAPACITY_WARNING": "Capacity warning",
+    "SERVER_RECOVERY": "Server recovery",
+    "POLICY_CHANGED": "Policy changed",
+    "REPORT_READY": "Report ready",
+    "SYSTEM": "System"
+  },
+  "severities": {
+    "1": "Info",
+    "2": "Notice",
+    "3": "Important",
+    "4": "Critical",
+    "5": "Emergency"
+  },
+  "connection": {
+    "connected": "Live",
+    "connectedHint": "Real-time updates are on",
+    "connecting": "Connecting…",
+    "connectingHint": "Reaching the server",
+    "disconnected": "Offline",
+    "disconnectedHint": "Retrying automatically",
+    "unauthorized": "Signed out",
+    "unauthorizedHint": "Session rejected by the socket",
+    "idle": "Idle",
+    "idleHint": "Not connected"
+  },
+  "filters": {
+    "anySeverity": "Any severity",
+    "sev2": "Notice+",
+    "sev3": "Important+",
+    "sev4": "Critical+"
+  }
+}

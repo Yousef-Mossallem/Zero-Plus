@@ -1,0 +1,118 @@
+{
+  "page": {
+    "title": "Sicherheitsereignisse",
+    "subtitle": "Jede vom Gateway geprüfte Anfrage – mit Entscheidung und Begründung.",
+    "live": "Live",
+    "liveLabel": "Automatische Aktualisierung alle 10 Sekunden",
+    "refresh": "Aktualisieren"
+  },
+  "stats": {
+    "total": "Ereignisse gesamt",
+    "matching": "Entspricht den aktuellen Filtern",
+    "allTime": "Gesamter Zeitraum",
+    "avgRisk": "Ø Risiko",
+    "blocked": "Blockiert",
+    "challenged": "Challenge",
+    "share": "{{pct}} % der Ereignisse"
+  },
+  "decision": {
+    "all": "Alle",
+    "ALLOW": "Erlauben",
+    "MONITOR": "Überwachen",
+    "RATE_LIMIT": "Ratenbegrenzung",
+    "CHALLENGE": "Challenge",
+    "BLOCK": "Blockieren"
+  },
+  "filters": {
+    "search": "IP, Pfad, User-Agent, Anfrage-ID, Grund suchen…",
+    "allServers": "Alle Server",
+    "more": "Mehr",
+    "clear": "Zurücksetzen",
+    "method": "Methode",
+    "ipType": "IP-Typ",
+    "challenge": "Challenge",
+    "any": "Beliebig",
+    "challenged": "Mit Challenge",
+    "notChallenged": "Ohne Challenge",
+    "minRisk": "Min. Risiko",
+    "maxRisk": "Max. Risiko",
+    "range": "0–100",
+    "from": "Von",
+    "to": "Bis",
+    "repFilter": "Nach Reputationseintrag gefiltert",
+    "removeRepFilter": "Reputationsfilter entfernen",
+    "clearFilters": "Filter zurücksetzen"
+  },
+  "ipTypes": {
+    "RESIDENTIAL": "Privat",
+    "MOBILE": "Mobil",
+    "DATACENTER": "Rechenzentrum",
+    "VPN_PROXY": "VPN / Proxy",
+    "TOR": "Tor",
+    "UNKNOWN": "Unbekannt"
+  },
+  "table": {
+    "columns": {
+      "time": "Zeit",
+      "ip": "IP",
+      "request": "Anfrage",
+      "server": "Server",
+      "risk": "Risiko",
+      "decision": "Entscheidung",
+      "challenge": "Challenge"
+    },
+    "passed": "Bestanden",
+    "failed": "Fehlgeschlagen",
+    "pending": "Ausstehend",
+    "empty": {
+      "title": "Keine Sicherheitsereignisse gefunden",
+      "description": "Nichts entspricht den aktuellen Filtern. Ereignisse erscheinen hier, sobald das Gateway Datenverkehr verarbeitet."
+    }
+  },
+  "toast": {
+    "loadFailed": "Sicherheitsereignisse konnten nicht geladen werden",
+    "copied": "{{label}} kopiert",
+    "copyFailed": "Kopieren fehlgeschlagen",
+    "copyBlocked": "Ihr Browser hat den Zugriff auf die Zwischenablage blockiert",
+    "detailsFailed": "Ereignisdetails konnten nicht geladen werden"
+  },
+  "drawer": {
+    "title": "Ereignisdetails",
+    "sections": {
+      "request": "Anfrage",
+      "network": "Netzwerk",
+      "detection": "Erkennung",
+      "signals": "Signale & Begründungsdetails",
+      "reputation": "Geräte-Reputation"
+    },
+    "fields": {
+      "ipAddress": "IP-Adresse",
+      "method": "Methode",
+      "path": "Pfad",
+      "server": "Server",
+      "requestId": "Anfrage-ID",
+      "referer": "Referer",
+      "userAgent": "User-Agent",
+      "country": "Land",
+      "asn": "ASN",
+      "ipType": "IP-Typ",
+      "stage": "Entschieden in Stufe",
+      "processing": "Verarbeitungszeit",
+      "anomaly": "KI-Anomaliewert",
+      "confidence": "KI-Konfidenz",
+      "challenge": "Challenge",
+      "notChallenged": "Ohne Challenge"
+    },
+    "copyIp": "IP kopieren",
+    "rep": {
+      "score": "Wert {{score}}/10 · {{type}}",
+      "notBanned": "Nicht gesperrt",
+      "open": "In Reputation öffnen",
+      "none": "Diesem Ereignis ist kein Reputationseintrag zugeordnet."
+    },
+    "banStatus": {
+      "TEMPORARY": "Temporär",
+      "PERMANENT": "Dauerhaft"
+    }
+  }
+}

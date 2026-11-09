@@ -6,6 +6,7 @@
 // ==================================================================
 
 import { Activity, Ban, CalendarRange, FileText } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 import { Badge } from '../../components/ui/kit'
 import type { Report } from '../../services/reportsService'
@@ -35,6 +36,7 @@ export default function ReportCard({
   index: number
   onOpen: () => void
 }) {
+  const { t } = useTranslation('reports')
   const ratio = r.eventCount > 0 ? Math.min(1, r.blockedCount / r.eventCount) : 0
   const type = TYPE_META[r.type]
 
@@ -74,11 +76,11 @@ export default function ReportCard({
         <div className="mb-1.5 flex items-center justify-between text-[11px] text-slate-500">
           <span className="flex items-center gap-1.5">
             <Activity className="h-3.5 w-3.5 text-cyan-400" />
-            {formatNumber(r.eventCount)} events
+            {t('card.events', { count: formatNumber(r.eventCount) })}
           </span>
           <span className="flex items-center gap-1.5">
             <Ban className="h-3.5 w-3.5 text-rose-400" />
-            {formatNumber(r.blockedCount)} blocked · {Math.round(ratio * 100)}%
+            {t('card.blockedRatio', { count: formatNumber(r.blockedCount), pct: Math.round(ratio * 100) })}
           </span>
         </div>
         <div className="h-1.5 overflow-hidden rounded-full bg-white/6">

@@ -18,6 +18,7 @@ import {
   SlidersHorizontal,
 } from 'lucide-react'
 
+import i18n from '../i18n'
 import type { Tone } from '../components/ui/kit'
 
 export type NotificationType =
@@ -43,25 +44,34 @@ export const NOTIFICATION_TYPES: NotificationType[] = [
 
 type IconType = ComponentType<{ className?: string }>
 
+function typeMeta(key: NotificationType, icon: IconType): { label: string; icon: IconType } {
+  return {
+    get label() {
+      return i18n.t(`types.${key}`, { ns: 'notifications', defaultValue: key })
+    },
+    icon,
+  }
+}
+
 /** أيقونة واسم كل نوع */
 export const TYPE_META: Record<NotificationType, { label: string; icon: IconType }> = {
-  DDOS_START: { label: 'Attack / surge', icon: ShieldAlert },
-  NEW_BLOCK: { label: 'New block', icon: Ban },
-  CRITICAL_REPUTATION: { label: 'Critical reputation', icon: Fingerprint },
-  SERVER_CAPACITY_WARNING: { label: 'Capacity warning', icon: Gauge },
-  SERVER_RECOVERY: { label: 'Server recovery', icon: CheckCircle2 },
-  POLICY_CHANGED: { label: 'Policy changed', icon: SlidersHorizontal },
-  REPORT_READY: { label: 'Report ready', icon: FileText },
-  SYSTEM: { label: 'System', icon: Info },
+  DDOS_START: typeMeta('DDOS_START', ShieldAlert),
+  NEW_BLOCK: typeMeta('NEW_BLOCK', Ban),
+  CRITICAL_REPUTATION: typeMeta('CRITICAL_REPUTATION', Fingerprint),
+  SERVER_CAPACITY_WARNING: typeMeta('SERVER_CAPACITY_WARNING', Gauge),
+  SERVER_RECOVERY: typeMeta('SERVER_RECOVERY', CheckCircle2),
+  POLICY_CHANGED: typeMeta('POLICY_CHANGED', SlidersHorizontal),
+  REPORT_READY: typeMeta('REPORT_READY', FileText),
+  SYSTEM: typeMeta('SYSTEM', Info),
 }
 
 /** أسماء الشدة (1 معلوماتي … 5 طارئ) */
 export const SEVERITY_LABELS: Record<number, string> = {
-  1: 'Info',
-  2: 'Notice',
-  3: 'Important',
-  4: 'Critical',
-  5: 'Emergency',
+  get 1() { return i18n.t('severities.1', { ns: 'notifications', defaultValue: 'Info' }) },
+  get 2() { return i18n.t('severities.2', { ns: 'notifications', defaultValue: 'Notice' }) },
+  get 3() { return i18n.t('severities.3', { ns: 'notifications', defaultValue: 'Important' }) },
+  get 4() { return i18n.t('severities.4', { ns: 'notifications', defaultValue: 'Critical' }) },
+  get 5() { return i18n.t('severities.5', { ns: 'notifications', defaultValue: 'Emergency' }) },
 }
 
 export interface NotificationVisual {

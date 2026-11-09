@@ -1,0 +1,298 @@
+{
+  "status": {
+    "ONLINE": "Online",
+    "PENDING": "Pending setup",
+    "DEGRADED": "Degraded",
+    "OFFLINE": "Offline",
+    "MAINTENANCE": "Maintenance"
+  },
+  "rec": {
+    "excellent": "Excellent",
+    "good": "Good",
+    "fair": "Fair",
+    "poor": "Poor",
+    "down": "Down"
+  },
+  "confidence": {
+    "high": "High confidence",
+    "medium": "Medium confidence",
+    "low": "Low confidence"
+  },
+  "mode": {
+    "PROTECT": "Protect",
+    "MONITOR_ONLY": "Monitor only"
+  },
+  "page": {
+    "title": "Protected Servers",
+    "subtitle": "Domains protected by the Gateway: DNS setup, health and measured capacity.",
+    "refresh": "Refresh",
+    "add": "Add server",
+    "attention_one": "<b>{{count}} server</b> needs attention ({{offline}} offline · {{degraded}} degraded).",
+    "attention_other": "<b>{{count}} servers</b> need attention ({{offline}} offline · {{degraded}} degraded).",
+    "showThem": "Show them",
+    "fleet": {
+      "title": "Fleet health",
+      "onlineSuffix": "/ {{total}} online",
+      "clickHint": "Click a status to filter",
+      "updated": "Updated {{time}}",
+      "all": "All",
+      "capacity": "Safe capacity · this page",
+      "measured": "Measured · this page",
+      "awaiting": "Awaiting ownership · this page"
+    },
+    "filters": {
+      "search": "Search by domain…",
+      "allModes": "All modes",
+      "anyDns": "Any DNS state",
+      "verified": "Ownership verified",
+      "notVerified": "Not verified",
+      "clear": "Clear",
+      "clearFilters": "Clear filters"
+    },
+    "sort": {
+      "newest": "Newest first",
+      "oldest": "Oldest first",
+      "updated": "Recently updated",
+      "domainAsc": "Domain A → Z",
+      "domainDesc": "Domain Z → A",
+      "status": "Status"
+    },
+    "empty": {
+      "filteredTitle": "No servers match these filters",
+      "filteredDesc": "Try widening the filters.",
+      "noneTitle": "No protected servers yet",
+      "noneManage": "Add your first domain to start routing its traffic through the Gateway.",
+      "noneViewer": "An Owner or Admin needs to add the first server."
+    },
+    "hint": "Protection starts once DNS ownership and routing are verified."
+  },
+  "toast": {
+    "loadFailed": "Failed to load servers",
+    "maintenanceFailed": "Could not change maintenance mode",
+    "verifyFirst": "Verify domain ownership first",
+    "verifyFirstDesc": "Capacity can only be measured for verified domains.",
+    "measureStarted": "Measurement started",
+    "waitSeconds": "Please wait {{s}}s before measuring again",
+    "waitGeneric": "Please wait before measuring again",
+    "notFound": "Server not found",
+    "notFoundDesc": "It may have been deleted.",
+    "measureFailed": "Could not start the measurement",
+    "measureSlow": "Measurement is taking longer than expected",
+    "measureSlowDesc": "No result yet. Check back in a minute or try again.",
+    "measureDone": "Capacity measurement finished",
+    "autoMeasure": "Capacity measurement started",
+    "autoMeasureDesc": "It runs in the background. The numbers will appear on the server card.",
+    "copied": "{{label}} copied",
+    "copyFailed": "Copy failed",
+    "copyBlocked": "Your browser blocked clipboard access",
+    "copyAria": "Copy {{label}}"
+  },
+  "card": {
+    "httpsOrigin": "HTTPS origin",
+    "httpOrigin": "HTTP origin",
+    "safeCapacity": "Safe capacity",
+    "max": "Max",
+    "p95": "p95",
+    "p99": "p99 load",
+    "errors": "Errors",
+    "measured": "Measured {{time}}",
+    "measuringTitle": "Measuring capacity…",
+    "measuringText": "Results usually arrive within about 2 minutes.",
+    "notMeasured": "Not measured yet",
+    "needsOwnership": "Verify domain ownership to start measuring.",
+    "clickMeasure": "Click “Measure” to run a capacity test.",
+    "ownerOnly": "An Owner or Admin can run a capacity test.",
+    "currentLoad": "Current load",
+    "avgResponse": "Avg response",
+    "checked": "Checked",
+    "setup": {
+      "ownership": "Ownership",
+      "routing": "Routing",
+      "origin": "Origin"
+    },
+    "details": "Details",
+    "dns": "DNS",
+    "finishSetup": "Finish setup",
+    "remeasure": "Re-measure",
+    "measure": "Measure",
+    "endMaintenance": "End maintenance",
+    "maintenance": "Maintenance",
+    "edit": "Edit",
+    "editAria": "Edit server",
+    "delete": "Delete",
+    "deleteAria": "Delete server"
+  },
+  "drawer": {
+    "fallbackTitle": "Server",
+    "verified": "Domain verified",
+    "notVerified": "Not verified",
+    "routingOk": "Routing OK",
+    "routingPending": "Routing pending",
+    "safeCapacity": "Safe capacity",
+    "measuring": "Measuring…",
+    "measuringDesc": "This takes about two minutes. The result appears here by itself.",
+    "notMeasured": "Not measured yet",
+    "noUsable": "No usable result from the last measurement",
+    "sections": {
+      "measurement": "Measurement",
+      "health": "Health"
+    },
+    "fields": {
+      "maxRate": "Max sustained rate",
+      "p95": "Response P95 (idle)",
+      "p99": "Response P99 (under load)",
+      "errorRate": "Error rate",
+      "confidence": "Confidence",
+      "lastMeasured": "Last measured",
+      "avgResponse": "Avg response",
+      "currentLoad": "Current load",
+      "originReachable": "Origin reachable",
+      "httpsOrigin": "HTTPS origin",
+      "lastCheck": "Last health check"
+    },
+    "yes": "Yes",
+    "no": "No",
+    "prove": {
+      "title": "Prove you own this domain first",
+      "text": "Capacity can only be measured for verified domains.",
+      "open": "Open DNS setup"
+    },
+    "remeasure": "Re-measure capacity",
+    "retryIn": "Try again in {{s}}s",
+    "unverifiedHint": "Verify domain ownership to enable measurement.",
+    "maintenanceHint": "Measurement is paused while the server is in maintenance.",
+    "ownerOnly": "Only Owners and Admins can re-measure capacity."
+  },
+  "dns": {
+    "title": "DNS setup",
+    "verifyOwnership": "Verify ownership",
+    "verifyRouting": "Verify routing",
+    "verifyAll": "Verify all",
+    "loadFailed": "Couldn’t load the DNS instructions for this server.",
+    "ownershipVerified": "Ownership verified",
+    "ownershipPending": "Ownership pending",
+    "routingVerified": "Routing verified",
+    "routingPending": "Routing pending",
+    "active": "Your domain is verified and routed through the Gateway. Capacity measurement runs in the background and the numbers will appear on the server card shortly.",
+    "step1": {
+      "badge": "Step 1",
+      "title": "Prove domain ownership",
+      "text": "Add this TXT record in your DNS provider, wait for it to propagate, then click “Verify ownership”. Keep it in place after verification."
+    },
+    "step2": {
+      "badge": "Step 2",
+      "title": "Route your domain to the Gateway"
+    },
+    "noRouting": "Gateway routing isn’t configured on the platform yet, so there are no routing records to show. Please contact support.",
+    "routingMulti": "Choose ONE of the options below (not both). Use CNAME for subdomains and A for root domains.",
+    "routingSingle": "Add this record, then click “Verify routing”.",
+    "option": "Option {{n}}",
+    "how": "How it works",
+    "latest": "Latest check",
+    "ownershipTxt": "Ownership (TXT)",
+    "routingCheck": "Routing (CNAME / A)",
+    "expected": "Expected: ",
+    "found": "Found: ",
+    "nothingFound": "Nothing found",
+    "cooldown": "Too many checks. You can verify again in {{s}}s.",
+    "ownerOnly": "Only Owners and Admins can run verification.",
+    "fields": {
+      "type": "Type",
+      "name": "Name",
+      "value": "Value",
+      "ttl": "TTL"
+    },
+    "toast": {
+      "loadFailed": "Failed to load DNS instructions",
+      "complete": "Verification complete",
+      "result": "Verification result",
+      "failed": "Verification failed"
+    }
+  },
+  "delete": {
+    "title": "Delete server",
+    "description": "This stops protection for the domain and permanently deletes its security events.",
+    "confirm": "Delete permanently",
+    "origin": "Origin {{addr}}",
+    "warning": "If your DNS still points to the Gateway, visitors will stop reaching your site after deletion. Point the domain back to your origin server (or remove the Gateway records) as part of this change.",
+    "typeToConfirm": "Type “{{domain}}” to confirm",
+    "toast": {
+      "deleted": "Server deleted",
+      "deletedDesc": "{{domain}} · {{n}} related events removed",
+      "already": "Server already deleted",
+      "failed": "Could not delete server"
+    }
+  },
+  "form": {
+    "addTitle": "Add protected server",
+    "editTitle": "Edit server",
+    "addDesc": "Traffic for this domain will pass through the Zero Plus Gateway.",
+    "editDesc": "Changing the domain requires verifying DNS ownership again.",
+    "save": "Save changes",
+    "add": "Add server",
+    "domain": {
+      "label": "Domain",
+      "hint": "e.g. shop.example.com — no http:// and no port"
+    },
+    "originIp": {
+      "label": "Origin IP",
+      "hint": "The real server’s IPv4 address"
+    },
+    "port": "Port",
+    "mode": {
+      "label": "Mode",
+      "protect": {
+        "title": "Protect",
+        "hint": "Block and rate-limit"
+      },
+      "monitor": {
+        "title": "Monitor only",
+        "hint": "Log decisions, enforce nothing"
+      }
+    },
+    "tip": "Tip: start with Monitor only to review decisions, then switch to Protect.",
+    "https": {
+      "title": "Origin uses HTTPS",
+      "hint": "Turn off if the origin only speaks plain HTTP."
+    },
+    "notice": {
+      "domain": "A new verification token will be issued and DNS ownership must be verified again before protection works for the new domain.",
+      "origin": "Changing the origin resets reachability, response times and capacity numbers. Capacity is measured again for the new origin.",
+      "ssl": "Changing the HTTPS setting triggers a new measurement."
+    },
+    "toast": {
+      "nothing": "Nothing to update",
+      "noChange": "No fields were changed",
+      "same": "The values are the same as the current ones",
+      "updated": "Server updated",
+      "dnsReset": "DNS verification was reset",
+      "dnsResetDesc": "Add the new TXT record and verify again.",
+      "originReset": "Origin checks were reset",
+      "originResetDesc": "Health and capacity numbers will be measured again.",
+      "added": "Server added",
+      "addedDesc": "Follow the DNS steps to activate protection.",
+      "updateFailed": "Could not update server",
+      "addFailed": "Could not add server"
+    }
+  },
+  "validation": {
+    "domain": {
+      "required": "Domain is required",
+      "noProtocol": "Enter the domain only, without http:// or https://",
+      "noPath": "Enter the domain only (no paths, spaces or special characters)",
+      "noPathOrPort": "Enter the domain only (no path, port or spaces)",
+      "needsExtension": "Domain needs an extension, e.g. shop.example.com",
+      "wildcard": "Wildcard domains are not supported. Add each subdomain separately",
+      "hasPort": "Don’t include a port in the domain. Use the Port field"
+    },
+    "originIp": {
+      "required": "Origin IP is required",
+      "invalid": "Enter a valid IPv4 address",
+      "ipv6": "IPv6 is not supported yet. Use an IPv4 address"
+    },
+    "originPort": {
+      "range": "Port must be between 1 and 65535",
+      "reserved": "This port is reserved for a non-web service and can’t be used as an origin"
+    }
+  }
+}

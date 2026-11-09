@@ -1,0 +1,63 @@
+{
+  "page": {
+    "title": "安全通知中心",
+    "subtitle": "实时全景推送安全告警、攻击阻断通知与系统动态。",
+    "markAllRead": "全部标为已读",
+    "markedAll": "所有告警通知已成功标记为已读",
+    "refresh": "刷新列表",
+    "sound": "告警提示音",
+    "soundOn": "提示音已开启",
+    "soundOff": "提示音已静音",
+    "search": "搜索通知内容或标题…",
+    "allTypes": "全部通知类型",
+    "unreadOnly": "仅看未读",
+    "clearFilters": "清空筛选",
+    "emptyTitle": "没有匹配筛选条件的通知",
+    "emptyTitleNone": "暂无任何安全通知",
+    "emptyDesc": "尝试调整筛选条件以查找记录。",
+    "emptyDescNone": "一旦网关捕获安全事件或系统状态变更，告警信息将实时呈现在此处。"
+  },
+  "days": {
+    "today": "今天",
+    "yesterday": "昨天"
+  },
+  "status": {
+    "new": "新通知",
+    "markRead": "标记已读"
+  },
+  "types": {
+    "DDOS_START": "攻击阻断 / 流量剧增",
+    "NEW_BLOCK": "新增封禁",
+    "CRITICAL_REPUTATION": "高危信誉恶化",
+    "SERVER_CAPACITY_WARNING": "源站容量预警",
+    "SERVER_RECOVERY": "源站恢复正常",
+    "POLICY_CHANGED": "安全策略变更",
+    "REPORT_READY": "安全分析报告就绪",
+    "SYSTEM": "系统通告"
+  },
+  "severities": {
+    "1": "一般信息",
+    "2": "提醒注意",
+    "3": "重要事件",
+    "4": "紧急严重",
+    "5": "重大灾备"
+  },
+  "connection": {
+    "connected": "实时联机",
+    "connectedHint": "WebSocket 实时同步已就绪",
+    "connecting": "连接中…",
+    "connectingHint": "正在建立安全通信信道",
+    "disconnected": "已离线",
+    "disconnectedHint": "正在后台自动尝试重连",
+    "unauthorized": "登录态失效",
+    "unauthorizedHint": "会话凭证已被网关拒绝",
+    "idle": "就绪空闲",
+    "idleHint": "未建立连接"
+  },
+  "filters": {
+    "anySeverity": "全部严重级别",
+    "sev2": "注意级别及以上",
+    "sev3": "重要级别及以上",
+    "sev4": "紧急级别及以上"
+  }
+}

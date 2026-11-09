@@ -1,0 +1,31 @@
+{
+  "hero": {
+    "titleLine": "We’d love to",
+    "titleHighlight": "hear from you",
+    "description": "For any question about Zero Plus, a trial request, or a technical inquiry—write to us and we’ll get back as soon as we can."
+  },
+  "info": {
+    "email": "Email",
+    "phone": "Phone",
+    "address": "Address",
+    "response": "Response time",
+    "addressValue": "Cairo, Egypt",
+    "responseValue": "Within one business day"
+  },
+  "form": {
+    "title": "Send us a message",
+    "success": "We received your message. We’ll contact you at your email soon.",
+    "name": { "label": "Name", "placeholder": "Your full name" },
+    "email": { "label": "Email", "placeholder": "you@company.com" },
+    "subject": { "label": "Subject", "placeholder": "e.g. Question about server protection" },
+    "message": { "label": "Message", "placeholder": "Write the details of your request here..." },
+    "sending": "Sending...",
+    "send": "Send message"
+  },
+  "validation": {
+    "name": { "required": "Name is required" },
+    "email": { "required": "Email is required", "invalid": "Invalid email format" },
+    "subject": { "required": "Subject is required" },
+    "message": { "tooShort": "Message must be at least 10 characters" }
+  }
+}

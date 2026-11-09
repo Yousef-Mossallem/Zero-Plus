@@ -10,10 +10,12 @@
 //   3) نجاح → /dashboard
 //
 // ملاحظة: مفيش باسورد في الدخول الأساسي.
+// i18n: كل النصوص جاية من locales (قسم auth + errors)، وفيه زر اختيار لغة.
 // ==================================================================
 
 import { useState, useEffect, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import {
   Shield,
   Mail,
@@ -29,6 +31,7 @@ import {
 } from 'lucide-react'
 import { useAuthStore } from '../store/authStore'
 import type { LoginRequest } from '../services/authService'
+import LanguageSwitcher from '../components/LanguageSwitcher'
 
 // ==================================================================
 // Constants & Helpers
@@ -38,6 +41,9 @@ import type { LoginRequest } from '../services/authService'
 const EMAIL_MIN_LENGTH = 5
 const EMAIL_MAX_LENGTH = 255
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+/** أكواد أخطاء التحقق: بتتترجم وقت العرض من errors.json → validation.email.* */
+type EmailErrorCode = 'required' | 'tooShort' | 'tooLong' | 'invalid'
 
 /**
  * هل المتصفح يدعم WebAuthn؟
@@ -59,6 +65,9 @@ function isPasskeySupported(): boolean {
 export default function LoginPage() {
   const navigate = useNavigate()
 
+  // الأقسام: auth للصفحة، errors لرسائل التحقق
+  const { t } = useTranslation(['auth', 'errors'])
+
   const login = useAuthStore((s) => s.login)
   const status = useAuthStore((s) => s.status)
   const error = useAuthStore((s) => s.error)
@@ -72,7 +81,8 @@ export default function LoginPage() {
   // ----------------------------------------------------------------
 
   const [email, setEmail] = useState('')
-  const [emailError, setEmailError] = useState<string | undefined>()
+  // بنخزن الكود مش الجملة، عشان لو اللغة اتغيرت الرسالة تتترجم فوراً
+  const [emailError, setEmailError] = useState<EmailErrorCode | undefined>()
   const [emailTouched, setEmailTouched] = useState(false)
   const [passkeySupported] = useState(isPasskeySupported)
 
@@ -95,13 +105,13 @@ export default function LoginPage() {
   // Validation
   // ----------------------------------------------------------------
 
-  const validateEmail = (value: string): string | undefined => {
+  const validateEmail = (value: string): EmailErrorCode | undefined => {
     const trimmed = value.trim()
 
-    if (!trimmed) return 'Work email is required'
-    if (trimmed.length < EMAIL_MIN_LENGTH) return 'Email is too short'
-    if (trimmed.length > EMAIL_MAX_LENGTH) return 'Email is too long'
-    if (!EMAIL_REGEX.test(trimmed)) return 'Invalid email format'
+    if (!trimmed) return 'required'
+    if (trimmed.length < EMAIL_MIN_LENGTH) return 'tooShort'
+    if (trimmed.length > EMAIL_MAX_LENGTH) return 'tooLong'
+    if (!EMAIL_REGEX.test(trimmed)) return 'invalid'
 
     return undefined
   }
@@ -150,12 +160,25 @@ export default function LoginPage() {
 
   const showEmailError = emailTouched && !!emailError
 
+  // مميزات الهيرو: المفتاح بيوصف الوظيفة، والنص بييجي من الترجمة
+  const features = [
+    { icon: Activity, key: 'liveTraffic' },
+    { icon: LockKeyhole, key: 'sessionSecured' },
+    { icon: Zap, key: 'instantDecisions' },
+  ] as const
+
   // ----------------------------------------------------------------
   // Render
   // ----------------------------------------------------------------
 
   return (
     <div className="relative min-h-screen w-full overflow-hidden bg-[#05070f] text-white">
+      {/* ============================================================ */}
+      {/* Language Switcher (فوق في الركن، بيتقلب تلقائياً في العربي)    */}
+      {/* ============================================================ */}
+
+      <LanguageSwitcher className="absolute end-4 top-4 z-20" />
+
       {/* ============================================================ */}
       {/* Background Layers                                            */}
       {/* ============================================================ */}
@@ -173,8 +196,9 @@ export default function LoginPage() {
         }}
       />
 
-      <div className="pointer-events-none absolute -left-40 top-1/4 h-105 w-105 rounded-full bg-cyan-500/10 blur-[120px]" />
-      <div className="pointer-events-none absolute -right-40 bottom-1/4 h-95 w-95 rounded-full bg-indigo-600/15 blur-[110px]" />
+      {/* start/end بدل left/right عشان الخلفية تتقلب مع الاتجاه */}
+      <div className="pointer-events-none absolute -start-40 top-1/4 h-105 w-105 rounded-full bg-cyan-500/10 blur-[120px]" />
+      <div className="pointer-events-none absolute -end-40 bottom-1/4 h-95 w-95 rounded-full bg-indigo-600/15 blur-[110px]" />
       <div className="pointer-events-none absolute left-1/2 top-0 h-70 w-150 -translate-x-1/2 rounded-full bg-emerald-500/5 blur-[100px]" />
 
       {/* ============================================================ */}
@@ -183,21 +207,21 @@ export default function LoginPage() {
 
       <div className="relative z-10 mx-auto flex min-h-screen max-w-7xl flex-col lg:flex-row">
         {/* ---------------------------------------------------------- */}
-        {/* Left Panel – Branding                                      */}
+        {/* Branding Panel (على الشمال في LTR وعلى اليمين في RTL)       */}
         {/* ---------------------------------------------------------- */}
 
         <div className="hidden flex-1 flex-col justify-between p-12 lg:flex xl:p-16">
-          {/* Logo */}
+          {/* Logo: الاسم بيفضل ZeroPlus بالحروف اللاتينية في كل اللغات */}
           <div className="flex items-center gap-3">
             <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-linear-to-br from-cyan-400 to-blue-600 shadow-lg shadow-cyan-500/25">
               <Shield className="h-6 w-6 text-white" strokeWidth={2.2} />
             </div>
             <div>
-              <span className="text-xl font-bold tracking-tight text-white">
+              <span className="text-xl font-bold tracking-tight text-white" dir="ltr">
                 Zero<span className="text-cyan-400">Plus</span>
               </span>
-              <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-slate-500">
-                Adaptive Security Gateway
+              <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-slate-500 rtl:tracking-normal">
+                {t('brand.tagline')}
               </p>
             </div>
           </div>
@@ -207,49 +231,41 @@ export default function LoginPage() {
             <div className="space-y-4">
               <div className="inline-flex items-center gap-2 rounded-full border border-cyan-500/20 bg-cyan-500/10 px-3 py-1 text-xs font-medium text-cyan-300">
                 <ShieldCheck className="h-3.5 w-3.5" />
-                Passwordless. Phishing-resistant.
+                {t('login.hero.badge')}
               </div>
 
-              <h1 className="text-4xl font-bold leading-[1.15] tracking-tight text-white xl:text-5xl">
-                Welcome back to
+              <h1 className="text-4xl font-bold leading-[1.15] tracking-tight text-white xl:text-5xl rtl:tracking-normal rtl:leading-[1.3]">
+                {t('login.hero.titleLine')}
                 <span className="block bg-linear-to-r from-cyan-300 via-blue-400 to-indigo-400 bg-clip-text text-transparent">
-                  command center
+                  {t('login.hero.titleHighlight')}
                 </span>
               </h1>
 
               <p className="text-base leading-relaxed text-slate-400">
-                Sign in with your fingerprint, face, or device PIN. No
-                passwords to leak, no codes to type. Your live traffic and
-                policies are one touch away.
+                {t('login.hero.description')}
               </p>
             </div>
 
             {/* Feature pills */}
             <div className="flex flex-wrap gap-3">
-              {[
-                { icon: Activity, label: 'Live Traffic Feed' },
-                { icon: LockKeyhole, label: 'Session Secured' },
-                { icon: Zap, label: 'Instant Decisions' },
-              ].map(({ icon: Icon, label }) => (
+              {features.map(({ icon: Icon, key }) => (
                 <div
-                  key={label}
+                  key={key}
                   className="flex items-center gap-2 rounded-lg border border-white/5 bg-white/3 px-3 py-2 text-sm text-slate-300 backdrop-blur-sm"
                 >
                   <Icon className="h-4 w-4 text-cyan-400" />
-                  {label}
+                  {t(`login.hero.features.${key}`)}
                 </div>
               ))}
             </div>
           </div>
 
           {/* Footer note */}
-          <p className="text-xs text-slate-600">
-            Multi-tenant isolation • Real-time Socket updates • Audit-ready logs
-          </p>
+          <p className="text-xs text-slate-600">{t('login.hero.footer')}</p>
         </div>
 
         {/* ---------------------------------------------------------- */}
-        {/* Right Panel – Form                                         */}
+        {/* Form Panel                                                 */}
         {/* ---------------------------------------------------------- */}
 
         <div className="flex flex-1 items-center justify-center p-6 sm:p-10 lg:p-12">
@@ -259,7 +275,7 @@ export default function LoginPage() {
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-linear-to-br from-cyan-400 to-blue-600">
                 <Shield className="h-5 w-5 text-white" />
               </div>
-              <span className="text-lg font-bold text-white">
+              <span className="text-lg font-bold text-white" dir="ltr">
                 Zero<span className="text-cyan-400">Plus</span>
               </span>
             </div>
@@ -271,33 +287,28 @@ export default function LoginPage() {
 
               {/* Header */}
               <div className="mb-8 space-y-2">
-                <h2 className="text-2xl font-bold tracking-tight text-white">
-                  Sign in to Zero Plus
+                <h2 className="text-2xl font-bold tracking-tight text-white rtl:tracking-normal">
+                  {t('login.title')}
                 </h2>
-                <p className="text-sm text-slate-400">
-                  Enter your work email, then confirm with your passkey.
-                </p>
+                <p className="text-sm text-slate-400">{t('login.subtitle')}</p>
               </div>
 
               {/* Unsupported browser */}
               {!passkeySupported && (
                 <div className="mb-6 flex items-start gap-3 rounded-xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-300">
                   <Info className="mt-0.5 h-4 w-4 shrink-0" />
-                  <span>
-                    This browser doesn&apos;t support passkeys. Please use a
-                    recent version of Chrome, Safari, Edge, or Firefox.
-                  </span>
+                  <span>{t('login.unsupported')}</span>
                 </div>
               )}
 
-              {/* Global Error */}
+              {/* Global Error (جاية من الباك/الـ store — هتتحول لأكواد في خطوة الأخطاء) */}
               {error && (
                 <div
                   role="alert"
                   className="mb-6 flex items-start gap-3 rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-300"
                 >
                   <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-                  <span>{error}</span>
+                  <span dir="auto">{error}</span>
                 </div>
               )}
 
@@ -312,21 +323,23 @@ export default function LoginPage() {
                 <div className="space-y-1.5">
                   <label
                     htmlFor="login-email"
-                    className="text-xs font-medium uppercase tracking-wider text-slate-400"
+                    className="text-xs font-medium uppercase tracking-wider text-slate-400 rtl:tracking-normal"
                   >
-                    Work Email
+                    {t('login.emailLabel')}
                   </label>
 
                   <div className="relative">
+                    {/* الإيميل دايماً LTR: فالأيقونة والـ padding ثابتين على الشمال */}
                     <Mail className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
 
                     <input
                       id="login-email"
                       type="email"
+                      dir="ltr"
                       value={email}
                       onChange={(e) => handleEmailChange(e.target.value)}
                       onBlur={handleEmailBlur}
-                      placeholder="you@company.com"
+                      placeholder={t('login.emailPlaceholder')}
                       disabled={isLoading}
                       autoComplete="username webauthn"
                       autoFocus
@@ -347,9 +360,9 @@ export default function LoginPage() {
                     />
                   </div>
 
-                  {showEmailError && (
+                  {showEmailError && emailError && (
                     <p id="login-email-error" className="text-xs text-rose-400">
-                      {emailError}
+                      {t(`validation.email.${emailError}`, { ns: 'errors' })}
                     </p>
                   )}
                 </div>
@@ -358,8 +371,7 @@ export default function LoginPage() {
                 <div className="flex items-start gap-3 rounded-xl border border-white/5 bg-white/2 px-4 py-3">
                   <Fingerprint className="mt-0.5 h-4 w-4 shrink-0 text-cyan-400" />
                   <p className="text-xs leading-relaxed text-slate-400">
-                    After you continue, your device will ask for Face ID,
-                    Touch ID, Windows Hello, or your device PIN.
+                    {t('login.passkeyHint')}
                   </p>
                 </div>
 
@@ -381,13 +393,14 @@ export default function LoginPage() {
                   {isLoading ? (
                     <>
                       <Loader2 className="h-4 w-4 animate-spin" />
-                      Waiting for your passkey...
+                      {t('login.submit.waiting')}
                     </>
                   ) : (
                     <>
                       <Fingerprint className="h-4 w-4" />
-                      Continue with Passkey
-                      <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />
+                      {t('login.submit.continue')}
+                      {/* السهم اتجاهي: بيتعكس في العربي وحركته الهوفر بتتعكس كمان */}
+                      <ArrowRight className="h-4 w-4 transition-transform duration-300 rtl:rotate-180 ltr:group-hover:translate-x-1 rtl:group-hover:-translate-x-1" />
                     </>
                   )}
                 </button>
@@ -396,23 +409,21 @@ export default function LoginPage() {
               {/* Footer */}
               <div className="mt-8 space-y-3 text-center text-sm text-slate-500">
                 <p>
-                  Don&apos;t have an account?{' '}
+                  {t('login.noAccount')}{' '}
                   <Link
                     to="/signup"
                     className="font-medium text-cyan-400 transition hover:text-cyan-300"
                   >
-                    Create one
+                    {t('login.createOne')}
                   </Link>
                 </p>
-                <p className="text-xs text-slate-600">
-                  Lost access to your device? Contact your organization admin.
-                </p>
+                <p className="text-xs text-slate-600">{t('login.lostAccess')}</p>
               </div>
             </div>
 
             {/* Trust note */}
             <p className="mt-6 text-center text-[11px] text-slate-600">
-              Protected by Zero Plus passwordless authentication
+              {t('login.trustNote')}
             </p>
           </div>
         </div>

@@ -1,0 +1,31 @@
+{
+  "hero": {
+    "titleLine": "يسعدنا أن",
+    "titleHighlight": "نسمع منك",
+    "description": "لأي سؤال عن Zero Plus أو طلب تجربة أو استفسار تقني، راسلنا وسنرد عليك في أقرب وقت."
+  },
+  "info": {
+    "email": "البريد الإلكتروني",
+    "phone": "الهاتف",
+    "address": "العنوان",
+    "response": "وقت الرد",
+    "addressValue": "القاهرة، مصر",
+    "responseValue": "خلال يوم عمل واحد"
+  },
+  "form": {
+    "title": "أرسل لنا رسالة",
+    "success": "استلمنا رسالتك. سنتواصل معك على بريدك الإلكتروني قريباً.",
+    "name": { "label": "الاسم", "placeholder": "اسمك الكامل" },
+    "email": { "label": "البريد الإلكتروني", "placeholder": "you@company.com" },
+    "subject": { "label": "الموضوع", "placeholder": "مثال: سؤال عن حماية السيرفرات" },
+    "message": { "label": "الرسالة", "placeholder": "اكتب تفاصيل طلبك هنا..." },
+    "sending": "جارٍ الإرسال...",
+    "send": "إرسال الرسالة"
+  },
+  "validation": {
+    "name": { "required": "الاسم مطلوب" },
+    "email": { "required": "البريد الإلكتروني مطلوب", "invalid": "صيغة البريد الإلكتروني غير صحيحة" },
+    "subject": { "required": "الموضوع مطلوب" },
+    "message": { "tooShort": "يجب ألا تقل الرسالة عن 10 أحرف" }
+  }
+}

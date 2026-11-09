@@ -10,7 +10,7 @@
 //          ثم كروت KPI صغيرة، ثم الرسم الزمني، ثم Top + Servers، ثم الخريطة
 // ==================================================================
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   Ban,
@@ -21,6 +21,7 @@ import {
   Server as ServerIcon,
   ShieldCheck,
 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 import {
   Button,
@@ -52,12 +53,12 @@ const RANGES: Array<{ value: DashboardRange; label: string }> = [
 
 type SegmentKey = 'allowed' | 'monitored' | 'challenged' | 'rateLimited' | 'blocked'
 
-const SEGMENTS: Array<{ key: SegmentKey; label: string; bar: string }> = [
-  { key: 'allowed', label: 'Allowed', bar: 'bg-emerald-400' },
-  { key: 'monitored', label: 'Monitored', bar: 'bg-cyan-400' },
-  { key: 'challenged', label: 'Challenged', bar: 'bg-indigo-400' },
-  { key: 'rateLimited', label: 'Rate limited', bar: 'bg-amber-400' },
-  { key: 'blocked', label: 'Blocked', bar: 'bg-rose-400' },
+const SEGMENTS_CONFIG: Array<{ key: SegmentKey; bar: string }> = [
+  { key: 'allowed', bar: 'bg-emerald-400' },
+  { key: 'monitored', bar: 'bg-cyan-400' },
+  { key: 'challenged', bar: 'bg-indigo-400' },
+  { key: 'rateLimited', bar: 'bg-amber-400' },
+  { key: 'blocked', bar: 'bg-rose-400' },
 ]
 
 /** نسبة مئوية بدون كسور زيادة */
@@ -70,17 +71,18 @@ function pct(part: number, total: number): string {
 // ==================================================================
 
 function RiskRing({ score, loading }: { score: number | null; loading: boolean }) {
+  const { t } = useTranslation('dashboard')
   const r = 52
   const c = 2 * Math.PI * r
   const v = Math.max(0, Math.min(100, score ?? 0))
   const meta =
     v >= 80
-      ? { label: 'Critical', color: '#fb7185' }
+      ? { label: t('threatMap.levels.critical'), color: '#fb7185' }
       : v >= 60
-        ? { label: 'High', color: '#fb923c' }
+        ? { label: t('threatMap.levels.high'), color: '#fb923c' }
         : v >= 31
-          ? { label: 'Elevated', color: '#fbbf24' }
-          : { label: 'Low', color: '#34d399' }
+          ? { label: t('threatMap.levels.medium'), color: '#fbbf24' }
+          : { label: t('threatMap.levels.low'), color: '#34d399' }
 
   return (
     <div className="flex flex-col items-center gap-3">
@@ -110,13 +112,13 @@ function RiskRing({ score, loading }: { score: number | null; loading: boolean }
               <span className="text-3xl font-bold tabular-nums text-white">
                 {score !== null ? score.toFixed(1) : '—'}
               </span>
-              <span className="text-[11px] text-slate-500">out of 100</span>
+              <span className="text-[11px] text-slate-500">{t('overview.outOf')}</span>
             </>
           )}
         </div>
       </div>
       <div className="text-center">
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Avg risk score</p>
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{t('overview.avgRisk')}</p>
         {!loading && score !== null && (
           <p className="mt-0.5 text-sm font-semibold" style={{ color: meta.color }}>
             {meta.label}
@@ -132,8 +134,18 @@ function RiskRing({ score, loading }: { score: number | null; loading: boolean }
 // ==================================================================
 
 function Overview({ section, range, onRetry }: { section: Section<OverviewData>; range: DashboardRange; onRetry: () => void }) {
+  const { t } = useTranslation('dashboard')
   const { data, loading, error } = section
   const first = loading && !data
+
+  const segments = useMemo(
+    () =>
+      SEGMENTS_CONFIG.map((s) => ({
+        ...s,
+        label: t(`overview.segments.${s.key}` as never),
+      })),
+    [t],
+  )
 
   if (error && !data) {
     return (
@@ -143,8 +155,8 @@ function Overview({ section, range, onRetry }: { section: Section<OverviewData>;
     )
   }
 
-  const t = data?.traffic
-  const total = t?.total ?? 0
+  const tr = data?.traffic
+  const total = tr?.total ?? 0
   const serverTotal = data ? Object.values(data.servers).reduce((n, v) => n + (v ?? 0), 0) : 0
   const online = data?.servers.ONLINE ?? 0
   const passRate = data && data.challenges.total > 0 ? pct(data.challenges.passed, data.challenges.total) : '—'
@@ -156,21 +168,21 @@ function Overview({ section, range, onRetry }: { section: Section<OverviewData>;
         <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
           <div className="min-w-0">
             <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-              Total requests · {data?.rangeLabel ?? range}
+              {t('overview.totalRequests', { range: data?.rangeLabel ?? range })}
             </p>
             {first ? (
               <Skeleton className="mt-2 h-12 w-48 rounded-md" />
             ) : (
-              <p className="mt-1 text-5xl font-bold tracking-tight text-white tabular-nums">{formatNumber(t?.total)}</p>
+              <p className="mt-1 text-5xl font-bold tracking-tight text-white tabular-nums">{formatNumber(tr?.total)}</p>
             )}
 
             {/* شريط تركيبة الترافيك */}
             <div className="mt-6 flex h-3 overflow-hidden rounded-full bg-white/6">
               {!first &&
-                t &&
+                tr &&
                 total > 0 &&
-                SEGMENTS.map((s) => {
-                  const value = t[s.key] ?? 0
+                segments.map((s) => {
+                  const value = tr[s.key] ?? 0
                   return value > 0 ? (
                     <div
                       key={s.key}
@@ -183,7 +195,7 @@ function Overview({ section, range, onRetry }: { section: Section<OverviewData>;
             </div>
 
             <div className="mt-5 grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3 xl:grid-cols-5">
-              {SEGMENTS.map((s) => (
+              {segments.map((s) => (
                 <div key={s.key}>
                   <p className="flex items-center gap-2 text-xs text-slate-400">
                     <span className={cn('h-2 w-2 rounded-full', s.bar)} />
@@ -193,8 +205,8 @@ function Overview({ section, range, onRetry }: { section: Section<OverviewData>;
                     <Skeleton className="mt-1.5 h-5 w-14" />
                   ) : (
                     <p className="mt-1 text-base font-semibold tabular-nums text-white">
-                      {formatNumber(t?.[s.key])}
-                      <span className="ml-1.5 text-xs font-normal text-slate-500">{t ? pct(t[s.key] ?? 0, total) : ''}</span>
+                      {formatNumber(tr?.[s.key])}
+                      <span className="ms-1.5 text-xs font-normal text-slate-500">{tr ? pct(tr[s.key] ?? 0, total) : ''}</span>
                     </p>
                   )}
                 </div>
@@ -206,12 +218,12 @@ function Overview({ section, range, onRetry }: { section: Section<OverviewData>;
                 to="/notifications"
                 className="mt-5 inline-flex items-center gap-2 rounded-lg border border-cyan-400/20 bg-cyan-500/8 px-3 py-1.5 text-xs font-medium text-cyan-300 hover:bg-cyan-500/15"
               >
-                {data.unreadNotifications} unread notification{data.unreadNotifications === 1 ? '' : 's'} →
+                {t('overview.unread', { count: data.unreadNotifications })}
               </Link>
             )}
           </div>
 
-          <div className="flex justify-center lg:border-l lg:border-white/8 lg:pl-8">
+          <div className="flex justify-center lg:border-s lg:border-white/8 lg:ps-8">
             <RiskRing score={data ? data.risk.avgScore : null} loading={first} />
           </div>
         </div>
@@ -220,34 +232,41 @@ function Overview({ section, range, onRetry }: { section: Section<OverviewData>;
       {/* ---------- كروت KPI ---------- */}
       <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
         <StatCard
-          label="Active bans"
+          label={t('kpi.activeBans')}
           value={formatNumber(data?.reputation.activeBans)}
           icon={Ban}
           tone="rose"
           loading={first}
           delay={0}
-          hint={data ? `${formatNumber(data.reputation.permanentBans)} permanent` : undefined}
+          hint={data ? t('kpi.permanent', { count: formatNumber(data.reputation.permanentBans) }) : undefined}
         />
         <StatCard
-          label="Critical entries"
+          label={t('kpi.criticalEntries')}
           value={formatNumber(data?.reputation.criticalEntries)}
           icon={Fingerprint}
           tone="amber"
           loading={first}
           delay={50}
-          hint={data ? `${formatNumber(data.reputation.newBansInRange)} new bans in range` : undefined}
+          hint={data ? t('kpi.newBans', { count: formatNumber(data.reputation.newBansInRange) }) : undefined}
         />
         <StatCard
-          label="Challenge pass rate"
+          label={t('kpi.challengePass')}
           value={passRate}
           icon={ShieldCheck}
           tone="indigo"
           loading={first}
           delay={100}
-          hint={data ? `${formatNumber(data.challenges.passed)} of ${formatNumber(data.challenges.total)} passed` : undefined}
+          hint={
+            data
+              ? t('kpi.passedOf', {
+                  passed: formatNumber(data.challenges.passed),
+                  total: formatNumber(data.challenges.total),
+                })
+              : undefined
+          }
         />
         <StatCard
-          label="Servers online"
+          label={t('kpi.serversOnline')}
           value={data ? `${online}/${serverTotal}` : '—'}
           icon={ServerIcon}
           tone={data && online < serverTotal ? 'amber' : 'emerald'}
@@ -255,7 +274,10 @@ function Overview({ section, range, onRetry }: { section: Section<OverviewData>;
           delay={150}
           hint={
             data
-              ? `${data.servers.DEGRADED ?? 0} degraded · ${data.servers.OFFLINE ?? 0} offline`
+              ? t('kpi.serverHealth', {
+                  degraded: data.servers.DEGRADED ?? 0,
+                  offline: data.servers.OFFLINE ?? 0,
+                })
               : undefined
           }
         />
@@ -269,6 +291,7 @@ function Overview({ section, range, onRetry }: { section: Section<OverviewData>;
 // ==================================================================
 
 export default function DashboardPage() {
+  const { t, i18n } = useTranslation('dashboard')
   const [range, setRange] = useState<DashboardRange>('24h')
   const [serverId, setServerId] = useState('')
   const [topBy, setTopBy] = useState<TopBy>('ip')
@@ -293,8 +316,8 @@ export default function DashboardPage() {
     <PageShell>
       <PageHeader
         icon={LayoutDashboard}
-        title="Dashboard"
-        subtitle="Live overview of traffic, threats and server health."
+        title={t('page.title')}
+        subtitle={t('page.subtitle')}
         actions={
           <>
             {/* اختيار الفترة */}
@@ -315,7 +338,7 @@ export default function DashboardPage() {
             </div>
 
             <SelectInput value={serverId} onChange={(e) => setServerId(e.target.value)} className="w-44">
-              <option value="">All servers</option>
+              <option value="">{t('page.allServers')}</option>
               {serverOptions.map((s) => (
                 <option key={s.id} value={s.id} className="bg-[#0b1224]">
                   {s.domain}
@@ -324,7 +347,7 @@ export default function DashboardPage() {
             </SelectInput>
 
             <Button variant="outline" icon={RefreshCw} loading={refreshing && Boolean(overview.data)} onClick={refresh}>
-              Refresh
+              {t('page.refresh')}
             </Button>
           </>
         }
@@ -334,8 +357,8 @@ export default function DashboardPage() {
         <Card>
           <EmptyState
             icon={Lock}
-            title="You don't have access to the dashboard"
-            description="The dashboard is available to Owners, Admins and Analysts. Ask an Owner to change your role."
+            title={t('page.noAccess')}
+            description={t('page.noAccessDesc')}
           />
         </Card>
       ) : (
@@ -354,7 +377,9 @@ export default function DashboardPage() {
 
           {updatedAt && (
             <p className="text-center text-xs text-slate-600">
-              Updated {updatedAt.toLocaleTimeString('en-GB')} · refreshes every 45 seconds
+              {t('page.updatedAt', {
+                time: updatedAt.toLocaleTimeString(i18n.language.startsWith('ar') ? 'ar-EG' : 'en-GB'),
+              })}
             </p>
           )}
         </>

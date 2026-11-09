@@ -1,0 +1,102 @@
+{
+  "page": {
+    "title": "Simulation Lab",
+    "subtitle": "Simulate traffic against a protected server and watch protection decisions in real time.",
+    "start": "Start simulation",
+    "stop": "Stop run",
+    "starting": "Starting…",
+    "stopping": "Stopping…",
+    "targetServer": "Target server",
+    "selectServer": "Select a server…",
+    "pattern": "Traffic pattern",
+    "targetRps": "Target RPS",
+    "durationSec": "Duration (seconds)",
+    "advancedSettings": "Advanced options",
+    "resetDefaults": "Reset defaults",
+    "kpis": {
+      "sent": "Total sent",
+      "allowed": "Allowed",
+      "challenged": "Challenged",
+      "rateLimited": "Rate limited",
+      "blocked": "Blocked",
+      "blockedShare": "Block rate",
+      "approxRps": "Current RPS",
+      "avgLatency": "Avg latency"
+    },
+    "charts": {
+      "trafficDecisions": "Decisions timeline",
+      "decisionBreakdown": "Decision breakdown",
+      "emptyTimeline": "No data recorded yet"
+    },
+    "events": {
+      "title": "Simulation events",
+      "subtitle": "Events generated during this simulation run"
+    },
+    "history": {
+      "title": "Previous runs",
+      "subtitle": "Past simulation experiments and results",
+      "empty": "No simulation runs recorded yet"
+    }
+  },
+  "patterns": {
+    "realistic_mix": {
+      "label": "Realistic mix",
+      "desc": "Natural traffic blend with a small percentage of anomalous behavior. (Default)"
+    },
+    "legit_only": {
+      "label": "Legitimate only",
+      "desc": "Only legitimate visitors with standard browsing patterns."
+    },
+    "login_focus": {
+      "label": "Login focus",
+      "desc": "Concentrated traffic on /login and sensitive authorization endpoints."
+    },
+    "rate_stress": {
+      "label": "Rate stress",
+      "desc": "High-volume traffic testing rate limit thresholds."
+    },
+    "bot_wave": {
+      "label": "Bot wave",
+      "desc": "Automated scraper signatures, headless browsers, and failed JS challenges."
+    },
+    "ban_recovery": {
+      "label": "Ban & recovery",
+      "desc": "Bursts of aggressive requests, trigger bans, and observe recovery."
+    },
+    "full_pipeline": {
+      "label": "Full pipeline",
+      "desc": "Sequential execution through all visitor personas."
+    },
+    "custom": {
+      "label": "Custom mix",
+      "desc": "Manually customized weights across individual personas."
+    }
+  },
+  "personas": {
+    "legit_ok": "Regular legitimate visitor",
+    "legit_sensitive": "Legitimate visitor accessing sensitive endpoints",
+    "rate_soft": "Traffic approaching soft rate limit",
+    "rate_hard": "Traffic breaching hard rate limit",
+    "bot_ua": "Scripted or automated crawler user agent",
+    "fail_js": "Client failing silent JS challenge",
+    "pass_js": "Client explicitly passing JS challenge",
+    "bad_ip": "Known malicious IP / high anomaly score"
+  },
+  "status": {
+    "PENDING": "Pending",
+    "RUNNING": "Running",
+    "COMPLETED": "Completed",
+    "STOPPED": "Stopped",
+    "FAILED": "Failed"
+  },
+  "toast": {
+    "started": "Simulation started",
+    "startedDesc": "Traffic worker is generating requests.",
+    "completed": "Simulation completed",
+    "completedDesc": "Final results are ready.",
+    "stopped": "Simulation stopped",
+    "failed": "Simulation failed",
+    "startFailed": "Could not start simulation",
+    "stopFailed": "Could not stop simulation"
+  }
+}
