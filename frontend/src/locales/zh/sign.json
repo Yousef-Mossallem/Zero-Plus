@@ -1,0 +1,59 @@
+{
+  "brand": {
+    "tagline": "自适应安全网关"
+  },
+  "signup": {
+    "hero": {
+      "badge": "无密码 • 指纹或面容 ID",
+      "titleLine": "保护您的流量",
+      "titleHighlight": "在到达您之前",
+      "description": "Zero Plus 位于互联网与您的服务器之间。智能检测、静默挑战与实时可见性 — 使用指纹或面容注册。我们的服务器从不存储密码。",
+      "features": {
+        "realtimeDetection": "实时检测",
+        "passkeyAuth": "通行密钥认证",
+        "silentChallenge": "静默 JS 挑战",
+        "adaptiveRisk": "自适应风险引擎"
+      },
+      "footer": "可信架构 • 多租户隔离 • 在线学习"
+    },
+    "title": "创建您的账户",
+    "subtitle": "提交后，您的设备将要求指纹或面容 ID。我们只存储公钥 — 从不保存您的生物特征。",
+    "unsupported": "此浏览器不支持通行密钥。请在 localhost 或 HTTPS 下使用 Chrome、Edge、Safari 或 Firefox。",
+    "organizationLabel": "组织名称",
+    "organizationPlaceholder": "Acme Security",
+    "fullNameLabel": "全名",
+    "fullNamePlaceholder": "张三",
+    "emailLabel": "工作邮箱",
+    "emailPlaceholder": "you@company.com",
+    "trafficSizeLabel": "流量规模",
+    "trafficSize": {
+      "small": "小型",
+      "medium": "中型",
+      "large": "大型"
+    },
+    "trafficSizeHint": "为您的组织设定 AI 模型基线。",
+    "passkeyRequiredTitle": "需要通行密钥",
+    "passkeyRequiredHint": "下一步：在此设备上使用指纹、面容 ID 或 Windows Hello。",
+    "submit": {
+      "continue": "使用通行密钥创建账户",
+      "waiting": "等待生物识别…"
+    },
+    "hasAccount": "已有账户？",
+    "signIn": "登录",
+    "trustNote": "服务器仅存储公钥 • 生物特征永不离开您的设备"
+  },
+  "validation": {
+    "organizationName": {
+      "required": "组织名称是必填项",
+      "tooShort": "组织名称至少需要 2 个字符"
+    },
+    "fullName": {
+      "required": "全名是必填项",
+      "tooShort": "姓名至少需要 2 个字符"
+    },
+    "email": {
+      "required": "邮箱是必填项",
+      "invalid": "邮箱格式无效"
+    }
+  }
+}

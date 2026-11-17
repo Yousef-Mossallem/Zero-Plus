@@ -1,0 +1,38 @@
+{
+  "org_id": "a346ad5c-e97e-454c-a68e-e5dbb5a86296",
+  "kind": "surge",
+  "name": "traffic_surge",
+  "version": "1",
+  "algorithm": "ewma+pagehinkley+adwin",
+  "created_at": 1794708314.3327637,
+  "updated_at": 1794711619.6759357,
+  "last_score_at": 1794711609.996075,
+  "last_learn_at": 1794711609.9960766,
+  "n_learned": 11250,
+  "n_scored": 11250,
+  "n_saved": 279,
+  "n_loaded": 2,
+  "min_samples_ready": 30,
+  "feature_dim": 76,
+  "feature_keys_hash": "80bb5da5ad096532",
+  "state": "ready",
+  "extra": {
+    "max_tracked_paths": 64,
+    "weights": {
+      "org_rate": 0.4,
+      "org_drift": 0.25,
+      "path_rate": 0.2,
+      "path_sens": 0.15
+    }
+  },
+  "model_id": "67f48e088a69a8ba",
+  "is_ready": true,
+  "_store": {
+    "saved_at": 1794711629.293683,
+    "org_id": "a346ad5c-e97e-454c-a68e-e5dbb5a86296",
+    "kind": "surge",
+    "format": "zero-plus-model-v1"
+  },
+  "blob_path": "D:\\yprojects\\Zero-Plus\\ai-service\\models_store\\org_a346ad5c-e97e-454c-a68e-e5dbb5a86296\\surge.joblib",
+  "blob_size": 3155
+}

@@ -1,0 +1,59 @@
+{
+  "brand": {
+    "tagline": "بوابة أمان تكيفية"
+  },
+  "signup": {
+    "hero": {
+      "badge": "بدون كلمة مرور • بصمة أو Face ID",
+      "titleLine": "أمّن حركة المرور",
+      "titleHighlight": "قبل أن تصل إليك",
+      "description": "Zero Plus يقف بين الإنترنت وخوادمك. كشف ذكي، تحديات صامتة، ورؤية لحظية — سجّل باستخدام بصمتك أو وجهك. لا نحتفظ بأي كلمة مرور على خوادمنا.",
+      "features": {
+        "realtimeDetection": "كشف لحظي",
+        "passkeyAuth": "مصادقة بالمفتاح",
+        "silentChallenge": "تحدي JS صامت",
+        "adaptiveRisk": "محرك مخاطر تكيفي"
+      },
+      "footer": "بنية موثوقة • عزل متعدد المستأجرين • تعلّم مستمر"
+    },
+    "title": "إنشاء حسابك",
+    "subtitle": "بعد الإرسال، سيطلب جهازك البصمة أو Face ID. نخزّن المفتاح العام فقط — ولا نحتفظ ببياناتك البيومترية أبدًا.",
+    "unsupported": "هذا المتصفح لا يدعم المفاتيح (Passkeys). استخدم Chrome أو Edge أو Safari أو Firefox على localhost أو HTTPS.",
+    "organizationLabel": "اسم المنظمة",
+    "organizationPlaceholder": "شركة الأمان",
+    "fullNameLabel": "الاسم الكامل",
+    "fullNamePlaceholder": "أحمد محمد",
+    "emailLabel": "البريد الإلكتروني للعمل",
+    "emailPlaceholder": "you@company.com",
+    "trafficSizeLabel": "حجم الحركة",
+    "trafficSize": {
+      "small": "صغير",
+      "medium": "متوسط",
+      "large": "كبير"
+    },
+    "trafficSizeHint": "يُستخدم كخط أساس لنموذج الذكاء الاصطناعي لمنظمتك.",
+    "passkeyRequiredTitle": "المفتاح مطلوب",
+    "passkeyRequiredHint": "الخطوة التالية: بصمة أو Face ID أو Windows Hello على هذا الجهاز.",
+    "submit": {
+      "continue": "إنشاء الحساب بالمفتاح",
+      "waiting": "في انتظار التحقق البيومتري…"
+    },
+    "hasAccount": "لديك حساب بالفعل؟",
+    "signIn": "تسجيل الدخول",
+    "trustNote": "المفتاح العام فقط على خوادمنا • البيانات البيومترية لا تغادر جهازك"
+  },
+  "validation": {
+    "organizationName": {
+      "required": "اسم المنظمة مطلوب",
+      "tooShort": "يجب أن يكون اسم المنظمة حرفين على الأقل"
+    },
+    "fullName": {
+      "required": "الاسم الكامل مطلوب",
+      "tooShort": "يجب أن يكون الاسم حرفين على الأقل"
+    },
+    "email": {
+      "required": "البريد الإلكتروني مطلوب",
+      "invalid": "صيغة البريد الإلكتروني غير صحيحة"
+    }
+  }
+}

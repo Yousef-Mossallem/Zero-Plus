@@ -177,7 +177,7 @@ export default function LoginPage() {
       {/* Language Switcher (فوق في الركن، بيتقلب تلقائياً في العربي)    */}
       {/* ============================================================ */}
 
-      <LanguageSwitcher className="absolute end-4 top-4 z-20" />
+      <LanguageSwitcher className="absolute inset-e-4 top-4 z-20" />
 
       {/* ============================================================ */}
       {/* Background Layers                                            */}
@@ -197,8 +197,8 @@ export default function LoginPage() {
       />
 
       {/* start/end بدل left/right عشان الخلفية تتقلب مع الاتجاه */}
-      <div className="pointer-events-none absolute -start-40 top-1/4 h-105 w-105 rounded-full bg-cyan-500/10 blur-[120px]" />
-      <div className="pointer-events-none absolute -end-40 bottom-1/4 h-95 w-95 rounded-full bg-indigo-600/15 blur-[110px]" />
+      <div className="pointer-events-none absolute -inset-s-40 top-1/4 h-105 w-105 rounded-full bg-cyan-500/10 blur-[120px]" />
+      <div className="pointer-events-none absolute -inset-e-40 bottom-1/4 h-95 w-95 rounded-full bg-indigo-600/15 blur-[110px]" />
       <div className="pointer-events-none absolute left-1/2 top-0 h-70 w-150 -translate-x-1/2 rounded-full bg-emerald-500/5 blur-[100px]" />
 
       {/* ============================================================ */}

@@ -7,11 +7,23 @@
 //
 // - غير حاجز للطلب (fire-and-forget + طابور + سقف أمان)
 // - risk / route / policy / rate / JS / advanced / edge / geo
+// - AI (جديد): anomaly / recommendation / confidence / drift / surge /
+//   path sensitivity / future / comparison / merge / clearance revoke
 // - مرآة سمعة عند BLOCK أو فشل تحدي حقيقي
 // - Simulation Lab: simulationRunId + persona + sim metadata
 //   (التوكن يتحقق في app/sim-auth — هنا تمرير فقط)
 //
 // JS: phase expired/failed/error = فشل حقيقي → challengePassed=false
+//
+// خريطة الحقول → Prisma SecurityEvent:
+//   anomalyScore   ← ai.anomalyScore (0..1)
+//   confidence     ← ai.confidence (0..1)
+//   surgeDetected  ← ai.surgeDetected
+//   pathSensitive  ← ai.pathSensitivity ∈ {high, critical}
+//   recommendation ← ai.recommendation
+//   decidedAtStage ← AI_ANOMALY / SURGE_DETECTED / CLEARANCE_REVOKED عند اللزوم
+//   reasonDetails.ai / .aiMerge / .anomalySource ← باقي تفاصيل الـ AI
+//   (مفيش أعمدة جديدة في Prisma — كله في الأعمدة الموجودة + reasonDetails)
 // ======================================================
 
 import { randomUUID } from 'node:crypto'
@@ -27,6 +39,11 @@ import {
   type IpTypeValue,
   type ReputationSignal,
 } from '../services/backend.client'
+import type {
+  AiAnalyzeResult,
+  FutureAction,
+  mergeAiWithGatewayPlan,
+} from '../services/ai.client'
 import type { RiskResult } from '../core/risk.engine'
 import type { PolicyDecision } from '../core/policy.engine'
 import type { RouteDecision } from '../detection/suspicion-router'
@@ -40,6 +57,9 @@ import type { SimulationContext } from '../detection/sim-auth'
 // ------------------------------------------------------
 // أنواع الإدخال
 // ------------------------------------------------------
+
+/** نتيجة mergeAiWithGatewayPlan (finalPath / source / note / mustRevokeClearance) */
+export type AiMergeInfo = ReturnType<typeof mergeAiWithGatewayPlan>
 
 export interface EventLoggerInput {
   organizationId: string
@@ -100,6 +120,18 @@ export interface EventLoggerInput {
    * false: لا applyReputation
    */
   mirrorReputation?: boolean
+
+  // ----- AI (جديد) -----
+  /** نتيجة analyzePreDecision (Phase 1) — مصدر anomaly/confidence/recommendation */
+  ai?: AiAnalyzeResult | null
+  /** نتيجة analyzePostDecision (Phase 2) — للمقارنة (comparison) فقط لو وُجدت */
+  aiPost?: AiAnalyzeResult | null
+  /** ناتج mergeAiWithGatewayPlan — يحدد هل الـ AI هو اللي غيّر المسار */
+  aiMerge?: AiMergeInfo | null
+  /** future_action مخزّن من طلب سابق وتم تنفيذه في هذا الطلب */
+  futureActionApplied?: FutureAction | null
+  /** تم سحب الـ clearance في هذا الطلب (revoke_clearance) */
+  clearanceRevoked?: boolean
 
   // ----- Simulation Lab -----
   /** من سياق المحاكاة بعد توكن صالح */
@@ -279,6 +311,160 @@ function resolveSimulationMeta(input: EventLoggerInput): {
   }
 }
 
+// ------------------------------------------------------
+// AI helpers (جديد)
+// ------------------------------------------------------
+
+/**
+ * أي نتيجة AI نعتمد عليها:
+ *  - Phase 1 لو نجحت (دي اللي اتبنى عليها القرار)
+ *  - وإلا Phase 2 لو نجحت
+ *  - وإلا أي واحدة موجودة (عشان نسجل سبب الفشل)
+ */
+function resolveAi(input: EventLoggerInput): AiAnalyzeResult | null {
+  const pre = input.ai ?? null
+  const post = input.aiPost ?? null
+  if (pre?.ok) return pre
+  if (post?.ok) return post
+  return pre ?? post
+}
+
+function clamp01(n: number): number {
+  return Math.min(1, Math.max(0, n))
+}
+
+/** الـ AI هو اللي غيّر المسار (future مخزّن أو دمج رفع التحدي/rate-limit/monitor) */
+function aiDroveDecision(input: EventLoggerInput): boolean {
+  const m = input.aiMerge
+  if (!m) return false
+  if (m.source === 'future') return true
+  return m.source === 'merged' && String(m.note || '').startsWith('ai_')
+}
+
+/** سحب clearance (من AI أو من app) — لا يُحسب لو المسار ban */
+function isClearanceRevoked(input: EventLoggerInput): boolean {
+  const flagged =
+    input.clearanceRevoked === true ||
+    input.aiMerge?.mustRevokeClearance === true
+  if (!flagged) return false
+  if (input.aiMerge?.finalPath === 'ban') return false
+  if (input.routeDecision?.route === 'ban') return false
+  return true
+}
+
+/**
+ * anomalyScore النهائي + مصدره.
+ * الأولوية: القيمة الممرّرة صراحة → AI الحقيقي → قيمة المحاكاة → تلميحات التحديات → سمعة الشبكة.
+ * المصدر بيتسجل في reasonDetails.anomalySource عشان نفرّق AI الحقيقي عن الـ fallback.
+ */
+function resolveAnomaly(
+  input: EventLoggerInput,
+  sim: ReturnType<typeof resolveSimulationMeta>,
+): { value?: number; source?: string } {
+  const ai = resolveAi(input)
+  const candidates: Array<[string, number | null | undefined]> = [
+    ['input', input.anomalyScore],
+    ['ai', ai?.ok ? clamp01(ai.anomalyScore) : undefined],
+    ['simulation', sim.aiScore],
+    ['js_challenge', input.jsChallenge?.telemetry.localSuspicionScore],
+    ['advanced_challenge', input.advancedChallenge?.telemetry.localSuspicionScore],
+    ['ip_reputation', input.ipReputation?.networkRiskScore],
+  ]
+  for (const [source, v] of candidates) {
+    if (typeof v === 'number' && Number.isFinite(v)) {
+      return { value: v, source }
+    }
+  }
+  return {}
+}
+
+function resolveAiPathSensitive(ai: AiAnalyzeResult | null): boolean | undefined {
+  if (!ai?.ok) return undefined
+  const level = String(ai.pathSensitivity || '').toLowerCase()
+  return level === 'high' || level === 'critical'
+}
+
+/** تفاصيل الـ AI للـ reasonDetails — بدون raw كامل وبحدود حجم */
+function buildAiDetails(
+  input: EventLoggerInput,
+): Record<string, unknown> | null {
+  const ai = resolveAi(input)
+  if (!ai) return null
+
+  const post = input.aiPost ?? null
+
+  const reasons = (ai.reasons ?? []).slice(0, 10).map((r) => ({
+    code: r.code,
+    message: cut(r.message, 200) ?? null,
+    weight: r.weight ?? null,
+  }))
+
+  const future = ai.future
+    ? {
+        action: ai.future.action ?? null,
+        reason: cut(ai.future.reason, 200) ?? null,
+        ttlSec: ai.future.ttl_sec ?? null,
+        confidence: ai.future.confidence ?? null,
+      }
+    : null
+
+  const learning = ai.raw?.learning
+    ? {
+        learned: ai.raw.learning.learned ?? null,
+        modelVersion: ai.raw.learning.model_version ?? null,
+        orgModelExists: ai.raw.learning.org_model_exists ?? null,
+        cacheHit: ai.raw.learning.cache_hit ?? null,
+        processingMs: ai.raw.learning.processing_ms ?? null,
+      }
+    : null
+
+  return {
+    ok: ai.ok,
+    failed: ai.failed,
+    failReason: ai.failReason ?? null,
+    anomalyScore: ai.ok ? clamp01(ai.anomalyScore) : null,
+    components: ai.raw?.anomaly?.components ?? null,
+    recommendation: ai.recommendation,
+    confidence: ai.ok ? ai.confidence : null,
+    confidenceLevel: ai.raw?.confidence_level ?? null,
+    sessionDriftScore: ai.ok ? ai.sessionDriftScore : null,
+    surgeDetected: ai.surgeDetected,
+    surge: ai.raw?.surge
+      ? {
+          score: ai.raw.surge.score ?? null,
+          scope: ai.raw.surge.scope ?? null,
+          hint: cut(ai.raw.surge.hint, 200) ?? null,
+        }
+      : null,
+    pathSensitivity: ai.pathSensitivity,
+    modelVersion: ai.modelVersion,
+    processingMs: ai.processingMs,
+    reasons,
+    future,
+    // مقارنة Phase 2 (لو متاحة) أفضل من اللي جاي مع Phase 1
+    comparison: post?.comparison ?? ai.comparison ?? null,
+    learning,
+    phases: {
+      pre: input.ai
+        ? {
+            ok: input.ai.ok,
+            failReason: input.ai.failReason ?? null,
+            processingMs: input.ai.processingMs,
+          }
+        : null,
+      post: post
+        ? {
+            ok: post.ok,
+            failReason: post.failReason ?? null,
+            processingMs: post.processingMs,
+            anomalyScore: post.ok ? clamp01(post.anomalyScore) : null,
+            recommendation: post.recommendation,
+          }
+        : null,
+    },
+  }
+}
+
 function isRealJsFailure(js: JsChallengeResult | null | undefined): boolean {
   if (!js) return false
   if (js.passed) return false
@@ -367,8 +553,19 @@ function mapStage(input: EventLoggerInput): DetectionStageValue | undefined {
   if (input.decidedAtStage) {
     return input.decidedAtStage as DetectionStageValue
   }
+
+  const ai = resolveAi(input)
+
+  // AI طلب سحب التصريح (ولسه المسار مش ban)
+  if (isClearanceRevoked(input)) return 'CLEARANCE_REVOKED'
+
+  // فشل تحدي حقيقي
   if (isRealJsFailure(input.jsChallenge)) return 'JS_CHALLENGE'
   if (isRealAdvancedFailure(input.advancedChallenge)) return 'TLS_FINGERPRINT'
+
+  // الـ AI هو اللي رفع المسار (future مخزّن أو تحدي/rate-limit/monitor من AI)
+  if (aiDroveDecision(input)) return 'AI_ANOMALY'
+
   if (input.jsChallenge?.phase === 'issue') return 'JS_CHALLENGE'
   if (input.advancedChallenge?.responseSent) return 'TLS_FINGERPRINT'
 
@@ -379,7 +576,16 @@ function mapStage(input: EventLoggerInput): DetectionStageValue | undefined {
   if (route === 'advanced_fingerprint_check') return 'TLS_FINGERPRINT'
   if (input.policyDecision?.action?.includes('ban')) return 'POLICY'
   if (input.rateLimit?.hardExceeded) return 'HARD_LIMIT'
-  if (input.anomalyScore != null && input.anomalyScore > 0.3) {
+
+  // surge من الـ AI ومعاه إجراء (مش ALLOW)
+  const decision = mapDecision(String(input.decision))
+  if (ai?.ok && ai.surgeDetected && decision !== 'ALLOW') {
+    return 'SURGE_DETECTED'
+  }
+
+  const aiScore =
+    input.anomalyScore ?? (ai?.ok ? ai.anomalyScore : null) ?? null
+  if (aiScore != null && aiScore > 0.3) {
     return 'AI_ANOMALY'
   }
   return 'POLICY'
@@ -393,6 +599,12 @@ function mapChallengeType(
   }
   if (input.jsChallenge) return 'JS_SILENT'
   if (input.advancedChallenge) return 'TLS_FINGERPRINT'
+
+  // المسار النهائي بعد دمج الـ AI
+  const finalPath = input.aiMerge?.finalPath
+  if (finalPath === 'silent_js_challenge') return 'JS_SILENT'
+  if (finalPath === 'advanced_fingerprint_check') return 'TLS_FINGERPRINT'
+
   const route = input.routeDecision?.route
   if (route === 'silent_js_challenge') return 'JS_SILENT'
   if (route === 'advanced_fingerprint_check') return 'TLS_FINGERPRINT'
@@ -426,6 +638,7 @@ function buildReasonSummary(
   if (input.reasonSummary) return input.reasonSummary
 
   const sim = resolveSimulationMeta(input)
+  const ai = resolveAi(input)
   const parts: string[] = []
   parts.push(`risk=${input.riskScore}`)
   if (sim.active) {
@@ -456,9 +669,32 @@ function buildReasonSummary(
       `adv=${input.advancedChallenge.telemetry.verdict}/s=${input.advancedChallenge.telemetry.localSuspicionScore.toFixed(2)}`,
     )
   }
-  if (input.anomalyScore != null) {
+
+  // ----- AI -----
+  if (ai) {
+    if (ai.ok) {
+      parts.push(`ai=${ai.anomalyScore.toFixed(2)}`)
+      if (ai.recommendation) parts.push(`rec=${ai.recommendation}`)
+      parts.push(`aic=${ai.confidence.toFixed(2)}`)
+      if (ai.sessionDriftScore > 0) {
+        parts.push(`drift=${ai.sessionDriftScore.toFixed(2)}`)
+      }
+      if (ai.surgeDetected) parts.push('surge=1')
+      if (ai.future?.action) parts.push(`future=${ai.future.action}`)
+    } else {
+      parts.push(`ai=off(${ai.failReason || 'unavailable'})`)
+    }
+  } else if (input.anomalyScore != null) {
     parts.push(`ai=${input.anomalyScore}`)
   }
+  if (input.aiMerge) {
+    parts.push(`merge=${input.aiMerge.source}/${input.aiMerge.note}`)
+  }
+  if (input.futureActionApplied) {
+    parts.push(`fa=${input.futureActionApplied}`)
+  }
+  if (isClearanceRevoked(input)) parts.push('revoke=1')
+
   if (geo.ipType) parts.push(`ipType=${geo.ipType}`)
   if (geo.countryCode) parts.push(`cc=${geo.countryCode}`)
   if (geo.city) parts.push(`city=${geo.city}`)
@@ -492,6 +728,32 @@ function buildReasonDetails(
       base.aiUnavailable = (input.riskResult as RiskResult).aiUnavailable
     }
   }
+
+  // ----- AI (جديد) -----
+  const aiDetails = buildAiDetails(input)
+  if (aiDetails) {
+    base.ai = aiDetails
+    const ai = resolveAi(input)
+    if (ai && !ai.ok) base.aiUnavailable = true
+  }
+  const anomaly = resolveAnomaly(input, sim)
+  if (anomaly.source) base.anomalySource = anomaly.source
+  if (input.aiMerge) {
+    base.aiMerge = {
+      finalPath: input.aiMerge.finalPath,
+      source: input.aiMerge.source,
+      note: input.aiMerge.note,
+      mustRevokeClearance: input.aiMerge.mustRevokeClearance,
+      aiDroveDecision: aiDroveDecision(input),
+    }
+  }
+  if (input.futureActionApplied) {
+    base.futureActionApplied = input.futureActionApplied
+  }
+  if (isClearanceRevoked(input)) {
+    base.clearanceRevoked = true
+  }
+
   if (input.routeDecision) {
     base.route = {
       route: input.routeDecision.route,
@@ -612,6 +874,7 @@ export function buildSecurityEvent(
 ): GatewaySecurityEvent {
   const geo = resolveGeoNetwork(input)
   const sim = resolveSimulationMeta(input)
+  const ai = resolveAi(input)
 
   const hardFail =
     isRealJsFailure(input.jsChallenge) ||
@@ -627,19 +890,25 @@ export function buildSecurityEvent(
     decision === 'CHALLENGE' ||
     !!input.jsChallenge ||
     !!input.advancedChallenge ||
+    input.aiMerge?.finalPath === 'silent_js_challenge' ||
+    input.aiMerge?.finalPath === 'advanced_fingerprint_check' ||
     input.routeDecision?.route === 'silent_js_challenge' ||
     input.routeDecision?.route === 'advanced_fingerprint_check' ||
     input.routeDecision?.route === 'rate_limit_with_challenge'
 
   const challengePassed = hardFail ? false : resolveChallengePassed(input)
 
-  const anomaly =
-    input.anomalyScore ??
-    sim.aiScore ??
-    input.jsChallenge?.telemetry.localSuspicionScore ??
-    input.advancedChallenge?.telemetry.localSuspicionScore ??
-    input.ipReputation?.networkRiskScore ??
-    undefined
+  // anomalyScore: ممرّر → AI حقيقي → sim → تحديات → سمعة الشبكة
+  const anomaly = resolveAnomaly(input, sim).value
+
+  // AI-derived (ما لم يتم تمريرها صراحة)
+  const confidence =
+    input.confidence ?? (ai?.ok ? ai.confidence : undefined) ?? geo.confidence
+  const surgeDetected =
+    input.surgeDetected ?? (ai?.ok ? ai.surgeDetected : undefined)
+  const pathSensitive = input.pathSensitive ?? resolveAiPathSensitive(ai)
+  const recommendation =
+    input.recommendation ?? (ai?.ok ? ai.recommendation : null) ?? undefined
 
   const event: GatewaySecurityEvent = {
     organizationId: input.organizationId,
@@ -654,13 +923,13 @@ export function buildSecurityEvent(
     referer: input.referer ?? undefined,
     requestId: input.requestId || randomUUID(),
     anomalyScore: anomaly,
-    confidence: input.confidence ?? geo.confidence ?? undefined,
+    confidence: confidence ?? undefined,
     reasonSummary: buildReasonSummary(input, geo),
     reasonDetails: buildReasonDetails(input, geo),
     processingTimeMs: input.processingTimeMs,
-    surgeDetected: input.surgeDetected,
-    pathSensitive: input.pathSensitive,
-    recommendation: input.recommendation ?? undefined,
+    surgeDetected,
+    pathSensitive,
+    recommendation: recommendation ?? undefined,
     countryCode: geo.countryCode,
     asn: geo.asn,
     ipType: geo.ipType,
@@ -670,10 +939,9 @@ export function buildSecurityEvent(
     reputationEntryId: input.reputationEntryId ?? undefined,
   }
 
-  // ربط Run في الباك (Prisma simulationRunId) — إن دعمه backend.client
+  // ربط Run في الباك (Prisma SecurityEvent.simulationRunId)
   if (sim.runId) {
-    ;(event as GatewaySecurityEvent & { simulationRunId?: string }).simulationRunId =
-      sim.runId
+    event.simulationRunId = sim.runId
   }
 
   return event
@@ -731,6 +999,15 @@ async function maybeMirrorReputation(input: EventLoggerInput): Promise<void> {
         confidence: Math.min(1, Math.max(0, input.ipReputation.confidence ?? 1)),
         note: cut(input.ipReputation.reasons?.join(',') || kind, 200),
       })
+    }
+  }
+
+  // AI: أرفق anomalyScore بكل إشارة (الحقل موجود في ReputationSignal)
+  const ai = resolveAi(input)
+  if (ai?.ok) {
+    const score = clamp01(ai.anomalyScore)
+    for (const s of signals) {
+      if (s.anomalyScore == null) s.anomalyScore = score
     }
   }
 
@@ -852,77 +1129,32 @@ export async function logSecurityEventImmediate(
   }
 }
 
-export function logFromGatewayContext(params: {
-  organizationId: string
-  serverId: string
+/**
+ * مدخل app.ts الوحيد: استدعاء واحد في آخر الطلب.
+ * يقبل كل حقول EventLoggerInput (يشمل ai / aiPost / aiMerge / futureActionApplied
+ * / clearanceRevoked / surge / pathSensitive / ...) — أي حقل جديد يتضاف في
+ * EventLoggerInput يتمرر هنا تلقائيًا من غير تعديل.
+ * الاختلاف الوحيد: ip بدل ipAddress، و startTime لحساب processingTimeMs.
+ */
+export type GatewayLogContext = Omit<
+  EventLoggerInput,
+  'ipAddress' | 'requestId' | 'processingTimeMs'
+> & {
   ip: string
-  path: string
-  method: string
   requestId: string
-  userAgent?: string | null
-  referer?: string | null
-  riskScore: number
-  decision: string
   startTime: number
-  riskResult?: RiskResult | null
-  routeDecision?: RouteDecision | null
-  policyDecision?: PolicyDecision | null
-  rateLimit?: RateLimitResult | null
-  ja3?: string | null
-  ja4?: string | null
-  deviceFingerprint?: string | null
-  jsChallenge?: JsChallengeResult | null
-  advancedChallenge?: AdvancedChallengeResult | null
-  anomalyScore?: number | null
-  ipType?: string | null
-  countryCode?: string | null
-  asn?: number | null
-  asOrg?: string | null
-  city?: string | null
-  region?: string | null
-  ipReputation?: IpReputationResult | null
-  reputationEntryId?: string | null
-  mirrorReputation?: boolean
-  simulation?: SimulationContext | null
-  simulationRunId?: string | null
-  simulationPersona?: string | null
-  isSimulation?: boolean
-}): EventLoggerResult {
+  /** لو اتحسب برّه — يتقدّم على startTime */
+  processingTimeMs?: number
+}
+
+export function logFromGatewayContext(
+  params: GatewayLogContext,
+): EventLoggerResult {
+  const { ip, startTime, processingTimeMs, ...rest } = params
   return logSecurityEvent({
-    organizationId: params.organizationId,
-    serverId: params.serverId,
-    ipAddress: params.ip,
-    path: params.path,
-    method: params.method,
-    requestId: params.requestId,
-    userAgent: params.userAgent,
-    referer: params.referer,
-    riskScore: params.riskScore,
-    decision: params.decision,
-    processingTimeMs: Date.now() - params.startTime,
-    riskResult: params.riskResult,
-    routeDecision: params.routeDecision,
-    policyDecision: params.policyDecision,
-    rateLimit: params.rateLimit,
-    ja3: params.ja3,
-    ja4: params.ja4,
-    deviceFingerprint: params.deviceFingerprint,
-    jsChallenge: params.jsChallenge,
-    advancedChallenge: params.advancedChallenge,
-    anomalyScore: params.anomalyScore,
-    ipType: params.ipType,
-    countryCode: params.countryCode,
-    asn: params.asn,
-    asOrg: params.asOrg,
-    city: params.city,
-    region: params.region,
-    ipReputation: params.ipReputation,
-    reputationEntryId: params.reputationEntryId,
-    mirrorReputation: params.mirrorReputation,
-    simulation: params.simulation,
-    simulationRunId: params.simulationRunId,
-    simulationPersona: params.simulationPersona,
-    isSimulation: params.isSimulation,
+    ...rest,
+    ipAddress: ip,
+    processingTimeMs: processingTimeMs ?? Date.now() - startTime,
   })
 }
 

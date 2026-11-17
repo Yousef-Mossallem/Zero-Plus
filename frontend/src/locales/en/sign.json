@@ -1,0 +1,59 @@
+{
+  "brand": {
+    "tagline": "Adaptive Security Gateway"
+  },
+  "signup": {
+    "hero": {
+      "badge": "Passwordless • Fingerprint or Face ID",
+      "titleLine": "Secure your traffic",
+      "titleHighlight": "before it reaches you",
+      "description": "Zero Plus stands between the internet and your servers. Intelligent detection, silent challenges, and real-time visibility — sign up with your fingerprint or face. No password stored on our servers.",
+      "features": {
+        "realtimeDetection": "Real-time Detection",
+        "passkeyAuth": "Passkey Auth",
+        "silentChallenge": "Silent JS Challenge",
+        "adaptiveRisk": "Adaptive Risk Engine"
+      },
+      "footer": "Trusted architecture • Multi-tenant isolation • Online learning"
+    },
+    "title": "Create your account",
+    "subtitle": "After you submit, your device will ask for fingerprint or Face ID. We only store a public key — never your biometrics.",
+    "unsupported": "This browser does not support Passkeys. Use Chrome, Edge, Safari, or Firefox on localhost / HTTPS.",
+    "organizationLabel": "Organization Name",
+    "organizationPlaceholder": "Acme Security",
+    "fullNameLabel": "Full Name",
+    "fullNamePlaceholder": "John Doe",
+    "emailLabel": "Work Email",
+    "emailPlaceholder": "you@company.com",
+    "trafficSizeLabel": "Traffic Size",
+    "trafficSize": {
+      "small": "Small",
+      "medium": "Medium",
+      "large": "Large"
+    },
+    "trafficSizeHint": "Seeds the AI model baseline for your organization.",
+    "passkeyRequiredTitle": "Passkey required",
+    "passkeyRequiredHint": "Next step: fingerprint, Face ID, or Windows Hello on this device.",
+    "submit": {
+      "continue": "Create account with Passkey",
+      "waiting": "Waiting for biometric…"
+    },
+    "hasAccount": "Already have an account?",
+    "signIn": "Sign in",
+    "trustNote": "Public key only on our servers • Biometrics never leave your device"
+  },
+  "validation": {
+    "organizationName": {
+      "required": "Organization name is required",
+      "tooShort": "Organization name must be at least 2 characters"
+    },
+    "fullName": {
+      "required": "Full name is required",
+      "tooShort": "Full name must be at least 2 characters"
+    },
+    "email": {
+      "required": "Email is required",
+      "invalid": "Invalid email format"
+    }
+  }
+}

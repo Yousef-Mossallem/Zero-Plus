@@ -1,0 +1,59 @@
+{
+  "brand": {
+    "tagline": "Adaptives Sicherheits-Gateway"
+  },
+  "signup": {
+    "hero": {
+      "badge": "Passwortlos • Fingerabdruck oder Face ID",
+      "titleLine": "Sichern Sie Ihren Traffic",
+      "titleHighlight": "bevor er Sie erreicht",
+      "description": "Zero Plus steht zwischen dem Internet und Ihren Servern. Intelligente Erkennung, stille Challenges und Echtzeit-Transparenz — melden Sie sich mit Fingerabdruck oder Gesicht an. Kein Passwort wird auf unseren Servern gespeichert.",
+      "features": {
+        "realtimeDetection": "Echtzeit-Erkennung",
+        "passkeyAuth": "Passkey-Auth",
+        "silentChallenge": "Stille JS-Challenge",
+        "adaptiveRisk": "Adaptives Risiko-Engine"
+      },
+      "footer": "Vertrauenswürdige Architektur • Multi-Tenant-Isolation • Online-Lernen"
+    },
+    "title": "Konto erstellen",
+    "subtitle": "Nach dem Absenden fragt Ihr Gerät nach Fingerabdruck oder Face ID. Wir speichern nur einen öffentlichen Schlüssel — niemals Ihre Biometrie.",
+    "unsupported": "Dieser Browser unterstützt keine Passkeys. Verwenden Sie Chrome, Edge, Safari oder Firefox unter localhost / HTTPS.",
+    "organizationLabel": "Organisationsname",
+    "organizationPlaceholder": "Acme Security",
+    "fullNameLabel": "Vollständiger Name",
+    "fullNamePlaceholder": "Max Mustermann",
+    "emailLabel": "Geschäftliche E-Mail",
+    "emailPlaceholder": "you@company.com",
+    "trafficSizeLabel": "Traffic-Größe",
+    "trafficSize": {
+      "small": "Klein",
+      "medium": "Mittel",
+      "large": "Groß"
+    },
+    "trafficSizeHint": "Legt die AI-Modell-Baseline für Ihre Organisation fest.",
+    "passkeyRequiredTitle": "Passkey erforderlich",
+    "passkeyRequiredHint": "Nächster Schritt: Fingerabdruck, Face ID oder Windows Hello auf diesem Gerät.",
+    "submit": {
+      "continue": "Konto mit Passkey erstellen",
+      "waiting": "Warte auf Biometrie…"
+    },
+    "hasAccount": "Bereits ein Konto?",
+    "signIn": "Anmelden",
+    "trustNote": "Nur öffentlicher Schlüssel auf unseren Servern • Biometrie verlässt Ihr Gerät nie"
+  },
+  "validation": {
+    "organizationName": {
+      "required": "Organisationsname ist erforderlich",
+      "tooShort": "Organisationsname muss mindestens 2 Zeichen haben"
+    },
+    "fullName": {
+      "required": "Vollständiger Name ist erforderlich",
+      "tooShort": "Name muss mindestens 2 Zeichen haben"
+    },
+    "email": {
+      "required": "E-Mail ist erforderlich",
+      "invalid": "Ungültiges E-Mail-Format"
+    }
+  }
+}

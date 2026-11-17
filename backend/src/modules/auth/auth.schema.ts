@@ -25,8 +25,17 @@
 //     3) POST /auth/login/finish     → body: assertion من WebAuthn
 //        السيرفر يتحقق من التوقيع ويصدر JWT
 //
+//   إضافة جهاز جديد (الطريقة القديمة - على نفس الجهاز):
+//     POST /auth/passkeys/register/start + finish
+//
+//   إضافة جهاز جديد عبر QR (الطريقة الجديدة - جهاز مختلف):
+//     1) POST /auth/passkeys/invite          (مسجّل دخول) → يرجع token + URL
+//     2) الجهاز الجديد يفتح الرابط
+//     3) GET  /auth/passkeys/invite/:token   → يرجع registration options
+//     4) POST /auth/passkeys/invite/:token/finish → يضيف الـ Passkey
+//
 // معتمد على Prisma:
-//   User, Organization, PasskeyCredential, Policy
+//   User, Organization, PasskeyCredential, Policy, PasskeyInvite
 // ==================================================================
 
 import { z } from 'zod'
@@ -245,7 +254,7 @@ export const loginFinishSchema = z
   .strict()
 
 // ==================================================================
-// 5) ADD PASSKEY START — إضافة جهاز/بصمة جديدة (مسجّل دخول)
+// 5) ADD PASSKEY START — إضافة جهاز/بصمة جديدة (مسجّل دخول) - الطريقة القديمة
 //    POST /auth/passkeys/register/start
 // ==================================================================
 
@@ -258,7 +267,7 @@ export const addPasskeyStartSchema = z
   .default({})
 
 // ==================================================================
-// 6) ADD PASSKEY FINISH
+// 6) ADD PASSKEY FINISH - الطريقة القديمة
 //    POST /auth/passkeys/register/finish
 // ==================================================================
 
@@ -310,6 +319,36 @@ export const setPasswordSchema = z
   .strict()
 
 // ==================================================================
+// 10) CREATE PASSKEY INVITE — إنشاء دعوة إضافة جهاز (QR)
+//     POST /auth/passkeys/invite
+// ==================================================================
+// المستخدم مسجّل دخول → السيرفر ينشئ توكن صالح 5 دقائق
+// ويرجع الـ token + الـ URL اللي هيتحط في الـ QR
+// ==================================================================
+
+export const createPasskeyInviteSchema = z
+  .object({
+    // فاضي حاليًا — المستخدم بييجي من الـ JWT
+  })
+  .strict()
+  .optional()
+  .default({})
+
+// ==================================================================
+// 11) FINISH PASSKEY INVITE — إنهاء إضافة الجهاز من الرابط
+//     POST /auth/passkeys/invite/:token/finish
+// ==================================================================
+// الجهاز الجديد بيبعت الـ credential بعد ما المستخدم حط بصمته
+// ==================================================================
+
+export const finishPasskeyInviteSchema = z
+  .object({
+    deviceName: deviceNameSchema,
+    credential: registrationResponseSchema,
+  })
+  .strict()
+
+// ==================================================================
 // Types — للاستخدام في Service و Routes
 // ==================================================================
 
@@ -321,6 +360,8 @@ export type AddPasskeyFinishInput = z.infer<typeof addPasskeyFinishSchema>
 export type RevokePasskeyInput = z.infer<typeof revokePasskeySchema>
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>
 export type SetPasswordInput = z.infer<typeof setPasswordSchema>
+export type CreatePasskeyInviteInput = z.infer<typeof createPasskeyInviteSchema>
+export type FinishPasskeyInviteInput = z.infer<typeof finishPasskeyInviteSchema>
 
 /** أشكال WebAuthn بعد التحويل من الفرونت */
 export type RegistrationCredentialJSON = z.infer<typeof registrationResponseSchema>
