@@ -38,8 +38,96 @@
       "empty": "No simulation runs recorded yet"
     }
   },
+  "columns": {
+    "date": "Date",
+    "pattern": "Pattern",
+    "duration": "Duration",
+    "totalSent": "Total Sent",
+    "blockedShare": "Blocked %",
+    "status": "Status",
+    "actions": "Actions",
+    "time": "Time",
+    "ip": "IP",
+    "path": "Path",
+    "decision": "Decision",
+    "risk": "Risk",
+    "stage": "Stage",
+    "latency": "Latency",
+    "persona": "Persona",
+    "view": "View",
+    "viewRun": "View this run",
+    "lockedRunHint": "Stop or wait for the current run to finish first"
+  },
+  "live": {
+    "running": "Simulation running",
+    "liveRps": "Live RPS",
+    "progress": "Progress",
+    "stop": "Stop simulation",
+    "stopping": "Stopping…"
+  },
+  "eventsTable": {
+    "noRun": "No run selected",
+    "noRunDesc": "Start a simulation or open a previous run to see its security events.",
+    "waiting": "Waiting for events…",
+    "waitingDesc": "Events appear here as soon as the Gateway starts deciding on simulated requests.",
+    "emptyRun": "No events for this run",
+    "emptyRunDesc": "No security events are linked to this run."
+  },
+  "settings": {
+    "title": "Simulation settings",
+    "subtitle": "Defaults are ready — you can start without opening Advanced Settings.",
+    "lockedHint": "Settings are locked while a run is active. Changes only apply to a new run.",
+    "noServers": "No servers found. Add and verify a server first, then come back to run a simulation.",
+    "noOnlineServer": "No ONLINE server is available, so the simulation cannot start. Wait until a server comes online or check its status.",
+    "openServers": "Open Servers",
+    "retry": "Retry",
+    "monitorOnlyBadge": "MONITOR_ONLY",
+    "monitorOnlyHint": "Decisions will be recorded, but traffic will mostly be allowed according to policy.",
+    "intensity": "Intensity",
+    "intensityHint": "Controls the persona weights used in the simulation",
+    "intensityLow": "Low",
+    "intensityMedium": "Medium",
+    "intensityHigh": "High",
+    "duration": "Duration",
+    "durationSeconds": "seconds",
+    "durationMinutes": "minutes",
+    "durationHint": "Min {{min}}s · Max {{max}}s (or per plan)",
+    "targetRps": "Target RPS",
+    "targetRpsHint": "Average target rate (the worker adds jitter)",
+    "maxRpsCap": "Max RPS Cap",
+    "maxRpsCapHint": "Safety ceiling for the request rate",
+    "advancedTitle": "Advanced settings",
+    "optionalBadge": "Optional",
+    "customBadge": "custom",
+    "weightsDefaultsHint": "Weights shown here are the defaults of {{pattern}}. Use Customize to edit them (switches the pattern to custom).",
+    "personaWeights": "Persona weights",
+    "personaWeightsHint": "Weights (0–100) are converted to percentages during the run",
+    "totalWeights": "Total",
+    "additionalOptions": "Additional options",
+    "additionalOptionsHint": "Optional overrides for IP pools, AI mode, seed and preferred paths",
+    "ipPoolLegit": "IP Pool Size (Legit)",
+    "ipPoolLegitHint": "IPs used to simulate legitimate visitors",
+    "ipPoolAttack": "IP Pool Size (Attack)",
+    "ipPoolAttackHint": "IPs used to simulate attackers",
+    "seed": "Seed",
+    "seedHint": "Empty = random. Same settings + same seed = same distribution",
+    "seedPlaceholder": "Random",
+    "aiAnomalyMode": "AI Anomaly Mode",
+    "aiFixedScore": "AI Fixed Score",
+    "aiFixedScoreHint": "0 – 1 · used when AI mode is fixed",
+    "enableJaHeaders": "Enable JA Headers",
+    "enableJaHeadersHint": "Send JA3/JA4 when the worker and gateway support it",
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "preferPaths": "Prefer Paths",
+    "preferPathsHint": "Comma separated, e.g. /, /login, /api/health (empty = backend defaults)"
+  },
   "patterns": {
     "realistic_mix": {
+      "label": "Realistic mix",
+      "desc": "Natural traffic blend with a small percentage of anomalous behavior. (Default)"
+    },
+    "REALISTIC_MIX": {
       "label": "Realistic mix",
       "desc": "Natural traffic blend with a small percentage of anomalous behavior. (Default)"
     },
@@ -47,7 +135,15 @@
       "label": "Legitimate only",
       "desc": "Only legitimate visitors with standard browsing patterns."
     },
+    "LEGIT_ONLY": {
+      "label": "Legitimate only",
+      "desc": "Only legitimate visitors with standard browsing patterns."
+    },
     "login_focus": {
+      "label": "Login focus",
+      "desc": "Concentrated traffic on /login and sensitive authorization endpoints."
+    },
+    "LOGIN_FOCUS": {
       "label": "Login focus",
       "desc": "Concentrated traffic on /login and sensitive authorization endpoints."
     },
@@ -55,7 +151,15 @@
       "label": "Rate stress",
       "desc": "High-volume traffic testing rate limit thresholds."
     },
+    "RATE_STRESS": {
+      "label": "Rate stress",
+      "desc": "High-volume traffic testing rate limit thresholds."
+    },
     "bot_wave": {
+      "label": "Bot wave",
+      "desc": "Automated scraper signatures, headless browsers, and failed JS challenges."
+    },
+    "BOT_WAVE": {
       "label": "Bot wave",
       "desc": "Automated scraper signatures, headless browsers, and failed JS challenges."
     },
@@ -63,11 +167,23 @@
       "label": "Ban & recovery",
       "desc": "Bursts of aggressive requests, trigger bans, and observe recovery."
     },
+    "BAN_RECOVERY": {
+      "label": "Ban & recovery",
+      "desc": "Bursts of aggressive requests, trigger bans, and observe recovery."
+    },
     "full_pipeline": {
       "label": "Full pipeline",
       "desc": "Sequential execution through all visitor personas."
     },
+    "FULL_PIPELINE": {
+      "label": "Full pipeline",
+      "desc": "Sequential execution through all visitor personas."
+    },
     "custom": {
+      "label": "Custom mix",
+      "desc": "Manually customized weights across individual personas."
+    },
+    "CUSTOM": {
       "label": "Custom mix",
       "desc": "Manually customized weights across individual personas."
     }
@@ -83,20 +199,27 @@
     "bad_ip": "Known malicious IP / high anomaly score"
   },
   "status": {
+    "IDLE": "Idle",
+    "idle": "Idle",
     "PENDING": "Pending",
+    "pending": "Pending",
     "RUNNING": "Running",
+    "running": "Running",
     "COMPLETED": "Completed",
+    "completed": "Completed",
     "STOPPED": "Stopped",
-    "FAILED": "Failed"
+    "stopped": "Stopped",
+    "FAILED": "Failed",
+    "failed": "Failed"
   },
   "toast": {
     "started": "Simulation started",
-    "startedDesc": "Traffic worker is generating requests.",
+    "startedDesc": "The traffic worker is generating requests now.",
     "completed": "Simulation completed",
     "completedDesc": "Final results are ready.",
     "stopped": "Simulation stopped",
     "failed": "Simulation failed",
-    "startFailed": "Could not start simulation",
-    "stopFailed": "Could not stop simulation"
+    "startFailed": "Failed to start simulation",
+    "stopFailed": "Failed to stop simulation"
   }
 }

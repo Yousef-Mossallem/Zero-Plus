@@ -91,6 +91,7 @@ function WeightsEditor({
   disabled: boolean
   error: string | undefined
 }) {
+  const { t } = useTranslation('simulation')
   const total = weightsTotal(form.weights)
 
   const setWeight = (key: PersonaKey, raw: string) => {
@@ -104,14 +105,14 @@ function WeightsEditor({
       <div className="flex flex-wrap items-end justify-between gap-2">
         <div className="min-w-0">
           <h4 className="text-xs font-semibold uppercase tracking-[0.16em] text-cyan-400/90">
-            Persona weights
+            {t('settings.personaWeights')}
           </h4>
           <p className="mt-1 text-xs text-slate-500">
-            Weights (0–100) are converted to percentages during the run
+            {t('settings.personaWeightsHint')}
           </p>
         </div>
         <p className="text-xs text-slate-500">
-          Total{' '}
+          {t('settings.totalWeights')}{' '}
           <span
             className={cn(
               'font-semibold tabular-nums',
@@ -207,7 +208,7 @@ export default function SettingsPanel({
   const isCustom = form.pattern === 'custom'
 
   const totalLabel = formatTotalDuration(form.durationValue, form.durationUnit)
-  const durationHint = `Min ${MIN_DURATION_SEC}s · Max ${MAX_DURATION_SEC}s (or per plan)${
+  const durationHint = `${t('settings.durationHint', { min: MIN_DURATION_SEC, max: MAX_DURATION_SEC })}${
     totalLabel ? ` · = ${totalLabel}` : ''
   }`
 
@@ -219,9 +220,9 @@ export default function SettingsPanel({
       {/* ---------- Header ---------- */}
       <div className="flex flex-col gap-4 border-b border-white/6 px-5 py-5 sm:flex-row sm:items-start sm:justify-between sm:px-6">
         <div className="min-w-0">
-          <h2 className="text-base font-semibold text-white">Simulation settings</h2>
+          <h2 className="text-base font-semibold text-white">{t('settings.title')}</h2>
           <p className="mt-1 text-xs leading-relaxed text-slate-500">
-            Defaults are ready — you can start without opening Advanced Settings.
+            {t('settings.subtitle')}
           </p>
         </div>
 
@@ -241,7 +242,7 @@ export default function SettingsPanel({
           <div className="flex items-start gap-3 rounded-xl border border-cyan-400/20 bg-cyan-500/6 px-4 py-3.5 text-sm text-cyan-200">
             <Info className="mt-0.5 h-4 w-4 shrink-0" />
             <p className="min-w-0 leading-relaxed">
-              Settings are locked while a run is active. Changes only apply to a new run.
+              {t('settings.lockedHint')}
             </p>
           </div>
         )}
@@ -263,13 +264,13 @@ export default function SettingsPanel({
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
             <p className="min-w-0 flex-1 leading-relaxed">
               {servers.length === 0
-                ? 'No servers found. Add and verify a server first, then come back to run a simulation.'
-                : 'No ONLINE server is available, so the simulation cannot start. Wait until a server comes online or check its status.'}{' '}
+                ? t('settings.noServers')
+                : t('settings.noOnlineServer')}{' '}
               <Link
                 to="/servers"
                 className="font-semibold underline underline-offset-2 hover:text-white"
               >
-                Open Servers
+                {t('settings.openServers')}
               </Link>
             </p>
           </div>
@@ -292,7 +293,7 @@ export default function SettingsPanel({
                     onClick={onRetryServers}
                     className="shrink-0 font-semibold underline"
                   >
-                    Retry
+                    {t('settings.retry')}
                   </button>
                 </div>
               ) : (
@@ -303,7 +304,7 @@ export default function SettingsPanel({
                   onChange={(e) => patch('serverId', e.target.value)}
                 >
                   <option value="" className="bg-[#0b1224]">
-                    {servers.length === 0 ? 'No servers' : t('page.selectServer')}
+                    {servers.length === 0 ? t('settings.noServers') : t('page.selectServer')}
                   </option>
                   {servers.map((s) => (
                     <option
@@ -321,11 +322,10 @@ export default function SettingsPanel({
               {selected?.mode === 'MONITOR_ONLY' && (
                 <div className="mt-2.5 space-y-1.5">
                   <Badge tone="amber" dot>
-                    MONITOR_ONLY
+                    {t('settings.monitorOnlyBadge')}
                   </Badge>
                   <p className="text-xs leading-relaxed text-amber-300/90">
-                    Decisions will be recorded, but traffic will mostly be allowed according
-                    to policy.
+                    {t('settings.monitorOnlyHint')}
                   </p>
                 </div>
               )}
@@ -357,26 +357,33 @@ export default function SettingsPanel({
           {/* Intensity */}
           <div className="min-w-0">
             <Field
-              label="Intensity"
-              hint="Controls the persona weights used in the simulation"
+              label={t('settings.intensity')}
+              hint={t('settings.intensityHint')}
             >
               <SelectInput
                 value={form.intensity}
                 disabled={locked}
                 onChange={(e) => patch('intensity', e.target.value as Intensity)}
               >
-                {INTENSITIES.map((i) => (
-                  <option key={i} value={i} className="bg-[#0b1224]">
-                    {i.charAt(0).toUpperCase() + i.slice(1)}
-                  </option>
-                ))}
+                {INTENSITIES.map((i) => {
+                  const labelMap: Record<Intensity, string> = {
+                    low: t('settings.intensityLow'),
+                    medium: t('settings.intensityMedium'),
+                    high: t('settings.intensityHigh'),
+                  }
+                  return (
+                    <option key={i} value={i} className="bg-[#0b1224]">
+                      {labelMap[i] || i}
+                    </option>
+                  )
+                })}
               </SelectInput>
             </Field>
           </div>
 
           {/* Duration — input takes the free space, unit select is auto width */}
           <div className="min-w-0">
-            <Field label="Duration" error={errors.durationValue} hint={durationHint}>
+            <Field label={t('settings.duration')} error={errors.durationValue} hint={durationHint}>
               <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2">
                 <div className="min-w-0">
                   <TextInput
@@ -395,13 +402,13 @@ export default function SettingsPanel({
                     value={form.durationUnit}
                     disabled={locked}
                     onChange={(e) => patch('durationUnit', e.target.value as DurationUnit)}
-                    aria-label="Duration unit"
+                    aria-label={t('settings.duration')}
                   >
                     <option value="sec" className="bg-[#0b1224]">
-                      seconds
+                      {t('settings.durationSeconds')}
                     </option>
                     <option value="min" className="bg-[#0b1224]">
-                      minutes
+                      {t('settings.durationMinutes')}
                     </option>
                   </SelectInput>
                 </div>
@@ -412,9 +419,9 @@ export default function SettingsPanel({
           {/* Target RPS */}
           <div className="min-w-0">
             <Field
-              label="Target RPS"
+              label={t('settings.targetRps')}
               error={errors.targetRps}
-              hint="Average target rate (the worker adds jitter)"
+              hint={t('settings.targetRpsHint')}
             >
               <TextInput
                 type="number"
@@ -432,9 +439,9 @@ export default function SettingsPanel({
           {/* Max RPS */}
           <div className="min-w-0">
             <Field
-              label="Max RPS Cap"
+              label={t('settings.maxRpsCap')}
               error={errors.maxRps}
-              hint="Safety ceiling for the request rate"
+              hint={t('settings.maxRpsCapHint')}
             >
               <TextInput
                 type="number"
@@ -461,9 +468,9 @@ export default function SettingsPanel({
             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-cyan-500/10 text-cyan-300">
               <SlidersHorizontal className="h-4 w-4" />
             </span>
-            <span className="text-sm font-medium text-white">Advanced settings</span>
-            <Badge tone="slate">Optional</Badge>
-            {isCustom && <Badge tone="indigo">custom</Badge>}
+            <span className="text-sm font-medium text-white">{t('settings.advancedTitle')}</span>
+            <Badge tone="slate">{t('settings.optionalBadge')}</Badge>
+            {isCustom && <Badge tone="indigo">{t('settings.customBadge')}</Badge>}
           </span>
           <ChevronDown
             className={cn(
@@ -480,10 +487,7 @@ export default function SettingsPanel({
               <p className="flex items-start gap-2.5 text-xs leading-relaxed text-slate-500">
                 <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                 <span>
-                  Weights shown here are the defaults of{' '}
-                  <span className="font-mono text-slate-300">{form.pattern}</span>. Use{' '}
-                  <span className="font-semibold text-slate-300">Customize</span> to edit
-                  them (switches the pattern to custom).
+                  {t('settings.weightsDefaultsHint', { pattern: form.pattern })}
                 </span>
               </p>
             )}
@@ -498,19 +502,19 @@ export default function SettingsPanel({
             <div className="space-y-4 border-t border-white/6 pt-6">
               <div>
                 <h4 className="text-xs font-semibold uppercase tracking-[0.16em] text-cyan-400/90">
-                  Additional options
+                  {t('settings.additionalOptions')}
                 </h4>
                 <p className="mt-1 text-xs text-slate-500">
-                  Optional overrides for IP pools, AI mode, seed and preferred paths
+                  {t('settings.additionalOptionsHint')}
                 </p>
               </div>
 
               <div className="grid grid-cols-1 gap-x-5 gap-y-6 sm:grid-cols-2 xl:grid-cols-3">
                 <div className="min-w-0">
                   <Field
-                    label="IP Pool Size (Legit)"
+                    label={t('settings.ipPoolLegit')}
                     error={errors.ipPoolLegit}
-                    hint="IPs used to simulate legitimate visitors"
+                    hint={t('settings.ipPoolLegitHint')}
                   >
                     <TextInput
                       type="number"
@@ -526,9 +530,9 @@ export default function SettingsPanel({
 
                 <div className="min-w-0">
                   <Field
-                    label="IP Pool Size (Attack)"
+                    label={t('settings.ipPoolAttack')}
                     error={errors.ipPoolAttack}
-                    hint="IPs used to simulate attackers"
+                    hint={t('settings.ipPoolAttackHint')}
                   >
                     <TextInput
                       type="number"
@@ -544,15 +548,15 @@ export default function SettingsPanel({
 
                 <div className="min-w-0">
                   <Field
-                    label="Seed"
+                    label={t('settings.seed')}
                     error={errors.seed}
-                    hint="Empty = random. Same settings + same seed = same distribution"
+                    hint={t('settings.seedHint')}
                   >
                     <TextInput
                       type="number"
                       inputMode="numeric"
                       min={0}
-                      placeholder="Random"
+                      placeholder={t('settings.seedPlaceholder')}
                       value={form.seed}
                       invalid={Boolean(errors.seed)}
                       disabled={locked}
@@ -562,7 +566,7 @@ export default function SettingsPanel({
                 </div>
 
                 <div className="min-w-0">
-                  <Field label="AI Anomaly Mode">
+                  <Field label={t('settings.aiAnomalyMode')}>
                     <SelectInput
                       value={form.aiMode}
                       disabled={locked}
@@ -579,9 +583,9 @@ export default function SettingsPanel({
 
                 <div className="min-w-0">
                   <Field
-                    label="AI Fixed Score"
+                    label={t('settings.aiFixedScore')}
                     error={errors.aiFixedScore}
-                    hint="0 – 1 · used when AI mode is fixed"
+                    hint={t('settings.aiFixedScoreHint')}
                   >
                     <TextInput
                       type="number"
@@ -599,18 +603,18 @@ export default function SettingsPanel({
 
                 <div className="min-w-0">
                   <Field
-                    label="Enable JA Headers"
-                    hint="Send JA3/JA4 when the worker and gateway support it"
+                    label={t('settings.enableJaHeaders')}
+                    hint={t('settings.enableJaHeadersHint')}
                   >
                     <div className="flex h-11 items-center gap-3">
                       <Toggle
                         checked={form.enableJaHeaders}
                         disabled={locked}
-                        label="Enable JA headers"
+                        label={t('settings.enableJaHeaders')}
                         onChange={(v) => patch('enableJaHeaders', v)}
                       />
                       <span className="text-sm text-slate-300">
-                        {form.enableJaHeaders ? 'Enabled' : 'Disabled'}
+                        {form.enableJaHeaders ? t('settings.enabled') : t('settings.disabled')}
                       </span>
                     </div>
                   </Field>
@@ -618,9 +622,9 @@ export default function SettingsPanel({
 
                 <div className="min-w-0 sm:col-span-2 xl:col-span-3">
                   <Field
-                    label="Prefer Paths"
+                    label={t('settings.preferPaths')}
                     error={errors.paths}
-                    hint="Comma separated, e.g. /, /login, /api/health (empty = backend defaults)"
+                    hint={t('settings.preferPathsHint')}
                   >
                     <TextInput
                       dir="ltr"

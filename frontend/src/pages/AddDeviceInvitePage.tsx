@@ -14,6 +14,7 @@
 
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { startRegistration } from '@simplewebauthn/browser'
 import {
   AlertTriangle,
@@ -32,6 +33,7 @@ import {
   Skeleton,
   TextInput,
 } from '../components/ui/kit'
+import DynamicText from '../components/DynamicText'
 import {
   finishPasskeyInvite,
   getPasskeyInviteOptions,
@@ -86,6 +88,7 @@ function mapError(err: unknown): string {
 type Stage = 'loading' | 'ready' | 'registering' | 'success' | 'error'
 
 export default function AddDeviceInvitePage() {
+  const { t } = useTranslation('auth')
   const { token } = useParams<{ token: string }>()
 
   const [stage, setStage] = useState<Stage>('loading')
@@ -149,9 +152,9 @@ export default function AddDeviceInvitePage() {
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-400/25 to-blue-600/25 shadow-lg shadow-cyan-500/10 ring-1 ring-cyan-400/25">
               <Fingerprint className="h-8 w-8 text-cyan-300" />
             </div>
-            <h1 className="text-2xl font-bold tracking-tight text-white">Add This Device</h1>
+            <h1 className="text-2xl font-bold tracking-tight text-white">{t('addDevice.invitePageTitle')}</h1>
             <p className="mt-1 text-sm text-slate-400">
-              Register biometrics for your Zero Plus account
+              {t('addDevice.invitePageSubtitle')}
             </p>
           </div>
 
@@ -171,8 +174,10 @@ export default function AddDeviceInvitePage() {
                 <div className="flex items-start gap-3 rounded-xl border border-rose-500/25 bg-rose-500/6 px-4 py-4 text-sm text-rose-200">
                   <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
                   <div>
-                    <p className="font-semibold">Could not load invitation</p>
-                    <p className="mt-1 text-xs text-rose-300">{errorMessage}</p>
+                    <p className="font-semibold">{t('addDevice.inviteError')}</p>
+                    <p className="mt-1 text-xs text-rose-300">
+                      <DynamicText text={errorMessage} />
+                    </p>
                   </div>
                 </div>
                 <p className="text-center text-sm text-slate-500">
@@ -188,14 +193,14 @@ export default function AddDeviceInvitePage() {
                   <CheckCircle className="h-9 w-9 text-emerald-400" />
                 </div>
                 <div className="text-center">
-                  <p className="text-lg font-semibold text-white">Device added successfully!</p>
+                  <p className="text-lg font-semibold text-white">{t('addDevice.successTitle')}</p>
                   <p className="mt-1 text-sm text-slate-400">
-                    You can now sign in to Zero Plus from this device using biometrics.
+                    {t('addDevice.successDesc')}
                   </p>
                 </div>
                 <div className="mt-2 flex items-center gap-2 text-xs text-slate-500">
                   <Lock className="h-3.5 w-3.5" />
-                  <span>Your private key never left this device.</span>
+                  <span>{t('addDevice.keyNote')}</span>
                 </div>
               </div>
             )}
@@ -214,8 +219,8 @@ export default function AddDeviceInvitePage() {
 
                 {/* Device name input */}
                 <Field
-                  label="Device name"
-                  hint="A label to identify this device in your profile (max 120 characters)."
+                  label={t('addDevice.deviceNameLabel')}
+                  hint={t('addDevice.deviceNameHint')}
                 >
                   <TextInput
                     icon={Laptop}
@@ -232,7 +237,7 @@ export default function AddDeviceInvitePage() {
                 <div className="flex items-start gap-3 rounded-xl border border-white/8 bg-white/3 px-4 py-3 text-xs text-slate-400">
                   <Lock className="mt-0.5 h-4 w-4 shrink-0 text-slate-500" />
                   <span>
-                    Your biometric data never leaves this device. Only a public key is sent to the server.
+                    {t('addDevice.privacyNote')}
                   </span>
                 </div>
 
@@ -240,7 +245,9 @@ export default function AddDeviceInvitePage() {
                 {errorMessage && (
                   <div className="flex items-start gap-3 rounded-xl border border-rose-500/25 bg-rose-500/6 px-4 py-3 text-sm text-rose-200">
                     <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                    <span>{errorMessage}</span>
+                    <span>
+                      <DynamicText text={errorMessage} />
+                    </span>
                   </div>
                 )}
 
@@ -251,7 +258,7 @@ export default function AddDeviceInvitePage() {
                   loading={stage === 'registering'}
                   onClick={() => void handleRegister()}
                 >
-                  {stage === 'registering' ? 'Waiting for biometrics…' : 'Register with biometrics'}
+                  {stage === 'registering' ? t('addDevice.registering') : t('addDevice.registerButton')}
                 </Button>
               </div>
             )}

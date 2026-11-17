@@ -38,8 +38,96 @@
       "empty": "Noch keine Simulationsläufe aufgezeichnet"
     }
   },
+  "columns": {
+    "date": "Datum",
+    "pattern": "Muster",
+    "duration": "Dauer",
+    "totalSent": "Gesamt gesendet",
+    "blockedShare": "Blockiert %",
+    "status": "Status",
+    "actions": "Aktionen",
+    "time": "Zeit",
+    "ip": "IP",
+    "path": "Pfad",
+    "decision": "Entscheidung",
+    "risk": "Risiko",
+    "stage": "Phase",
+    "latency": "Latenz",
+    "persona": "Persona",
+    "view": "Ansehen",
+    "viewRun": "Diesen Lauf ansehen",
+    "lockedRunHint": "Aktuelle Sitzung zuerst stoppen oder warten"
+  },
+  "live": {
+    "running": "Simulation läuft",
+    "liveRps": "Live-RPS",
+    "progress": "Fortschritt",
+    "stop": "Simulation stoppen",
+    "stopping": "Wird gestoppt…"
+  },
+  "eventsTable": {
+    "noRun": "Keine Sitzung ausgewählt",
+    "noRunDesc": "Starten Sie eine Simulation oder öffnen Sie eine vorherige Sitzung, um deren Sicherheitsereignisse anzuzeigen.",
+    "waiting": "Warten auf Ereignisse…",
+    "waitingDesc": "Ereignisse werden hier angezeigt, sobald das Gateway Entscheidungen über simulierte Anfragen trifft.",
+    "emptyRun": "Keine Ereignisse für diese Sitzung",
+    "emptyRunDesc": "Mit diesem Lauf sind keine Sicherheitsereignisse verknüpft."
+  },
+  "settings": {
+    "title": "Simulations-Einstellungen",
+    "subtitle": "Standardwerte sind bereit — Sie können ohne erweiterte Einstellungen starten.",
+    "lockedHint": "Einstellungen sind gesperrt, während ein Durchlauf aktiv ist. Änderungen gelten nur für neue Läufe.",
+    "noServers": "Keine Server gefunden. Fügen Sie zuerst einen Server hinzu und verifizieren Sie ihn, dann kehren Sie zurück.",
+    "noOnlineServer": "Kein ONLINE-Server verfügbar, daher kann die Simulation nicht gestartet werden.",
+    "openServers": "Server öffnen",
+    "retry": "Wiederholen",
+    "monitorOnlyBadge": "NUR_ÜBERWACHUNG",
+    "monitorOnlyHint": "Entscheidungen werden aufgezeichnet, der Datenverkehr wird jedoch weitgehend richtlinienkonform zugelassen.",
+    "intensity": "Intensität",
+    "intensityHint": "Steuert die in der Simulation verwendeten Persona-Gewichtungen",
+    "intensityLow": "Niedrig",
+    "intensityMedium": "Mittel",
+    "intensityHigh": "Hoch",
+    "duration": "Dauer",
+    "durationSeconds": "Sekunden",
+    "durationMinutes": "Minuten",
+    "durationHint": "Min {{min}}s · Max {{max}}s (oder laut Tarif)",
+    "targetRps": "Ziel-RPS",
+    "targetRpsHint": "Durchschnittliche Zielrate (Worker erzeugt Jitter)",
+    "maxRpsCap": "Max. RPS-Obergrenze",
+    "maxRpsCapHint": "Sicherheitsobergrenze für die Anfragerate",
+    "advancedTitle": "Erweiterte Einstellungen",
+    "optionalBadge": "Optional",
+    "customBadge": "Benutzerdefiniert",
+    "weightsDefaultsHint": "Die hier angezeigten Gewichtungen sind die Standardwerte von {{pattern}}. Verwenden Sie Anpassen, um sie zu bearbeiten.",
+    "personaWeights": "Persona-Gewichtungen",
+    "personaWeightsHint": "Gewichtungen (0–100) werden während des Laufs in Prozentsätze umgewandelt",
+    "totalWeights": "Gesamt",
+    "additionalOptions": "Zusätzliche Optionen",
+    "additionalOptionsHint": "Optionale Überschreibungen für IP-Pools, KI-Modus, Seed und bevorzugte Pfade",
+    "ipPoolLegit": "IP-Pool-Größe (Legitim)",
+    "ipPoolLegitHint": "Zur Simulation legitimer Besucher verwendete IPs",
+    "ipPoolAttack": "IP-Pool-Größe (Angriff)",
+    "ipPoolAttackHint": "Zur Simulation von Angreifern verwendete IPs",
+    "seed": "Seed",
+    "seedHint": "Leer = Zufall. Gleiche Einstellungen + gleicher Seed = gleiche Verteilung",
+    "seedPlaceholder": "Zufällig",
+    "aiAnomalyMode": "KI-Anomalie-Modus",
+    "aiFixedScore": "Feste KI-Punktzahl",
+    "aiFixedScoreHint": "0 – 1 · verwendet, wenn der KI-Modus fest ist",
+    "enableJaHeaders": "JA-Header aktivieren",
+    "enableJaHeadersHint": "JA3/JA4 senden, wenn Worker und Gateway dies unterstützen",
+    "enabled": "Aktiviert",
+    "disabled": "Deaktiviert",
+    "preferPaths": "Bevorzugte Pfade",
+    "preferPathsHint": "Kommagetrennt, z. B. /, /login, /api/health (leer = Backend-Standardwerte)"
+  },
   "patterns": {
     "realistic_mix": {
+      "label": "Realistischer Mix",
+      "desc": "Natürlicher Verkehrsmix mit einem geringen Anteil an anomalem Verhalten. (Standard)"
+    },
+    "REALISTIC_MIX": {
       "label": "Realistischer Mix",
       "desc": "Natürlicher Verkehrsmix mit einem geringen Anteil an anomalem Verhalten. (Standard)"
     },
@@ -47,27 +135,55 @@
       "label": "Nur legitim",
       "desc": "Ausschließlich legitime Besucher mit normalen Surfgewohnheiten."
     },
+    "LEGIT_ONLY": {
+      "label": "Nur legitim",
+      "desc": "Ausschließlich legitime Besucher mit normalen Surfgewohnheiten."
+    },
     "login_focus": {
       "label": "Login-Fokus",
-      "desc": "Konzentrierter Datenverkehr auf /login und sensible Autorisierungsendpunkte."
+      "desc": "Konzentrierter Datenverkehr auf /login und sensible Endpunkte."
+    },
+    "LOGIN_FOCUS": {
+      "label": "Login-Fokus",
+      "desc": "Konzentrierter Datenverkehr auf /login und sensible Endpunkte."
     },
     "rate_stress": {
-      "label": "Ratenbelastung",
+      "label": "Raten-Stresstest",
+      "desc": "Verkehr mit hohem Volumen zum Testen von Ratenbegrenzungsschwellen."
+    },
+    "RATE_STRESS": {
+      "label": "Raten-Stresstest",
       "desc": "Verkehr mit hohem Volumen zum Testen von Ratenbegrenzungsschwellen."
     },
     "bot_wave": {
       "label": "Bot-Welle",
       "desc": "Automatisierte Scraper-Signaturen, Headless-Browser und fehlgeschlagene JS-Challenges."
     },
+    "BOT_WAVE": {
+      "label": "Bot-Welle",
+      "desc": "Automatisierte Scraper-Signaturen, Headless-Browser und fehlgeschlagene JS-Challenges."
+    },
     "ban_recovery": {
       "label": "Sperre & Wiederherstellung",
-      "desc": "Schübe aggressiver Anfragen, Auslösen von Sperren und Beobachten der Erholung."
+      "desc": "Schübe aggressiver Anfragen, Sperren auslösen und Erholung beobachten."
+    },
+    "BAN_RECOVERY": {
+      "label": "Sperre & Wiederherstellung",
+      "desc": "Schübe aggressiver Anfragen, Sperren auslösen und Erholung beobachten."
     },
     "full_pipeline": {
-      "label": "Gesamte Pipeline",
+      "label": "Vollständige Pipeline",
+      "desc": "Sequenzielle Ausführung durch alle Besucher-Personas."
+    },
+    "FULL_PIPELINE": {
+      "label": "Vollständige Pipeline",
       "desc": "Sequenzielle Ausführung durch alle Besucher-Personas."
     },
     "custom": {
+      "label": "Benutzerdefinierter Mix",
+      "desc": "Manuell angepasste Gewichtungen für einzelne Personas."
+    },
+    "CUSTOM": {
       "label": "Benutzerdefinierter Mix",
       "desc": "Manuell angepasste Gewichtungen für einzelne Personas."
     }
@@ -75,23 +191,30 @@
   "personas": {
     "legit_ok": "Regulärer legitimer Besucher",
     "legit_sensitive": "Legitimer Besucher auf sensiblen Endpunkten",
-    "rate_soft": "Verkehr nahe dem Soft-Rate-Limit",
-    "rate_hard": "Verkehr überschreitet Hard-Rate-Limit",
+    "rate_soft": "Verkehr nahe dem weichen Ratenlimit",
+    "rate_hard": "Verkehr überschreitet das harte Ratenlimit",
     "bot_ua": "Skript- oder Crawler-User-Agent",
-    "fail_js": "Client besteht stille JS-Challenge nicht",
+    "fail_js": "Client besteht stumme JS-Challenge nicht",
     "pass_js": "Client besteht JS-Challenge erfolgreich",
-    "bad_ip": "Bekannte bösartige IP / hohe Anomalie-Bewertung"
+    "bad_ip": "Bekannte bösartige IP / hoher Anomaliewert"
   },
   "status": {
+    "IDLE": "Inaktiv",
+    "idle": "Inaktiv",
     "PENDING": "Ausstehend",
-    "RUNNING": "Wird ausgeführt",
+    "pending": "Ausstehend",
+    "RUNNING": "Läuft",
+    "running": "Läuft",
     "COMPLETED": "Abgeschlossen",
+    "completed": "Abgeschlossen",
     "STOPPED": "Gestoppt",
-    "FAILED": "Fehlgeschlagen"
+    "stopped": "Gestoppt",
+    "FAILED": "Fehlgeschlagen",
+    "failed": "Fehlgeschlagen"
   },
   "toast": {
     "started": "Simulation gestartet",
-    "startedDesc": "Verkehrs-Worker generiert Anfragen.",
+    "startedDesc": "Der Traffic-Worker generiert jetzt Anfragen.",
     "completed": "Simulation abgeschlossen",
     "completedDesc": "Endergebnisse liegen vor.",
     "stopped": "Simulation gestoppt",

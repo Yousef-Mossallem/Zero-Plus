@@ -6,6 +6,7 @@ import { Ban, Lock, RotateCcw, ShieldCheck, ShieldOff, Unlock, ExternalLink } fr
 import { useTranslation } from 'react-i18next'
 import { useToast } from '../../components/ui/Toast'
 import { Badge, Button, Drawer, KeyValue, Skeleton } from '../../components/ui/kit'
+import DynamicText from '../../components/DynamicText'
 import { parseApiError } from '../../services/apiError'
 import { listChallenges, type ChallengeLog, type ReputationEntry } from '../../services/reputationService'
 import { formatDateTime, formatNumber, timeAgo } from '../../utils/format'
@@ -85,8 +86,8 @@ export function EntryDrawer({
             </div>
             {entry.banReason && (
               <p dir="auto" className="mt-3 text-sm text-slate-400">
-                <span className="text-slate-500">{t('drawer.banReason')}</span>
-                {entry.banReason}
+                <span className="text-slate-500">{t('drawer.banReason')}</span>{' '}
+                <DynamicText text={entry.banReason} />
               </p>
             )}
           </div>
@@ -183,7 +184,12 @@ export function EntryDrawer({
                       <p className="truncate text-[11px] text-slate-500">
                         {timeAgo(c.createdAt)}
                         {c.durationMs !== null ? ` · ${c.durationMs} ms` : ''}
-                        {c.failureReason ? ` · ${c.failureReason}` : ''}
+                        {c.failureReason && (
+                          <>
+                            {' · '}
+                            <DynamicText text={c.failureReason} />
+                          </>
+                        )}
                       </p>
                     </div>
                     <Badge tone={c.passed ? 'emerald' : 'rose'}>{c.passed ? t('drawer.passed') : t('drawer.failed')}</Badge>

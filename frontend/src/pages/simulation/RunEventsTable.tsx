@@ -6,6 +6,7 @@
 // ==================================================================
 
 import { ChevronRight, ShieldQuestion } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 import RiskGauge from '../../components/RiskGauge'
 import {
@@ -19,15 +20,15 @@ import type { SecurityEvent } from '../../services/eventsService'
 import type { Decision } from '../../services/types'
 import { cn, truncate } from '../../utils/format'
 
-const COLUMNS = [
-  'Time',
-  'IP',
-  'Path',
-  'Decision',
-  'Risk',
-  'Stage',
-  'Latency',
-  'Persona',
+const COLUMN_KEYS = [
+  'columns.time',
+  'columns.ip',
+  'columns.path',
+  'columns.decision',
+  'columns.risk',
+  'columns.stage',
+  'columns.latency',
+  'columns.persona',
   '',
 ] as const
 
@@ -83,6 +84,7 @@ export default function RunEventsTable({
   onRetry: () => void
   onRowClick: (event: SecurityEvent) => void
 }) {
+  const { t } = useTranslation('simulation')
   if (error && events.length === 0) {
     return (
       <div className="px-5 py-10">
@@ -96,16 +98,16 @@ export default function RunEventsTable({
       <table className="w-full min-w-225 text-left">
         <thead>
           <tr className="border-b border-white/8 bg-white/2">
-            {COLUMNS.map((col, i) => (
+            {COLUMN_KEYS.map((colKey, i) => (
               <th
-                key={`${col}-${i}`}
+                key={`${colKey}-${i}`}
                 className={cn(
                   'px-4 py-3.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500',
                   i === 0 && 'pl-5',
-                  i === COLUMNS.length - 1 && 'pr-4',
+                  i === COLUMN_KEYS.length - 1 && 'pr-4',
                 )}
               >
-                {col}
+                {colKey ? t(colKey) : ''}
               </th>
             ))}
           </tr>
@@ -118,7 +120,7 @@ export default function RunEventsTable({
             events.length === 0 &&
             Array.from({ length: 6 }).map((_, i) => (
               <tr key={i} className="border-b border-white/5">
-                {COLUMNS.map((c, j) => (
+                {COLUMN_KEYS.map((c, j) => (
                   <td
                     key={`${c}-${j}`}
                     className={cn('px-4 py-4', j === 0 && 'pl-5')}
@@ -231,17 +233,17 @@ export default function RunEventsTable({
             icon={ShieldQuestion}
             title={
               !hasRun
-                ? 'No run selected'
+                ? t('eventsTable.noRun')
                 : running
-                  ? 'Waiting for events…'
-                  : 'No events for this run'
+                  ? t('eventsTable.waiting')
+                  : t('eventsTable.emptyRun')
             }
             description={
               !hasRun
-                ? 'Start a simulation or open a previous run to see its security events.'
+                ? t('eventsTable.noRunDesc')
                 : running
-                  ? 'Events appear here as soon as the Gateway starts deciding on simulated requests.'
-                  : 'No security events are linked to this run.'
+                  ? t('eventsTable.waitingDesc')
+                  : t('eventsTable.emptyRunDesc')
             }
           />
         </div>

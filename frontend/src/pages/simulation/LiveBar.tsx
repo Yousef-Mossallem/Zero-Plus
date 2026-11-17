@@ -5,6 +5,7 @@
 // ==================================================================
 
 import { AlertTriangle, Gauge, Square, Timer } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 import { Badge, Button, Card } from '../../components/ui/kit'
 import type { SimulationRun } from '../../services/simulationsService'
@@ -27,6 +28,7 @@ export default function LiveBar({
   pollError: string | null
   onStop: () => void
 }) {
+  const { t } = useTranslation('simulation')
   const pct = progressPercent(run, now)
   const elapsed = elapsedSec(run, now)
   const total = run.durationSec
@@ -42,7 +44,7 @@ export default function LiveBar({
                 <span className="zp-anim-pulse-ring absolute inline-flex h-full w-full rounded-full bg-cyan-400/60" />
                 <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-cyan-400" />
               </span>
-              <p className="text-sm font-semibold text-white">Simulation running</p>
+              <p className="text-sm font-semibold text-white">{t('live.running')}</p>
               <Badge tone="slate" className="font-mono normal-case tracking-normal">
                 {shortId(run.id)}
               </Badge>
@@ -77,7 +79,7 @@ export default function LiveBar({
             </span>
             <div className="min-w-0">
               <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-                Live RPS
+                {t('live.liveRps')}
               </p>
               <p className="text-sm font-semibold tabular-nums text-white">
                 {rps !== null ? `≈ ${rps.toFixed(1)}` : 'N/A'}
@@ -91,7 +93,7 @@ export default function LiveBar({
             </span>
             <div className="min-w-0">
               <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-                Progress
+                {t('live.progress')}
               </p>
               <p className="text-sm font-semibold tabular-nums text-white">
                 {pct !== null ? `${Math.round(pct)}%` : 'N/A'}
@@ -107,7 +109,7 @@ export default function LiveBar({
             onClick={onStop}
             className="shrink-0"
           >
-            Stop
+            {stopping ? t('live.stopping') : t('live.stop')}
           </Button>
         </div>
       </div>

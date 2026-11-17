@@ -9,6 +9,7 @@ import { Activity, Ban, CalendarRange, FileText } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { Badge } from '../../components/ui/kit'
+import DynamicText from '../../components/DynamicText'
 import type { Report } from '../../services/reportsService'
 import { cn, formatNumber, timeAgo } from '../../utils/format'
 import { ReportStatusBadge, TYPE_META, periodLabel } from './shared'
@@ -57,7 +58,7 @@ export default function ReportCard({
       </div>
 
       <h3 dir="auto" className="mt-4 line-clamp-2 text-base font-semibold leading-snug text-white">
-        {r.title}
+        <DynamicText text={r.title} />
       </h3>
 
       <p className="mt-1.5 flex items-center gap-1.5 text-xs text-slate-500">
@@ -67,7 +68,7 @@ export default function ReportCard({
 
       {r.status === 'FAILED' && r.errorMessage && (
         <p dir="auto" className="mt-2 line-clamp-2 rounded-lg border border-rose-500/20 bg-rose-500/5 px-2.5 py-1.5 text-xs text-rose-300/90">
-          {r.errorMessage}
+          <DynamicText text={r.errorMessage} />
         </p>
       )}
 

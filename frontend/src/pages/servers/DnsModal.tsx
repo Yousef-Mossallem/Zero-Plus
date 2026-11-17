@@ -105,7 +105,11 @@ function RecordCard({ rec, badge }: { rec: DnsRecordInstruction; badge?: string 
           </div>
         )
       })}
-      {rec.note && <p dir="auto" className="mt-2 text-xs text-slate-500">{rec.note}</p>}
+      {rec.note && (
+        <p dir="auto" className="mt-2 text-xs text-slate-500">
+          <DynamicText text={rec.note} />
+        </p>
+      )}
     </div>
   )
 }
@@ -133,7 +137,11 @@ function CheckResult({ label, check }: { label: string; check: DnsCheckResult })
         </span>
       </p>
 
-      <p dir="auto" className="mt-1 text-xs text-slate-400">{check.message}</p>
+      {check.message && (
+        <p dir="auto" className="mt-1 text-xs text-slate-400">
+          <DynamicText text={check.message} />
+        </p>
+      )}
 
       {!check.verified && (
         <div dir="ltr" className="mt-2 space-y-1.5 text-start font-mono text-[11px]">

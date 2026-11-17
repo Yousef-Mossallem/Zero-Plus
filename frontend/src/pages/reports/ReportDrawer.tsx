@@ -14,6 +14,7 @@ import { useTranslation } from 'react-i18next'
 
 import { useToast } from '../../components/ui/Toast'
 import { Button, Drawer, Modal, Skeleton } from '../../components/ui/kit'
+import DynamicText from '../../components/DynamicText'
 import { parseApiError } from '../../services/apiError'
 import { deleteReport, getReport, type Report } from '../../services/reportsService'
 import { formatDateTime, formatNumber } from '../../utils/format'
@@ -139,7 +140,11 @@ export default function ReportDrawer({
               <div className="rounded-2xl border border-rose-500/30 bg-rose-500/8 p-5">
                 <p className="text-sm font-semibold text-rose-200">{t('reports:drawer.failedTitle', 'Generation failed')}</p>
                 <p dir="auto" className="mt-1 text-sm text-rose-100/80">
-                  {current.errorMessage ?? t('reports:drawer.failedDesc', 'The report could not be generated. Try creating it again.')}
+                  {current.errorMessage ? (
+                    <DynamicText text={current.errorMessage} />
+                  ) : (
+                    t('reports:drawer.failedDesc', 'The report could not be generated. Try creating it again.')
+                  )}
                 </p>
               </div>
             ) : loading && !full ? (
@@ -158,7 +163,9 @@ export default function ReportDrawer({
                     <p className="mb-1 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-cyan-300">
                       <FileText className="h-3.5 w-3.5" /> {t('reports:drawer.executiveSummary', 'Executive summary')}
                     </p>
-                    <p dir="auto" className="text-sm leading-relaxed text-slate-200">{current.summary}</p>
+                    <p dir="auto" className="text-sm leading-relaxed text-slate-200">
+                      <DynamicText text={current.summary} />
+                    </p>
                   </div>
                 )}
                 {current.content ? (

@@ -11,7 +11,15 @@ import type { SimulationRun } from '../../services/simulationsService'
 import { cn, formatDateTime, formatNumber, formatPercent } from '../../utils/format'
 import { blockedPercent, formatDuration, STATUS_TONE } from './shared'
 
-const COLUMNS = ['Date', 'Pattern', 'Duration', 'Total Sent', 'Blocked %', 'Status', '']
+const COLUMN_KEYS = [
+  'columns.date',
+  'columns.pattern',
+  'columns.duration',
+  'columns.totalSent',
+  'columns.blockedShare',
+  'columns.status',
+  '',
+] as const
 
 export default function RunsHistory({
   items,
@@ -39,12 +47,12 @@ export default function RunsHistory({
       <table className="w-full min-w-180 text-left">
         <thead>
           <tr className="border-b border-white/6">
-            {COLUMNS.map((col, i) => (
+            {COLUMN_KEYS.map((colKey, i) => (
               <th
-                key={`${col}-${i}`}
+                key={`${colKey}-${i}`}
                 className="px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500"
               >
-                {col}
+                {colKey ? t(colKey) : ''}
               </th>
             ))}
           </tr>
@@ -55,7 +63,7 @@ export default function RunsHistory({
             items.length === 0 &&
             Array.from({ length: 4 }).map((_, i) => (
               <tr key={i} className="border-b border-white/4">
-                {COLUMNS.map((c, j) => (
+                {COLUMN_KEYS.map((c, j) => (
                   <td key={`${c}-${j}`} className="px-5 py-4">
                     <Skeleton className="h-4 w-full max-w-24" />
                   </td>
@@ -66,6 +74,7 @@ export default function RunsHistory({
           {items.map((run) => {
             const blocked = blockedPercent(run.totals)
             const disabled = lockedRunId !== null && lockedRunId !== run.id
+            const patternKey = (run.pattern || '').toLowerCase()
             return (
               <tr
                 key={run.id}
@@ -77,7 +86,7 @@ export default function RunsHistory({
               >
                 <td className="whitespace-nowrap px-5 py-3.5 text-sm text-slate-200">{formatDateTime(run.startedAt)}</td>
                 <td className="px-5 py-3.5 font-mono text-sm text-slate-300">
-                  {t(`patterns.${run.pattern}.label`, { defaultValue: run.pattern || '—' })}
+                  {t(`patterns.${patternKey}.label`, { defaultValue: run.pattern || '—' })}
                 </td>
                 <td className="whitespace-nowrap px-5 py-3.5 text-sm tabular-nums text-slate-300">
                   {formatDuration(run.durationSec)}
@@ -94,10 +103,10 @@ export default function RunsHistory({
                     size="sm"
                     icon={Eye}
                     disabled={disabled}
-                    title={disabled ? 'Stop or wait for the current run to finish first' : 'View this run'}
+                    title={disabled ? t('columns.lockedRunHint') : t('columns.viewRun')}
                     onClick={() => onView(run)}
                   >
-                    View
+                    {t('columns.view')}
                   </Button>
                 </td>
               </tr>

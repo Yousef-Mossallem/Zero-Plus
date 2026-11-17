@@ -18,6 +18,7 @@
 // ==================================================================
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import QRCode from 'react-qr-code'
 import {
   AlertTriangle,
@@ -228,6 +229,7 @@ function PasskeyRow({
 // ==================================================================
 
 export default function ProfilePage() {
+  const { t } = useTranslation(['auth', 'common'])
   const toast = useToast()
 
   // ---------------- Data ----------------
@@ -368,13 +370,33 @@ export default function ProfilePage() {
     }
   }
 
-  const closeAdd = () => {
+  const closeAdd = useCallback(() => {
     clearTimer()
     setAddOpen(false)
     setInvite(null)
     setInviteError(null)
     setTimeLeft(0)
-  }
+  }, [clearTimer])
+
+  // Poll for newly added devices while the QR modal is open
+  useEffect(() => {
+    if (!addOpen || !invite) return
+    const initialCount = passkeys.length
+    const pollInterval = setInterval(async () => {
+      try {
+        const latest = await listPasskeys()
+        if (latest.length > initialCount) {
+          setPasskeys(latest)
+          toast.success('New device registered successfully!')
+          closeAdd()
+        }
+      } catch {
+        // ignore polling errors
+      }
+    }, 3000)
+
+    return () => clearInterval(pollInterval)
+  }, [addOpen, invite, passkeys.length, toast, closeAdd])
 
   // ==================================================================
   // Delete device (soft delete)
@@ -610,7 +632,7 @@ export default function ProfilePage() {
 
                   {/* Add device via QR — works from any device */}
                   <Button variant="primary" icon={QrCode} disabled={loading} onClick={() => void openAdd()}>
-                    Add device
+                    {t('auth:addDevice.button')}
                   </Button>
                 </div>
 
@@ -756,11 +778,11 @@ export default function ProfilePage() {
         open={addOpen}
         onClose={closeAdd}
         icon={QrCode}
-        title="Add a new device"
-        description="Scan this QR code from the device you want to add, then follow the on-screen instructions."
+        title={t('auth:addDevice.title')}
+        description={t('auth:addDevice.description')}
         footer={
           <Button variant="ghost" onClick={closeAdd}>
-            Close
+            {t('auth:addDevice.close')}
           </Button>
         }
       >
@@ -791,13 +813,13 @@ export default function ProfilePage() {
                 <>
                   <Clock className="h-4 w-4 text-cyan-400" />
                   <span className={timeLeft < 60 ? 'text-amber-400 font-semibold' : 'text-slate-300'}>
-                    Expires in {Math.floor(timeLeft / 60)}:{String(timeLeft % 60).padStart(2, '0')}
+                    {t('auth:addDevice.expiresIn')} {Math.floor(timeLeft / 60)}:{String(timeLeft % 60).padStart(2, '0')}
                   </span>
                 </>
               ) : (
                 <>
                   <AlertTriangle className="h-4 w-4 text-rose-400" />
-                  <span className="text-rose-400 font-semibold">Invitation expired</span>
+                  <span className="text-rose-400 font-semibold">{t('auth:addDevice.expired')}</span>
                 </>
               )}
             </div>
@@ -806,27 +828,27 @@ export default function ProfilePage() {
             <div className="w-full space-y-2 rounded-xl border border-white/8 bg-white/3 px-4 py-3 text-xs text-slate-400">
               <p className="flex items-center gap-2">
                 <span className="flex h-5 w-5 items-center justify-center rounded-full bg-cyan-500/20 text-cyan-400 font-semibold text-[10px]">1</span>
-                Open the camera on the new device and scan the QR code.
+                {t('auth:addDevice.step1')}
               </p>
               <p className="flex items-center gap-2">
                 <span className="flex h-5 w-5 items-center justify-center rounded-full bg-cyan-500/20 text-cyan-400 font-semibold text-[10px]">2</span>
-                Follow the on-screen instructions to register your biometrics.
+                {t('auth:addDevice.step2')}
               </p>
               <p className="flex items-center gap-2">
                 <span className="flex h-5 w-5 items-center justify-center rounded-full bg-cyan-500/20 text-cyan-400 font-semibold text-[10px]">3</span>
-                Once done, your device list updates automatically.
+                {t('auth:addDevice.step3')}
               </p>
             </div>
 
             {timeLeft > 0 && (
               <Button variant="ghost" size="sm" icon={RefreshCw} onClick={() => void openAdd()}>
-                Generate new QR
+                {t('auth:addDevice.generateNew')}
               </Button>
             )}
 
             {timeLeft === 0 && (
               <Button variant="primary" size="sm" icon={QrCode} onClick={() => void openAdd()}>
-                Generate new QR
+                {t('auth:addDevice.generateNew')}
               </Button>
             )}
           </div>

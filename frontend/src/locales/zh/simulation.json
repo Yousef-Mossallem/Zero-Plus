@@ -38,8 +38,96 @@
       "empty": "暂无模拟运行记录"
     }
   },
+  "columns": {
+    "date": "日期",
+    "pattern": "模式",
+    "duration": "持续时间",
+    "totalSent": "发送总量",
+    "blockedShare": "拦截率 %",
+    "status": "状态",
+    "actions": "操作",
+    "time": "时间",
+    "ip": "IP",
+    "path": "路径",
+    "decision": "决策",
+    "risk": "风险",
+    "stage": "阶段",
+    "latency": "延迟",
+    "persona": "角色",
+    "view": "查看",
+    "viewRun": "查看此运行",
+    "lockedRunHint": "请先停止当前运行或等待其完成"
+  },
+  "live": {
+    "running": "模拟运行中",
+    "liveRps": "实时 RPS",
+    "progress": "进度",
+    "stop": "停止模拟",
+    "stopping": "正在停止…"
+  },
+  "eventsTable": {
+    "noRun": "未选择会话",
+    "noRunDesc": "启动模拟或打开之前的会话以查看其安全事件。",
+    "waiting": "等待事件中…",
+    "waitingDesc": "网关开始对模拟请求做出决策后，事件将显示在此处。",
+    "emptyRun": "此会话没有事件",
+    "emptyRunDesc": "没有与此运行关联的安全事件。"
+  },
+  "settings": {
+    "title": "模拟设置",
+    "subtitle": "默认值已就绪 — 您可以直接开始而无需打开高级设置。",
+    "lockedHint": "运行时设置已锁定。更改仅适用于新会话。",
+    "noServers": "未找到服务器。请先添加并验证服务器，然后返回运行模拟。",
+    "noOnlineServer": "没有可用的在线服务器，因此无法启动模拟。请等待服务器上线或检查其状态。",
+    "openServers": "打开服务器页面",
+    "retry": "重试",
+    "monitorOnlyBadge": "仅监控",
+    "monitorOnlyHint": "将记录决策，但根据策略大部分流量将被允许。",
+    "intensity": "强度",
+    "intensityHint": "控制模拟中使用的角色权重",
+    "intensityLow": "低",
+    "intensityMedium": "中",
+    "intensityHigh": "高",
+    "duration": "持续时间",
+    "durationSeconds": "秒",
+    "durationMinutes": "分钟",
+    "durationHint": "最小 {{min}} 秒 · 最大 {{max}} 秒（或按计划）",
+    "targetRps": "目标 RPS",
+    "targetRpsHint": "平均目标速率（工作进程会添加抖动）",
+    "maxRpsCap": "最大 RPS 上限",
+    "maxRpsCapHint": "请求速率的安全上限",
+    "advancedTitle": "高级设置",
+    "optionalBadge": "可选",
+    "customBadge": "自定义",
+    "weightsDefaultsHint": "此处显示的权重是 {{pattern}} 的默认值。使用“自定义”进行编辑（将模式切换为自定义）。",
+    "personaWeights": "角色权重",
+    "personaWeightsHint": "权重 (0–100) 在运行期间转换为百分比",
+    "totalWeights": "总计",
+    "additionalOptions": "其他选项",
+    "additionalOptionsHint": "IP 池、AI 模式、种子和首选路径的可选替代",
+    "ipPoolLegit": "IP 池大小（正常）",
+    "ipPoolLegitHint": "用于模拟正常访问者的 IP",
+    "ipPoolAttack": "IP 池大小（攻击）",
+    "ipPoolAttackHint": "用于模拟攻击者的 IP",
+    "seed": "种子 (Seed)",
+    "seedHint": "留空 = 随机。相同的设置 + 相同的种子 = 相同的分布",
+    "seedPlaceholder": "随机",
+    "aiAnomalyMode": "AI 异常模式",
+    "aiFixedScore": "AI 固定评分",
+    "aiFixedScoreHint": "0 – 1 · 在 AI 模式为 fixed 时使用",
+    "enableJaHeaders": "启用 JA 标头",
+    "enableJaHeadersHint": "在工作进程和网关支持时发送 JA3/JA4",
+    "enabled": "已启用",
+    "disabled": "已禁用",
+    "preferPaths": "首选路径",
+    "preferPathsHint": "逗号分隔，例如 /, /login, /api/health（留空 = 后端默认值）"
+  },
   "patterns": {
     "realistic_mix": {
+      "label": "真实混合流量",
+      "desc": "自然流量混合少量异常行为。（默认推荐）"
+    },
+    "REALISTIC_MIX": {
       "label": "真实混合流量",
       "desc": "自然流量混合少量异常行为。（默认推荐）"
     },
@@ -47,55 +135,90 @@
       "label": "仅正常访客",
       "desc": "全部为合法的普通浏览行为流量。"
     },
+    "LEGIT_ONLY": {
+      "label": "仅正常访客",
+      "desc": "全部为合法的普通浏览行为流量。"
+    },
     "login_focus": {
-      "label": "登录端点聚焦",
-      "desc": "针对 /login 及敏感鉴权接口的集中请求。"
+      "label": "登录聚焦",
+      "desc": "主要针对 /login 和敏感鉴权接口的密集流量。"
+    },
+    "LOGIN_FOCUS": {
+      "label": "登录聚焦",
+      "desc": "主要针对 /login 和敏感鉴权接口的密集流量。"
     },
     "rate_stress": {
       "label": "速率压力测试",
-      "desc": "高并发流量，用于测试限流阈值策略。"
+      "desc": "高并发流量测试，用于验证限流阈值。"
+    },
+    "RATE_STRESS": {
+      "label": "速率压力测试",
+      "desc": "高并发流量测试，用于验证限流阈值。"
     },
     "bot_wave": {
-      "label": "爬虫波浪冲击",
-      "desc": "模拟自动化抓取工具特征、无头浏览器与 JS 验证失败。"
+      "label": "爬虫波次",
+      "desc": "自动化抓取特征、无头浏览器与失败的 JS 质询。"
+    },
+    "BOT_WAVE": {
+      "label": "爬虫波次",
+      "desc": "自动化抓取特征、无头浏览器与失败的 JS 质询。"
     },
     "ban_recovery": {
-      "label": "封禁与恢复测试",
-      "desc": "突发侵略性攻击触发临时封禁，随后观察恢复过程。"
+      "label": "封禁与恢复",
+      "desc": "突发攻击流量，触发封禁并观察恢复情况。"
+    },
+    "BAN_RECOVERY": {
+      "label": "封禁与恢复",
+      "desc": "突发攻击流量，触发封禁并观察恢复情况。"
     },
     "full_pipeline": {
-      "label": "全链路遍历",
-      "desc": "依次执行所有预设的访客画像模式。"
+      "label": "完整流程测试",
+      "desc": "依次遍历所有类型的访问者角色。"
+    },
+    "FULL_PIPELINE": {
+      "label": "完整流程测试",
+      "desc": "依次遍历所有类型的访问者角色。"
     },
     "custom": {
-      "label": "自定义权重",
-      "desc": "手动微调各项画像的具体占比权重。"
+      "label": "自定义组合",
+      "desc": "手动微调各角色的权重比例。"
+    },
+    "CUSTOM": {
+      "label": "自定义组合",
+      "desc": "手动微调各角色的权重比例。"
     }
   },
   "personas": {
-    "legit_ok": "正常合规访客",
-    "legit_sensitive": "访问敏感路径的正常访客",
-    "rate_soft": "接近柔性限流阈值的请求",
-    "rate_hard": "突破刚性限流阈值的请求",
-    "bot_ua": "脚本或爬虫 User-Agent 特征",
-    "fail_js": "未能通过静默 JS 验证的客户端",
-    "pass_js": "成功通过 JS 验证的客户端",
-    "bad_ip": "已知恶意 IP 或 AI 高异常评分"
+    "legit_ok": "普通正常访问者",
+    "legit_sensitive": "访问敏感接口的正常用户",
+    "rate_soft": "接近软性限流阈值的请求",
+    "rate_hard": "突破硬性限流阈值的请求",
+    "bot_ua": "脚本或自动化爬虫 User-Agent",
+    "fail_js": "未通过静默 JS 质询的客户端",
+    "pass_js": "成功通过 JS 质询的客户端",
+    "bad_ip": "已知恶意 IP / 高异常评分来源"
   },
   "status": {
-    "PENDING": "等待中",
+    "IDLE": "空闲",
+    "idle": "空闲",
+    "PENDING": "排队中",
+    "pending": "排队中",
     "RUNNING": "运行中",
+    "running": "运行中",
     "COMPLETED": "已完成",
+    "completed": "已完成",
     "STOPPED": "已停止",
-    "FAILED": "失败"
+    "stopped": "已停止",
+    "FAILED": "失败",
+    "failed": "失败"
   },
   "toast": {
     "started": "模拟已启动",
-    "startedDesc": "流量生成 Worker 正在持续发送请求。",
+    "startedDesc": "流量工作节点正在生成请求。",
     "completed": "模拟已完成",
-    "completedDesc": "最终测试结果已生成。",
-    "stopped": "模拟已终止",
-    "failed": "模拟运行失败",
+    "completedDesc": "最终结果已就绪。",
+    "stopped": "模拟已停止",
+    "failed": "模拟失败",
     "startFailed": "启动模拟失败",
     "stopFailed": "停止模拟失败"
   }
