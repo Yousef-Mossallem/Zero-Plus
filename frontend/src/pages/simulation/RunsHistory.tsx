@@ -4,6 +4,7 @@
 // ==================================================================
 
 import { Eye, History } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 import { Badge, Button, EmptyState, ErrorState, Skeleton } from '../../components/ui/kit'
 import type { SimulationRun } from '../../services/simulationsService'
@@ -30,6 +31,7 @@ export default function RunsHistory({
   onRetry: () => void
   onView: (run: SimulationRun) => void
 }) {
+  const { t } = useTranslation('simulation')
   if (error && items.length === 0) return <ErrorState message={error} onRetry={onRetry} />
 
   return (
@@ -74,7 +76,9 @@ export default function RunsHistory({
                 )}
               >
                 <td className="whitespace-nowrap px-5 py-3.5 text-sm text-slate-200">{formatDateTime(run.startedAt)}</td>
-                <td className="px-5 py-3.5 font-mono text-sm text-slate-300">{run.pattern || '—'}</td>
+                <td className="px-5 py-3.5 font-mono text-sm text-slate-300">
+                  {t(`patterns.${run.pattern}.label`, { defaultValue: run.pattern || '—' })}
+                </td>
                 <td className="whitespace-nowrap px-5 py-3.5 text-sm tabular-nums text-slate-300">
                   {formatDuration(run.durationSec)}
                 </td>
@@ -82,7 +86,7 @@ export default function RunsHistory({
                 <td className="px-5 py-3.5 text-sm tabular-nums text-slate-300">{formatPercent(blocked)}</td>
                 <td className="px-5 py-3.5">
                   <Badge tone={STATUS_TONE[run.status]} dot>
-                    {run.status}
+                    {t(`status.${run.status}`, { defaultValue: run.status })}
                   </Badge>
                 </td>
                 <td className="px-5 py-3.5 text-right">
@@ -105,8 +109,8 @@ export default function RunsHistory({
       {!loading && items.length === 0 && (
         <EmptyState
           icon={History}
-          title="No previous runs"
-          description="Completed and stopped simulations will be listed here."
+          title={t('page.history.empty')}
+          description=""
         />
       )}
     </div>

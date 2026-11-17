@@ -13,3 +13,6 @@ export type LandingPage = '' | 'about' | 'contact' | 'legal'
 /** landingPath('de', 'about') → /de/about  |  landingPath('ar') → /ar */
 export const landingPath = (lng: string, page: LandingPage = ''): string =>
   `/${lng}${page ? `/${page}` : ''}`
+
+/** مسار صفحة إضافة جهاز عبر QR (راوت عام) */
+export const addDevicePath = (token: string): string => `/add-device/${token}`

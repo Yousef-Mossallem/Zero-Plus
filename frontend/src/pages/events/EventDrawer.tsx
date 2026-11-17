@@ -9,6 +9,7 @@ import { Copy, ExternalLink } from 'lucide-react'
 import RiskGauge from '../../components/RiskGauge'
 import { useToast } from '../../components/ui/Toast'
 import { Badge, Button, DecisionBadge, Drawer, KeyValue, Skeleton } from '../../components/ui/kit'
+import DynamicText from '../../components/DynamicText'
 import { parseApiError } from '../../services/apiError'
 import { getEventById, type SecurityEvent, type SecurityEventDetail } from '../../services/eventsService'
 import { formatDateTime } from '../../utils/format'
@@ -93,7 +94,7 @@ export function EventDrawer({
               <DecisionBadge decision={e.decision} />
               {e.reasonSummary && (
                 <p dir="auto" className="text-sm leading-relaxed text-slate-300">
-                  {e.reasonSummary}
+                  <DynamicText text={e.reasonSummary} />
                 </p>
               )}
             </div>

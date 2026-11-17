@@ -17,6 +17,7 @@ import {
 } from 'lucide-react'
 import { useToast } from '../../components/ui/Toast'
 import { Badge, Button, Modal, Skeleton } from '../../components/ui/kit'
+import DynamicText from '../../components/DynamicText'
 import { parseApiError } from '../../services/apiError'
 import {
   getApiErrorInfo,
@@ -389,7 +390,8 @@ export function DnsModal({
             <div className="space-y-1.5 rounded-xl border border-amber-400/20 bg-amber-500/5 p-4">
               {dns.warnings.map((w, i) => (
                 <p key={i} dir="auto" className="flex gap-2 text-xs text-amber-200/90">
-                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" /> {w}
+                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  <DynamicText text={w} />
                 </p>
               ))}
             </div>
@@ -405,7 +407,7 @@ export function DnsModal({
                     <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/5 text-[11px] text-slate-300">
                       {i + 1}
                     </span>
-                    <span dir="auto" className="leading-relaxed">{s}</span>
+                    <DynamicText text={s} as="span" className="leading-relaxed" />
                   </li>
                 ))}
               </ol>

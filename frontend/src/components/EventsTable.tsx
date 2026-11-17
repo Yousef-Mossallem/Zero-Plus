@@ -14,6 +14,7 @@ import { ArrowDown, ArrowUp, ArrowUpDown, ChevronRight, ShieldQuestion } from 'l
 import { useTranslation } from 'react-i18next'
 import RiskGauge from './RiskGauge'
 import { Badge, DecisionBadge, EmptyState, Skeleton } from './ui/kit'
+import DynamicText from './DynamicText'
 import { cn, formatDateTime, timeAgo, truncate } from '../utils/format'
 import type { EventSortBy, SecurityEvent } from '../services/eventsService'
 
@@ -168,7 +169,7 @@ export default function EventsTable({
                 </p>
                 {event.reasonSummary && (
                   <p dir="auto" className="truncate text-[11px] text-slate-500" title={event.reasonSummary}>
-                    {event.reasonSummary}
+                    <DynamicText text={event.reasonSummary} />
                   </p>
                 )}
               </td>

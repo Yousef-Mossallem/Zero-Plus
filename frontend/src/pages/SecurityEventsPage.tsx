@@ -292,11 +292,21 @@ export default function SecurityEventsPage() {
       })
   }, [])
 
-  // ---------------- Auto refresh ----------------
+  // ---------------- Auto refresh & Live Socket ----------------
   useEffect(() => {
     if (!live) return
+
+    const handleLiveEvent = () => {
+      void load(true)
+    }
+
+    window.addEventListener('zp:security-event', handleLiveEvent)
     const timer = setInterval(() => void load(true), AUTO_REFRESH_MS)
-    return () => clearInterval(timer)
+
+    return () => {
+      window.removeEventListener('zp:security-event', handleLiveEvent)
+      clearInterval(timer)
+    }
   }, [live, load])
 
   // ---------------- Handlers ----------------

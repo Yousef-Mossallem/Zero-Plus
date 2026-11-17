@@ -3,10 +3,10 @@ import process from "node:process";
 import { defineConfig } from "prisma/config";
 
 export default defineConfig({
-  schema: "Prisma/schema.prisma",
+  schema: "prisma/schema.prisma",
 
   migrations: {
-    path: "Prisma/migrations",
+    path: "prisma/migrations",
   },
 
   datasource: {

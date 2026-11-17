@@ -31,6 +31,8 @@ function isNotificationPayload(value: unknown): value is NotificationSocketPaylo
   )
 }
 
+export const SECURITY_EVENT_WINDOW_EVENT = 'zp:security-event'
+
 export function useNotificationsLive(): void {
   const token = useAuthStore((s) => s.token)
   const status = useAuthStore((s) => s.status)
@@ -73,6 +75,10 @@ export function useNotificationsLive(): void {
       const { bumpUnread, ...notification } = payload
       useNotificationStore.getState().receive(notification, bumpUnread ?? true)
     }
+    const onSecurityEvent = (payload: unknown) => {
+      if (typeof payload !== 'object' || payload === null) return
+      window.dispatchEvent(new CustomEvent(SECURITY_EVENT_WINDOW_EVENT, { detail: payload }))
+    }
     const onOffline = () => useNotificationStore.getState().setConnection('disconnected')
     const onOnline = () => {
       if (!socket.connected) {
@@ -86,6 +92,7 @@ export function useNotificationsLive(): void {
     socket.on('connect_error', onError)
     socket.io.on('reconnect_attempt', onAttempt)
     socket.on(SocketEvents.NOTIFICATION_NEW, onNotification)
+    socket.on(SocketEvents.SECURITY_EVENT_NEW, onSecurityEvent)
     window.addEventListener('offline', onOffline)
     window.addEventListener('online', onOnline)
 
@@ -97,6 +104,7 @@ export function useNotificationsLive(): void {
       s.off('connect_error', onError)
       s.io.off('reconnect_attempt', onAttempt)
       s.off(SocketEvents.NOTIFICATION_NEW, onNotification)
+      s.off(SocketEvents.SECURITY_EVENT_NEW, onSecurityEvent)
       window.removeEventListener('offline', onOffline)
       window.removeEventListener('online', onOnline)
     }

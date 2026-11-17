@@ -10,6 +10,7 @@ import { Check } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { Badge, Button } from '../../components/ui/kit'
+import DynamicText from '../../components/DynamicText'
 import type { AppNotification } from '../../services/notificationsService'
 import { SEVERITY_LABELS, metaFor, visualFor } from '../../utils/notificationMeta'
 import { cn, formatDateTime, truncate } from '../../utils/format'
@@ -80,12 +81,12 @@ export default function NotificationItem({
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <p dir="auto" className="text-sm font-semibold text-white">
-                {n.title}
+                <DynamicText text={n.title} />
               </p>
               {highlighted && <Badge tone="cyan">{t('status.new')}</Badge>}
             </div>
             <p dir="auto" className="mt-1 text-sm leading-relaxed text-slate-400">
-              {n.message}
+              <DynamicText text={n.message} />
             </p>
           </div>
           <time

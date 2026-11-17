@@ -45,13 +45,27 @@ function resolveUrl(): string {
 let socket: Socket | null = null
 let currentToken = ''
 
+function getStoredToken(): string {
+  try {
+    return localStorage.getItem('zp_token') || ''
+  } catch {
+    return ''
+  }
+}
+
 export const getSocket = (): Socket => {
   if (!socket) {
+    const token = currentToken || getStoredToken()
+    currentToken = token
+
     socket = io(resolveUrl(), {
       path: '/socket.io',
       autoConnect: false,
       transports: ['websocket', 'polling'],
-      auth: (cb) => cb({ token: currentToken }),
+      auth: (cb) => {
+        const activeToken = currentToken || getStoredToken()
+        cb({ token: activeToken })
+      },
       reconnection: true,
       reconnectionAttempts: Infinity,
       reconnectionDelay: 1000,
@@ -74,21 +88,30 @@ export const getSocket = (): Socket => {
   return socket
 }
 
-export const connectSocket = (token: string): Socket => {
+export const connectSocket = (token?: string): Socket => {
   const prev = currentToken
-  currentToken = token || ''
+  const activeToken = token || getStoredToken()
+  currentToken = activeToken
   const s = getSocket()
 
-  if (!currentToken) {
-    if (s.connected || s.active) s.disconnect()
+  // تحديث الـ auth مباشرة لضمان وصول التوكن الجديد
+  s.auth = { token: activeToken }
+
+  if (!activeToken) {
+    if (s.connected) s.disconnect()
     return s
   }
 
-  if (prev && prev !== currentToken && (s.connected || s.active)) {
+  // لو التوكن اتغير وكان متصل → افصل وارجع اتصل
+  if (prev && prev !== activeToken && s.connected) {
     s.disconnect()
+    s.connect()
+    return s
   }
 
-  if (!s.connected && !s.active) s.connect()
+  if (!s.connected) {
+    s.connect()
+  }
   return s
 }
 

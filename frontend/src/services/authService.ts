@@ -392,30 +392,6 @@ export async function listPasskeys(): Promise<AuthPasskeySummary[]> {
 }
 
 /**
- * POST /auth/passkeys/register/start
- * لازم نبعت {} لأن Fastify بيرفض Content-Type JSON مع body فاضي.
- */
-export async function addPasskeyStart(): Promise<RegisterStartResult> {
-  const response = await api.post<AuthApiResponse<RegisterStartResult>>(
-    '/auth/passkeys/register/start',
-    {},
-  )
-  return response.data.data
-}
-
-/** POST /auth/passkeys/register/finish */
-export async function addPasskeyFinish(data: {
-  deviceName?: string
-  credential: RegistrationResponseJSON
-}): Promise<AuthPasskeySummary> {
-  const response = await api.post<AuthApiResponse<AuthPasskeySummary>>(
-    '/auth/passkeys/register/finish',
-    data,
-  )
-  return response.data.data
-}
-
-/**
  * DELETE /auth/passkeys → body: { passkeyId }
  * passkeyId هو الـ id اللي في القائمة (مش credentialId).
  * الحذف soft، ومينفعش تحذف آخر جهاز.
@@ -424,6 +400,72 @@ export async function revokePasskey(passkeyId: string): Promise<void> {
   await api.delete('/auth/passkeys', {
     data: { passkeyId },
   })
+}
+
+// ==================================================================
+// API — Passkey Invite (QR - الطريقة الجديدة)
+// ==================================================================
+
+/** رد POST /auth/passkeys/invite */
+export interface PasskeyInviteResult {
+  token: string
+  url: string
+  expiresAt: string
+  expiresInSeconds: number
+}
+
+/** رد GET /auth/passkeys/invite/:token */
+export interface PasskeyInviteOptionsResult {
+  options: PublicKeyCredentialCreationOptionsJSON
+  rpId: string
+  user: { fullName: string; email: string }
+  expiresAt: string
+}
+
+/** رد POST /auth/passkeys/invite/:token/finish */
+export interface PasskeyInviteFinishResult {
+  passkey: AuthPasskeySummary
+  message: string
+}
+
+/**
+ * POST /auth/passkeys/invite
+ * المستخدم مسجّل دخول → السيرفر بيرجع token + url (للـ QR) + expiresAt
+ */
+export async function createPasskeyInvite(): Promise<PasskeyInviteResult> {
+  const response = await api.post<AuthApiResponse<PasskeyInviteResult>>(
+    '/auth/passkeys/invite',
+    {},
+  )
+  return response.data.data
+}
+
+/**
+ * GET /auth/passkeys/invite/:token
+ * الجهاز الجديد يطلب الـ registration options — راوت عام بدون توكن
+ */
+export async function getPasskeyInviteOptions(
+  token: string,
+): Promise<PasskeyInviteOptionsResult> {
+  const response = await api.get<AuthApiResponse<PasskeyInviteOptionsResult>>(
+    `/auth/passkeys/invite/${token}`,
+  )
+  return response.data.data
+}
+
+/**
+ * POST /auth/passkeys/invite/:token/finish
+ * الجهاز الجديد يبعت الـ credential بعد البصمة
+ */
+export async function finishPasskeyInvite(
+  token: string,
+  data: { deviceName?: string; credential: RegistrationResponseJSON },
+): Promise<PasskeyInviteFinishResult> {
+  const response = await api.post<AuthApiResponse<PasskeyInviteFinishResult>>(
+    `/auth/passkeys/invite/${token}/finish`,
+    data,
+  )
+  return response.data.data
 }
 
 // ==================================================================
@@ -439,9 +481,10 @@ const authService = {
   updateProfile,
   setPassword,
   listPasskeys,
-  addPasskeyStart,
-  addPasskeyFinish,
   revokePasskey,
+  createPasskeyInvite,
+  getPasskeyInviteOptions,
+  finishPasskeyInvite,
 
   saveToken,
   getToken,

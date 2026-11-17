@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import type { Dispatch, SetStateAction } from 'react'
 import { Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 
 import {
   Badge,
@@ -199,6 +200,7 @@ export default function SettingsPanel({
   onCustomize,
   onReset,
 }: SettingsPanelProps) {
+  const { t } = useTranslation('simulation')
   const selected = servers.find((s) => s.id === form.serverId)
   const hasOnline = servers.some((s) => s.status === 'ONLINE')
   const patternMeta = PATTERNS.find((p) => p.value === form.pattern)
@@ -225,10 +227,10 @@ export default function SettingsPanel({
 
         <div className="flex shrink-0 flex-wrap items-center gap-2">
           <Button size="sm" icon={SlidersHorizontal} disabled={locked} onClick={onCustomize}>
-            Customize
+            {t('patterns.custom.label')}
           </Button>
           <Button size="sm" icon={RotateCcw} disabled={locked} onClick={onReset}>
-            Reset to Defaults
+            {t('page.resetDefaults')}
           </Button>
         </div>
       </div>
@@ -277,7 +279,7 @@ export default function SettingsPanel({
         <div className="grid grid-cols-1 gap-x-5 gap-y-6 sm:grid-cols-2 xl:grid-cols-3">
           {/* Server */}
           <div className="min-w-0">
-            <Field label="Server" error={errors.serverId}>
+            <Field label={t('page.targetServer')} error={errors.serverId}>
               {serversLoading ? (
                 <Skeleton className="h-11 w-full rounded-xl" />
               ) : serversError ? (
@@ -301,7 +303,7 @@ export default function SettingsPanel({
                   onChange={(e) => patch('serverId', e.target.value)}
                 >
                   <option value="" className="bg-[#0b1224]">
-                    {servers.length === 0 ? 'No servers' : 'Select a server'}
+                    {servers.length === 0 ? 'No servers' : t('page.selectServer')}
                   </option>
                   {servers.map((s) => (
                     <option
@@ -332,7 +334,7 @@ export default function SettingsPanel({
 
           {/* Pattern */}
           <div className="min-w-0">
-            <Field label="Pattern">
+            <Field label={t('page.pattern')}>
               <SelectInput
                 value={form.pattern}
                 disabled={locked}

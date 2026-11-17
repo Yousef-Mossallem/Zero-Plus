@@ -24,6 +24,7 @@ import {
   type Dispatch,
   type SetStateAction,
 } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   Ban,
   FlaskConical,
@@ -80,7 +81,6 @@ import {
   defaultSettings,
   mapBackendFieldErrors,
   progressPercent,
-  shortId,
   validateForm,
   type DisplayStatus,
   type FormErrors,
@@ -91,6 +91,7 @@ import { useNow, useSimulationRun } from './simulation/useSimulationRun'
 const HISTORY_DEFAULT_LIMIT = 10
 
 export default function SimulationPage() {
+  const { t } = useTranslation('simulation')
   const toast = useToast()
   const role = useAuthStore(selectUserRole)
   const canRun = role !== null && SIM_ROLES.includes(role)
@@ -149,9 +150,9 @@ export default function SimulationPage() {
       void loadHistory({ silent: true })
       if (!liveObserved) return
       if (finished.status === 'COMPLETED') {
-        toast.success('Simulation completed', 'Final results are ready.')
+        toast.success(t('toast.completed'), t('toast.completedDesc'))
       } else if (finished.status === 'FAILED') {
-        toast.error('Simulation failed', 'The backend reported a failure for this run.')
+        toast.error(t('toast.failed'), (finished as { errorMessage?: string }).errorMessage ?? undefined)
       }
     },
   })
@@ -302,7 +303,7 @@ export default function SimulationPage() {
       tracker.track(created, { live: true })
       setHistoryPage(1)
       void loadHistory({ silent: true })
-      toast.success('Simulation started', `Run ${shortId(created.id)} is now running.`)
+      toast.success(t('toast.started'), t('toast.startedDesc'))
     } catch (err) {
       const parsed = parseApiError(err)
       if (parsed.status === 400) {
@@ -321,7 +322,7 @@ export default function SimulationPage() {
       } else {
         setFormError(parsed.message)
       }
-      toast.error('Could not start the simulation', parsed.message)
+      toast.error(t('toast.startFailed'), parsed.message)
     } finally {
       setStarting(false)
     }
@@ -333,11 +334,11 @@ export default function SimulationPage() {
     try {
       const partial = await stopSimulation(run.id)
       tracker.applyPartial(partial)
-      toast.info('Simulation stopped', 'Final results are being loaded.')
+      toast.info(t('toast.stopped'), t('toast.completedDesc'))
       void loadHistory({ silent: true })
     } catch (err) {
       const parsed = parseApiError(err)
-      toast.error('Could not stop the simulation', parsed.message)
+      toast.error(t('toast.stopFailed'), parsed.message)
     } finally {
       setStopping(false)
     }
@@ -359,8 +360,8 @@ export default function SimulationPage() {
           ============================================================ */}
       <PageHeader
         icon={FlaskConical}
-        title="Simulation Lab"
-        subtitle="Traffic simulation through the same protection path according to company policy."
+        title={t('page.title')}
+        subtitle={t('page.subtitle')}
         actions={
           <div className="flex flex-wrap items-center gap-2.5">
             <Badge
@@ -368,7 +369,7 @@ export default function SimulationPage() {
               dot
               className={cn(lastStatus === 'RUNNING' && 'animate-pulse')}
             >
-              {run ? lastStatus : `Last run: ${lastStatus}`}
+              {run ? t(`status.${lastStatus}`, { defaultValue: lastStatus }) : `${t(`status.${lastStatus}`, { defaultValue: lastStatus })}`}
             </Badge>
 
             {isRunning && (
@@ -379,7 +380,7 @@ export default function SimulationPage() {
                 disabled={!canRun}
                 onClick={handleStop}
               >
-                Stop
+                {stopping ? t('page.stopping') : t('page.stop')}
               </Button>
             )}
 
@@ -388,10 +389,10 @@ export default function SimulationPage() {
               icon={Play}
               loading={starting}
               disabled={startDisabledReason !== null}
-              title={startDisabledReason ?? 'Start simulation'}
+              title={startDisabledReason ?? t('page.start')}
               onClick={handleStart}
             >
-              Start
+              {starting ? t('page.starting') : t('page.start')}
             </Button>
           </div>
         }
@@ -456,7 +457,7 @@ export default function SimulationPage() {
       <section className="space-y-3">
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-7">
           <StatCard
-            label="Total Sent"
+            label={t('page.kpis.sent')}
             value={formatNumber(totals?.sent)}
             icon={Send}
             tone="cyan"
@@ -464,7 +465,7 @@ export default function SimulationPage() {
             delay={60}
           />
           <StatCard
-            label="Allowed"
+            label={t('page.kpis.allowed')}
             value={formatNumber(totals?.allowed)}
             icon={ShieldCheck}
             tone="emerald"
@@ -472,7 +473,7 @@ export default function SimulationPage() {
             delay={90}
           />
           <StatCard
-            label="Challenged"
+            label={t('page.kpis.challenged')}
             value={formatNumber(totals?.challenged)}
             icon={ShieldQuestion}
             tone="indigo"
@@ -480,7 +481,7 @@ export default function SimulationPage() {
             delay={120}
           />
           <StatCard
-            label="Rate Limited"
+            label={t('page.kpis.rateLimited')}
             value={formatNumber(totals?.rateLimited)}
             icon={Gauge}
             tone="amber"
@@ -488,16 +489,16 @@ export default function SimulationPage() {
             delay={150}
           />
           <StatCard
-            label="Blocked"
+            label={t('page.kpis.blocked')}
             value={formatNumber(totals?.blocked)}
             icon={Ban}
             tone="rose"
-            hint={totals ? `Blocked ${formatPercent(blockedPercent(totals))}` : undefined}
+            hint={totals ? `${t('page.kpis.blockedShare')}: ${formatPercent(blockedPercent(totals))}` : undefined}
             loading={kpiLoading}
             delay={180}
           />
           <StatCard
-            label="Average Latency"
+            label={t('page.kpis.avgLatency')}
             value={run && run.avgLatencyMs !== null ? formatMs(run.avgLatencyMs) : 'N/A'}
             icon={Timer}
             tone="slate"
@@ -505,11 +506,11 @@ export default function SimulationPage() {
             delay={210}
           />
           <StatCard
-            label="Progress"
+            label={t('page.kpis.approxRps')}
             value={progress !== null ? `${Math.round(progress)}%` : 'N/A'}
             icon={Percent}
             tone="cyan"
-            hint={run ? run.status : undefined}
+            hint={run ? t(`status.${run.status}`, { defaultValue: run.status }) : undefined}
             loading={kpiLoading}
             delay={240}
           />
@@ -539,11 +540,11 @@ export default function SimulationPage() {
         <Card className="overflow-hidden" delay={180}>
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/6 px-5 py-4">
             <div className="min-w-0">
-              <h3 className="text-sm font-semibold text-white">Live Security Events</h3>
+              <h3 className="text-sm font-semibold text-white">{t('page.events.title')}</h3>
               <p className="mt-0.5 text-xs text-slate-500">
                 {run
-                  ? `Filtered by run ${shortId(run.id)} · latest ${Math.min(tracker.events.length, 50)} events`
-                  : 'Filtered by the current or selected run'}
+                  ? `${t('page.events.subtitle')} · ${Math.min(tracker.events.length, 50)} events`
+                  : t('page.events.subtitle')}
               </p>
             </div>
             {isRunning && (
@@ -576,9 +577,9 @@ export default function SimulationPage() {
               <History className="h-4 w-4" />
             </span>
             <div>
-              <h3 className="text-sm font-semibold text-white">Previous runs</h3>
+              <h3 className="text-sm font-semibold text-white">{t('page.history.title')}</h3>
               <p className="mt-0.5 text-xs text-slate-500">
-                Open a past run to inspect its results and events
+                {t('page.history.subtitle')}
               </p>
             </div>
           </div>

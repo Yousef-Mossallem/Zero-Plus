@@ -14,10 +14,11 @@ import {
   registerFinishSchema,
   loginStartSchema,
   loginFinishSchema,
-  addPasskeyFinishSchema,
   revokePasskeySchema,
   updateProfileSchema,
   setPasswordSchema,
+  createPasskeyInviteSchema,
+  finishPasskeyInviteSchema,
 } from './auth.schema.js'
 
 import {
@@ -25,13 +26,14 @@ import {
   registerFinish,
   loginStart,
   loginFinish,
-  addPasskeyStart,
-  addPasskeyFinish,
   revokePasskey,
   listPasskeys,
   getMe,
   updateProfile,
   setPassword,
+  createPasskeyInvite,
+  getPasskeyInviteOptions,
+  finishPasskeyInvite,
 } from './auth.service.js'
 
 // ------------------------------------------------------------------
@@ -100,6 +102,18 @@ function mapAuthError(
     USER_NOT_FOUND: {
       status: 404,
       message: 'User not found',
+    },
+    INVITE_NOT_FOUND: {
+      status: 404,
+      message: 'Invite not found',
+    },
+    INVITE_ALREADY_USED: {
+      status: 400,
+      message: 'Invite already used',
+    },
+    INVITE_EXPIRED: {
+      status: 400,
+      message: 'Invite expired',
     },
   }
   return table[message] ?? null
@@ -298,18 +312,19 @@ export async function authRoutes(fastify: FastifyInstance) {
   )
 
   // ================================================================
-  // POST /auth/passkeys/register/start
-  // إضافة Passkey لجهاز جديد (مسجّل دخول)
+  // POST /auth/passkeys/invite
+  // إنشاء دعوة إضافة جهاز جديد (QR) — مدتها 5 دقائق
   // ================================================================
 
   fastify.post(
-    '/passkeys/register/start',
+    '/passkeys/invite',
     {
       preHandler: [fastify.authenticate],
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
-        const result = await addPasskeyStart(fastify, request.user.id)
+        createPasskeyInviteSchema.parse(request.body)
+        const result = await createPasskeyInvite(fastify, request.user.id)
 
         return reply.status(200).send({
           success: true,
@@ -322,27 +337,50 @@ export async function authRoutes(fastify: FastifyInstance) {
   )
 
   // ================================================================
-  // POST /auth/passkeys/register/finish
+  // GET /auth/passkeys/invite/:token
+  // الجهاز الجديد يطلب الـ options بتاعة الـ WebAuthn (عام بدون توكن)
+  // ================================================================
+
+  fastify.get(
+    '/passkeys/invite/:token',
+    async (
+      request: FastifyRequest<{ Params: { token: string } }>,
+      reply: FastifyReply
+    ) => {
+      try {
+        const { token } = request.params
+        const result = await getPasskeyInviteOptions(fastify, token)
+
+        return reply.status(200).send({
+          success: true,
+          data: result,
+        })
+      } catch (error: unknown) {
+        return handleError(error, request, reply)
+      }
+    }
+  )
+
+  // ================================================================
+  // POST /auth/passkeys/invite/:token/finish
+  // إنهاء إضافة الجهاز من الرابط العام
   // ================================================================
 
   fastify.post(
-    '/passkeys/register/finish',
-    {
-      preHandler: [fastify.authenticate],
-    },
-    async (request: FastifyRequest, reply: FastifyReply) => {
+    '/passkeys/invite/:token/finish',
+    async (
+      request: FastifyRequest<{ Params: { token: string } }>,
+      reply: FastifyReply
+    ) => {
       try {
-        const body = addPasskeyFinishSchema.parse(request.body)
-        const passkey = await addPasskeyFinish(
-          fastify,
-          request.user.id,
-          body
-        )
+        const { token } = request.params
+        const body = finishPasskeyInviteSchema.parse(request.body)
+        const result = await finishPasskeyInvite(fastify, token, body)
 
         return reply.status(201).send({
           success: true,
-          message: 'Passkey added',
-          data: passkey,
+          message: result.message,
+          data: result.passkey,
         })
       } catch (error: unknown) {
         return handleError(error, request, reply)

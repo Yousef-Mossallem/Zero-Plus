@@ -3,23 +3,22 @@
 // Zero Plus - Profile Page
 // Connected to backend/modules/auth
 //
-//   GET    /auth/me                       → user + organization + devices (single request on open)
-//   PATCH  /auth/profile                  → { fullName }
-//   GET    /auth/passkeys                 → refresh list after add/delete
-//   POST   /auth/passkeys/register/start  → body: {}
-//   POST   /auth/passkeys/register/finish → { deviceName, credential }
-//   DELETE /auth/passkeys                 → { passkeyId }  (row id, not credentialId)
-//   POST   /auth/password                 → { newPassword } (backup only, not for login)
+//   GET    /auth/me                            → user + organization + devices
+//   PATCH  /auth/profile                       → { fullName }
+//   GET    /auth/passkeys                      → refresh list after add/delete
+//   POST   /auth/passkeys/invite               → { token, url, expiresAt, expiresInSeconds }
+//   DELETE /auth/passkeys                      → { passkeyId }  (row id, not credentialId)
+//   POST   /auth/password                      → { newPassword } (backup only, not for login)
 //
 // Notes from the backend:
 //   - Email and organization name are read-only.
 //   - Deletion is soft and you cannot delete the last device.
-//   - The challenge lives for 60 seconds, so we only start the request when the user confirms.
-//   - Messages are differentiated by text (no fixed code), so we rely on the exact message.
+//   - Invite URL comes from the backend — never generate it locally.
+//   - QR is generated from the backend url field.
 // ==================================================================
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { browserSupportsWebAuthn, startRegistration } from '@simplewebauthn/browser'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import QRCode from 'react-qr-code'
 import {
   AlertTriangle,
   Building2,
@@ -32,7 +31,7 @@ import {
   Laptop,
   Lock,
   Mail,
-  Plus,
+  QrCode,
   RefreshCw,
   Save,
   ShieldCheck,
@@ -61,14 +60,14 @@ import {
 } from '../components/ui/kit'
 import { parseApiError } from '../services/apiError'
 import {
-  addPasskeyFinish,
-  addPasskeyStart,
+  createPasskeyInvite,
   getMe,
   listPasskeys,
   revokePasskey,
   setPassword,
   updateProfile,
   type AuthPasskeySummary,
+  type PasskeyInviteResult,
 } from '../services/authService'
 import { useAuthStore } from '../store/authStore'
 import { formatDateTime, timeAgo } from '../utils/format'
@@ -96,18 +95,6 @@ function initials(name: string): string {
   return letters || 'Z'
 }
 
-/** Default device name (backend puts a generic value if we don't send a name, so we always send one) */
-function guessDeviceName(): string {
-  const ua = navigator.userAgent
-  if (/iPhone/i.test(ua)) return 'iPhone Face ID'
-  if (/iPad/i.test(ua)) return 'iPad Touch ID'
-  if (/Android/i.test(ua)) return 'Android Fingerprint'
-  if (/Windows/i.test(ua)) return 'Windows Hello'
-  if (/Macintosh|Mac OS/i.test(ua)) return 'Mac Touch ID'
-  if (/Linux/i.test(ua)) return 'Linux Device'
-  return 'My Device'
-}
-
 // ---- Browser errors during biometric (section 5 of the guide) ----
 const BROWSER_ERRORS: Record<string, string> = {
   NotAllowedError: 'The prompt was cancelled or timed out',
@@ -119,7 +106,6 @@ const BROWSER_ERRORS: Record<string, string> = {
 
 /**
  * Converts any error (browser or backend) into a display message.
- * Error table (section 4): we differentiate by the exact written text.
  */
 function describePasskeyError(err: unknown): string {
   if (typeof err === 'object' && err !== null && 'name' in err) {
@@ -137,6 +123,9 @@ function describePasskeyError(err: unknown): string {
   if (msg.includes('Cannot revoke your last passkey')) return 'At least one device must remain'
   if (msg.includes('User not found')) return 'Account not found or disabled'
   if (msg.includes('Internal server error')) return 'A server error occurred, please try again'
+  if (msg.includes('INVITE_EXPIRED') || msg.includes('Invite expired')) return 'Invitation expired'
+  if (msg.includes('INVITE_ALREADY_USED') || msg.includes('Invite already used')) return 'This invitation was already used'
+  if (msg.includes('INVITE_NOT_FOUND') || msg.includes('Invite not found')) return 'Invitation not found'
 
   if (msg.includes('Validation failed')) {
     const details = Object.values(parsed.fieldErrors)
@@ -252,12 +241,13 @@ export default function ProfilePage() {
   const [savingName, setSavingName] = useState(false)
   const [nameServerError, setNameServerError] = useState<string | undefined>()
 
-  // ---------------- Add device ----------------
-  const webauthnSupported = useMemo(() => browserSupportsWebAuthn(), [])
+  // ---------------- Add device (QR Invite) ----------------
   const [addOpen, setAddOpen] = useState(false)
-  const [deviceName, setDeviceName] = useState('')
-  const [adding, setAdding] = useState(false)
-  const [addError, setAddError] = useState<string | null>(null)
+  const [invite, setInvite] = useState<PasskeyInviteResult | null>(null)
+  const [inviteLoading, setInviteLoading] = useState(false)
+  const [inviteError, setInviteError] = useState<string | null>(null)
+  const [timeLeft, setTimeLeft] = useState(0)
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   // ---------------- Delete device ----------------
   const [deleteTarget, setDeleteTarget] = useState<AuthPasskeySummary | null>(null)
@@ -340,43 +330,50 @@ export default function ProfilePage() {
   }
 
   // ==================================================================
-  // Add device: start → biometric prompt → finish
+  // Add device: POST /auth/passkeys/invite → show QR with countdown
   // ==================================================================
 
-  const openAdd = () => {
-    setDeviceName(guessDeviceName())
-    setAddError(null)
+  /** يوقف الـ timer لو شغال */
+  const clearTimer = useCallback(() => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current)
+      timerRef.current = null
+    }
+  }, [])
+
+  const openAdd = async () => {
+    setInvite(null)
+    setInviteError(null)
+    setTimeLeft(0)
     setAddOpen(true)
+    setInviteLoading(true)
+    clearTimer()
+    try {
+      const result = await createPasskeyInvite()
+      setInvite(result)
+      setTimeLeft(result.expiresInSeconds)
+      timerRef.current = setInterval(() => {
+        setTimeLeft((prev) => {
+          if (prev <= 1) {
+            clearTimer()
+            return 0
+          }
+          return prev - 1
+        })
+      }, 1000)
+    } catch (err) {
+      setInviteError(describePasskeyError(err))
+    } finally {
+      setInviteLoading(false)
+    }
   }
 
   const closeAdd = () => {
-    if (adding) return
+    clearTimer()
     setAddOpen(false)
-  }
-
-  const submitAdd = async () => {
-    // deviceName is optional on the backend but we always send it (max 120)
-    const label = deviceName.trim() || guessDeviceName()
-    if (label.length > 120) {
-      setAddError('Device name is too long')
-      return
-    }
-
-    setAdding(true)
-    setAddError(null)
-    try {
-      const start = await addPasskeyStart()
-      const credential = await startRegistration({ optionsJSON: start.options })
-      await addPasskeyFinish({ deviceName: label, credential })
-
-      setAddOpen(false)
-      toast.success('Device added', label)
-      await refreshPasskeys()
-    } catch (err) {
-      setAddError(describePasskeyError(err))
-    } finally {
-      setAdding(false)
-    }
+    setInvite(null)
+    setInviteError(null)
+    setTimeLeft(0)
   }
 
   // ==================================================================
@@ -457,7 +454,7 @@ export default function ProfilePage() {
           <Button
             icon={RefreshCw}
             onClick={() => void load()}
-            disabled={loading || savingName || adding || deleting}
+            disabled={loading || savingName || deleting || inviteLoading}
           >
             Refresh
           </Button>
@@ -611,23 +608,13 @@ export default function ProfilePage() {
                     </p>
                   </div>
 
-                  {/* Hide the button if the browser doesn’t support WebAuthn */}
-                  {webauthnSupported && (
-                    <Button variant="primary" icon={Plus} disabled={loading} onClick={openAdd}>
-                      Add device
-                    </Button>
-                  )}
+                  {/* Add device via QR — works from any device */}
+                  <Button variant="primary" icon={QrCode} disabled={loading} onClick={() => void openAdd()}>
+                    Add device
+                  </Button>
                 </div>
 
-                {!webauthnSupported && (
-                  <div className="mx-6 mb-4 flex items-center gap-3 rounded-xl border border-amber-400/25 bg-amber-500/6 px-4 py-3 text-sm text-amber-200">
-                    <AlertTriangle className="h-4 w-4 shrink-0" />
-                    <span dir="auto">
-                      Your device or browser does not support Passkeys, so you cannot add a device from
-                      here.
-                    </span>
-                  </div>
-                )}
+
 
                 {!loading && passkeys.length === 1 && (
                   <div className="mx-6 mb-4 flex items-center gap-3 rounded-xl border border-white/8 bg-white/3 px-4 py-3 text-sm text-slate-400">
@@ -764,53 +751,84 @@ export default function ProfilePage() {
         </>
       )}
 
-      {/* ================= Modal: Add device ================= */}
+      {/* ================= Modal: Add device (QR Invite) ================= */}
       <Modal
         open={addOpen}
         onClose={closeAdd}
-        icon={Fingerprint}
+        icon={QrCode}
         title="Add a new device"
-        description="You’ll be asked to confirm with your fingerprint, face or screen lock."
+        description="Scan this QR code from the device you want to add, then follow the on-screen instructions."
         footer={
-          <>
-            <Button variant="ghost" onClick={closeAdd} disabled={adding}>
-              Cancel
-            </Button>
-            <Button
-              variant="primary"
-              icon={Fingerprint}
-              loading={adding}
-              onClick={() => void submitAdd()}
-            >
-              Continue
-            </Button>
-          </>
+          <Button variant="ghost" onClick={closeAdd}>
+            Close
+          </Button>
         }
       >
-        <Field label="Device name" hint="Shown in your devices list, max 120 characters.">
-          <TextInput
-            icon={Laptop}
-            dir="auto"
-            value={deviceName}
-            disabled={adding}
-            maxLength={120}
-            onChange={(e) => setDeviceName(e.target.value)}
-            placeholder="Windows Hello - Work laptop"
-          />
-        </Field>
+        {inviteLoading && (
+          <div className="flex flex-col items-center gap-3 py-6">
+            <Skeleton className="h-48 w-48 rounded-xl" />
+            <p className="text-sm text-slate-400">Generating QR code…</p>
+          </div>
+        )}
 
-        <div className="flex items-start gap-3 rounded-xl border border-white/8 bg-white/3 px-4 py-3 text-xs text-slate-400">
-          <Lock className="mt-0.5 h-4 w-4 shrink-0 text-slate-500" />
-          <span dir="auto">
-            Registration uses this device’s biometrics, so you must open this page from the device you
-            want to add.
-          </span>
-        </div>
-
-        {addError && (
+        {inviteError && !inviteLoading && (
           <div className="flex items-start gap-3 rounded-xl border border-rose-500/25 bg-rose-500/6 px-4 py-3 text-sm text-rose-200">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-            <span dir="auto">{addError}</span>
+            <span dir="auto">{inviteError}</span>
+          </div>
+        )}
+
+        {invite && !inviteLoading && (
+          <div className="flex flex-col items-center gap-5">
+            {/* QR Code — البيانات جاية من الباك اند */}
+            <div className="rounded-2xl bg-white p-4 shadow-lg shadow-cyan-500/10">
+              <QRCode value={invite.url} size={192} />
+            </div>
+
+            {/* Countdown timer */}
+            <div className="flex items-center gap-2 text-sm">
+              {timeLeft > 0 ? (
+                <>
+                  <Clock className="h-4 w-4 text-cyan-400" />
+                  <span className={timeLeft < 60 ? 'text-amber-400 font-semibold' : 'text-slate-300'}>
+                    Expires in {Math.floor(timeLeft / 60)}:{String(timeLeft % 60).padStart(2, '0')}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <AlertTriangle className="h-4 w-4 text-rose-400" />
+                  <span className="text-rose-400 font-semibold">Invitation expired</span>
+                </>
+              )}
+            </div>
+
+            {/* Instructions */}
+            <div className="w-full space-y-2 rounded-xl border border-white/8 bg-white/3 px-4 py-3 text-xs text-slate-400">
+              <p className="flex items-center gap-2">
+                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-cyan-500/20 text-cyan-400 font-semibold text-[10px]">1</span>
+                Open the camera on the new device and scan the QR code.
+              </p>
+              <p className="flex items-center gap-2">
+                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-cyan-500/20 text-cyan-400 font-semibold text-[10px]">2</span>
+                Follow the on-screen instructions to register your biometrics.
+              </p>
+              <p className="flex items-center gap-2">
+                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-cyan-500/20 text-cyan-400 font-semibold text-[10px]">3</span>
+                Once done, your device list updates automatically.
+              </p>
+            </div>
+
+            {timeLeft > 0 && (
+              <Button variant="ghost" size="sm" icon={RefreshCw} onClick={() => void openAdd()}>
+                Generate new QR
+              </Button>
+            )}
+
+            {timeLeft === 0 && (
+              <Button variant="primary" size="sm" icon={QrCode} onClick={() => void openAdd()}>
+                Generate new QR
+              </Button>
+            )}
           </div>
         )}
       </Modal>

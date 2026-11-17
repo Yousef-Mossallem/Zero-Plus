@@ -674,7 +674,7 @@ export async function getPasskeyInviteOptions(
     rpID: getRpId(),
     userName: invite.user.email,
     userDisplayName: invite.user.fullName,
-    excludeCredentials: invite.user.passkeys.map((pk) => ({
+    excludeCredentials: invite.user.passkeys.map((pk: any) => ({
       id: pk.credentialId,
       transports: pk.transports as AuthenticatorTransport[],
     })),

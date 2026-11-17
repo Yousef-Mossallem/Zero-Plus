@@ -9,6 +9,7 @@ import { ListOrdered } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { Card, EmptyState, ErrorState, Skeleton } from '../../components/ui/kit'
+import DynamicText from '../../components/DynamicText'
 import type { TopBy, TopData } from '../../services/dashboardService'
 import { cn, formatNumber } from '../../utils/format'
 import type { Section } from './useDashboardData'
@@ -86,7 +87,7 @@ export default function TopPanel({
                 <div className="mb-1 flex items-center justify-between gap-3 text-sm">
                   <span className="min-w-0 truncate font-mono text-slate-200" title={item.label ?? item.value}>
                     <span className="me-2 text-xs text-slate-600">{i + 1}</span>
-                    {item.label || item.value}
+                    <DynamicText text={item.label || item.value} />
                   </span>
                   <span className="flex shrink-0 items-center gap-3 text-xs">
                     <span className="text-slate-400">{formatNumber(item.total)} req</span>

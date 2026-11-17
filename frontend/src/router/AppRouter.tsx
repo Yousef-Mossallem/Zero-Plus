@@ -25,6 +25,7 @@ import SitePoliciesPage from '../pages/landing/SitePoliciesPage'
 
 import SignupPage from '../pages/SignupPage'
 import LoginPage from '../pages/LoginPage'
+import AddDeviceInvitePage from '../pages/AddDeviceInvitePage'
 
 // ------------------------------------------------------------------
 // Core / Dashboard Pages
@@ -119,6 +120,8 @@ export default function AppRouter() {
 
       <Route path="/signup" element={<SignupPage />} />
       <Route path="/login" element={<LoginPage />} />
+      {/* صفحة إضافة جهاز عبر QR — راوت عام بدون تسجيل دخول */}
+      <Route path="/add-device/:token" element={<AddDeviceInvitePage />} />
 
       {/* ============================================================
           Protected — محتاجة تسجيل دخول (من غير لغة في الرابط)
