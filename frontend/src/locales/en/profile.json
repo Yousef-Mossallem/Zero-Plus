@@ -1,0 +1,68 @@
+{
+  "title": "Profile",
+  "subtitle": "Your account details, devices and security.",
+  "refresh": "Refresh",
+  "stats": {
+    "organization": "Organization",
+    "lastLogin": "Last login",
+    "memberSince": "Member since"
+  },
+  "personal": {
+    "title": "Personal details",
+    "subtitle": "Your name appears in the sidebar and across the workspace.",
+    "unsavedChanges": "Unsaved changes",
+    "fullName": "Full name",
+    "email": "Email",
+    "emailHint": "Email can’t be changed.",
+    "discard": "Discard",
+    "saveChanges": "Save changes",
+    "updated": "Profile updated",
+    "updateFailed": "Could not update profile"
+  },
+  "devices": {
+    "title": "Your devices",
+    "subtitle": "Devices that can sign in to your account with biometrics.",
+    "oneDeviceWarning": "At least one device must remain, so you cannot delete the last device.",
+    "noDevicesTitle": "No devices yet",
+    "noDevicesDesc": "Add a device to sign in with your fingerprint or face.",
+    "lastUsed": "Last used {{time}}",
+    "added": "Added {{date}}",
+    "remove": "Remove",
+    "removeTitle": "Remove this device",
+    "cannotRemoveLast": "At least one device must remain",
+    "removedToast": "Device removed",
+    "deleteConfirmTitle": "Remove this device?",
+    "deleteConfirmDesc": "“{{name}}” will no longer be able to sign in to your account.",
+    "cancel": "Cancel",
+    "confirmDelete": "Remove device"
+  },
+  "accountInfo": {
+    "title": "Account info",
+    "company": "Company",
+    "slug": "Slug",
+    "plan": "Plan",
+    "size": "Size",
+    "role": "Role",
+    "userId": "User ID"
+  },
+  "password": {
+    "title": "Backup password",
+    "notice": "Backup password only. It does not let anyone in because sign-in is biometric only.",
+    "newPassword": "New password",
+    "hint": "8–128 characters, with a lowercase letter, an uppercase letter and a number.",
+    "save": "Save password",
+    "saved": "Backup password saved",
+    "failed": "Could not set password",
+    "validation": {
+      "min": "Password must be at least 8 characters",
+      "max": "Password is too long",
+      "lowercase": "Must contain a lowercase letter",
+      "uppercase": "Must contain an uppercase letter",
+      "number": "Must contain a number"
+    }
+  },
+  "validation": {
+    "nameMin": "Name must be at least 2 characters",
+    "nameMax": "Name is too long"
+  }
+}

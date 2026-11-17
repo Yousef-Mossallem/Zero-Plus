@@ -103,8 +103,8 @@ export function validate(
     const n = parseInt10(text)
     if (n === undefined || n < meta.min || n > meta.max) {
       errors[key] = translate('validation.between', {
-        min: meta.min.toLocaleString(i18n.language.startsWith('ar') ? 'ar-EG' : 'en-US'),
-        max: meta.max.toLocaleString(i18n.language.startsWith('ar') ? 'ar-EG' : 'en-US'),
+        min: meta.min.toLocaleString(i18n.language.startsWith('ar') ? 'ar-u-nu-latn' : 'en-US'),
+        max: meta.max.toLocaleString(i18n.language.startsWith('ar') ? 'ar-u-nu-latn' : 'en-US'),
       })
     }
   }

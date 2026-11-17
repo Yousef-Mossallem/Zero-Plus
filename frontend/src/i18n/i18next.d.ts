@@ -19,6 +19,8 @@ import type dashboard from '../locales/en/dashboard.json'
 import type notifications from '../locales/en/notifications.json'
 import type reports from '../locales/en/reports.json'
 import type simulation from '../locales/en/simulation.json'
+import type profile from '../locales/en/profile.json'
+import type organization from '../locales/en/organization.json'
 
 declare module 'i18next' {
   interface CustomTypeOptions {
@@ -39,6 +41,8 @@ declare module 'i18next' {
       notifications: typeof notifications
       reports: typeof reports
       simulation: typeof simulation
+      profile: typeof profile
+      organization: typeof organization
     }
   }
 }

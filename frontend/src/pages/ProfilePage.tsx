@@ -180,6 +180,7 @@ function PasskeyRow({
   canDelete: boolean
   onDelete: () => void
 }) {
+  const { t } = useTranslation('profile')
   const name = passkey.deviceName || 'Passkey'
   const transports = passkey.transports ?? []
   const isPhone = /iphone|ipad|android|phone/i.test(name) || transports.includes('hybrid')
@@ -196,8 +197,8 @@ function PasskeyRow({
           {name}
         </p>
         <p className="mt-0.5 truncate text-xs text-slate-500">
-          Last used {passkey.lastUsedAt ? timeAgo(passkey.lastUsedAt) : '—'} · Added{' '}
-          {formatDateTime(passkey.createdAt)}
+          {t('devices.lastUsed', { time: passkey.lastUsedAt ? timeAgo(passkey.lastUsedAt) : '—' })} ·{' '}
+          {t('devices.added', { date: formatDateTime(passkey.createdAt) })}
         </p>
         {transports.length > 0 && (
           <div className="mt-1.5 flex flex-wrap gap-1.5">
@@ -215,10 +216,10 @@ function PasskeyRow({
         size="sm"
         icon={Trash2}
         disabled={!canDelete}
-        title={canDelete ? 'Remove this device' : 'At least one device must remain'}
+        title={canDelete ? t('devices.removeTitle') : t('devices.cannotRemoveLast')}
         onClick={onDelete}
       >
-        Remove
+        {t('devices.remove')}
       </Button>
     </li>
   )
@@ -229,7 +230,7 @@ function PasskeyRow({
 // ==================================================================
 
 export default function ProfilePage() {
-  const { t } = useTranslation(['auth', 'common'])
+  const { t } = useTranslation(['profile', 'auth', 'common'])
   const toast = useToast()
 
   // ---------------- Data ----------------
@@ -300,9 +301,9 @@ export default function ProfilePage() {
   const trimmedName = name.trim()
   const nameError =
     trimmedName.length < 2
-      ? 'Name must be at least 2 characters'
+      ? t('profile:validation.nameMin')
       : trimmedName.length > 100
-        ? 'Name is too long'
+        ? t('profile:validation.nameMax')
         : undefined
   const nameDirty = me !== null && trimmedName !== me.fullName
 
@@ -321,11 +322,11 @@ export default function ProfilePage() {
       if (current) {
         useAuthStore.setState({ user: { ...current, fullName: updated.fullName } })
       }
-      toast.success('Profile updated')
+      toast.success(t('profile:personal.updated'))
     } catch (err) {
       const parsed = parseApiError(err)
       setNameServerError(parsed.fieldErrors.fullName)
-      toast.error('Could not update profile', describePasskeyError(err))
+      toast.error(t('profile:personal.updateFailed'), describePasskeyError(err))
     } finally {
       setSavingName(false)
     }
@@ -411,7 +412,7 @@ export default function ProfilePage() {
     try {
       // passkeyId = the row id in the list (not credentialId)
       await revokePasskey(deleteTarget.id)
-      toast.success('Device removed', deleteTarget.deviceName ?? undefined)
+      toast.success(t('profile:devices.removedToast'), deleteTarget.deviceName ?? undefined)
       setDeleteTarget(null)
       await refreshPasskeys()
     } catch (err) {
@@ -435,13 +436,13 @@ export default function ProfilePage() {
 
   const pwdError = useMemo(() => {
     if (!pwd) return undefined
-    if (pwd.length < 8) return 'Password must be at least 8 characters'
-    if (pwd.length > 128) return 'Password is too long'
-    if (!/[a-z]/.test(pwd)) return 'Must contain a lowercase letter'
-    if (!/[A-Z]/.test(pwd)) return 'Must contain an uppercase letter'
-    if (!/[0-9]/.test(pwd)) return 'Must contain a number'
+    if (pwd.length < 8) return t('profile:password.validation.min')
+    if (pwd.length > 128) return t('profile:password.validation.max')
+    if (!/[a-z]/.test(pwd)) return t('profile:password.validation.lowercase')
+    if (!/[A-Z]/.test(pwd)) return t('profile:password.validation.uppercase')
+    if (!/[0-9]/.test(pwd)) return t('profile:password.validation.number')
     return undefined
-  }, [pwd])
+  }, [pwd, t])
 
   const savePassword = async () => {
     if (!pwd || pwdError) return
@@ -451,10 +452,10 @@ export default function ProfilePage() {
       await setPassword(pwd)
       setPwd('')
       setShowPwd(false)
-      toast.success('Backup password saved')
+      toast.success(t('profile:password.saved'))
     } catch (err) {
       setPwdServerError(parseApiError(err).fieldErrors.newPassword)
-      toast.error('Could not set password', describePasskeyError(err))
+      toast.error(t('profile:password.failed'), describePasskeyError(err))
     } finally {
       setSavingPwd(false)
     }
@@ -470,15 +471,15 @@ export default function ProfilePage() {
     <PageShell>
       <PageHeader
         icon={User}
-        title="Profile"
-        subtitle="Your account details, devices and security."
+        title={t('profile:title')}
+        subtitle={t('profile:subtitle')}
         actions={
           <Button
             icon={RefreshCw}
             onClick={() => void load()}
             disabled={loading || savingName || deleting || inviteLoading}
           >
-            Refresh
+            {t('profile:refresh')}
           </Button>
         }
       />
@@ -521,21 +522,21 @@ export default function ProfilePage() {
             <div className="grid grid-cols-1 divide-white/6 border-t border-white/6 sm:grid-cols-3 sm:divide-x">
               <ProfileStat
                 icon={Building2}
-                label="Organization"
+                label={t('profile:stats.organization')}
                 value={organization?.name ?? '—'}
                 hint={organization ? `@${organization.slug}` : undefined}
                 loading={loading}
               />
               <ProfileStat
                 icon={Clock}
-                label="Last login"
+                label={t('profile:stats.lastLogin')}
                 value={me?.lastLoginAt ? timeAgo(me.lastLoginAt) : '—'}
                 hint={me?.lastLoginAt ? formatDateTime(me.lastLoginAt) : undefined}
                 loading={loading}
               />
               <ProfileStat
                 icon={CalendarDays}
-                label="Member since"
+                label={t('profile:stats.memberSince')}
                 value={me?.createdAt ? formatDateTime(me.createdAt) : '—'}
                 loading={loading}
               />
@@ -549,14 +550,14 @@ export default function ProfilePage() {
               <Card className="p-6" delay={150}>
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <h2 className="text-base font-semibold text-white">Personal details</h2>
+                    <h2 className="text-base font-semibold text-white">{t('profile:personal.title')}</h2>
                     <p className="mt-1 text-sm text-slate-500">
-                      Your name appears in the sidebar and across the workspace.
+                      {t('profile:personal.subtitle')}
                     </p>
                   </div>
                   {nameDirty && !loading && (
                     <Badge tone="amber" dot>
-                      Unsaved changes
+                      {t('profile:personal.unsavedChanges')}
                     </Badge>
                   )}
                 </div>
@@ -568,7 +569,7 @@ export default function ProfilePage() {
                   </div>
                 ) : (
                   <div className="mt-6 space-y-5">
-                    <Field label="Full name" error={nameError ?? nameServerError}>
+                    <Field label={t('profile:personal.fullName')} error={nameError ?? nameServerError}>
                       <TextInput
                         icon={User}
                         dir="auto"
@@ -585,7 +586,7 @@ export default function ProfilePage() {
                     </Field>
 
                     {/* Email: read-only (no edit from the current backend) */}
-                    <Field label="Email" hint="Email can’t be changed.">
+                    <Field label={t('profile:personal.email')} hint={t('profile:personal.emailHint')}>
                       <TextInput icon={Mail} value={me?.email ?? ''} disabled readOnly />
                     </Field>
 
@@ -600,7 +601,7 @@ export default function ProfilePage() {
                             setNameServerError(undefined)
                           }}
                         >
-                          Discard
+                          {t('profile:personal.discard')}
                         </Button>
                       )}
                       <Button
@@ -610,7 +611,7 @@ export default function ProfilePage() {
                         disabled={!nameDirty || Boolean(nameError)}
                         onClick={() => void saveName()}
                       >
-                        Save changes
+                        {t('profile:personal.saveChanges')}
                       </Button>
                     </div>
                   </div>
@@ -622,11 +623,11 @@ export default function ProfilePage() {
                 <div className="flex flex-col gap-3 p-6 pb-4 sm:flex-row sm:items-start sm:justify-between">
                   <div>
                     <div className="flex items-center gap-3">
-                      <h2 className="text-base font-semibold text-white">Your devices</h2>
+                      <h2 className="text-base font-semibold text-white">{t('profile:devices.title')}</h2>
                       {!loading && <Badge tone="cyan">{passkeys.length}</Badge>}
                     </div>
                     <p className="mt-1 text-sm text-slate-500">
-                      Devices that can sign in to your account with biometrics.
+                      {t('profile:devices.subtitle')}
                     </p>
                   </div>
 
@@ -636,13 +637,11 @@ export default function ProfilePage() {
                   </Button>
                 </div>
 
-
-
                 {!loading && passkeys.length === 1 && (
                   <div className="mx-6 mb-4 flex items-center gap-3 rounded-xl border border-white/8 bg-white/3 px-4 py-3 text-sm text-slate-400">
                     <Lock className="h-4 w-4 shrink-0 text-slate-500" />
                     <span dir="auto">
-                      At least one device must remain, so you cannot delete the last device.
+                      {t('profile:devices.oneDeviceWarning')}
                     </span>
                   </div>
                 )}
@@ -657,8 +656,8 @@ export default function ProfilePage() {
                   <div className="border-t border-white/6">
                     <EmptyState
                       icon={Fingerprint}
-                      title="No devices yet"
-                      description="Add a device to sign in with your fingerprint or face."
+                      title={t('profile:devices.noDevicesTitle')}
+                      description={t('profile:devices.noDevicesDesc')}
                     />
                   </div>
                 ) : (
@@ -683,7 +682,7 @@ export default function ProfilePage() {
             <div className="space-y-6">
               {/* ---------- Account info (read-only) ---------- */}
               <Card className="p-6" delay={270}>
-                <h2 className="mb-2 text-base font-semibold text-white">Account info</h2>
+                <h2 className="mb-2 text-base font-semibold text-white">{t('profile:accountInfo.title')}</h2>
                 {loading || !me ? (
                   <div className="space-y-3 pt-2">
                     {[0, 1, 2, 3].map((i) => (
@@ -692,16 +691,16 @@ export default function ProfilePage() {
                   </div>
                 ) : (
                   <>
-                    <KeyValue label="Company">{organization?.name}</KeyValue>
-                    <KeyValue label="Slug" mono>
+                    <KeyValue label={t('profile:accountInfo.company')}>{organization?.name}</KeyValue>
+                    <KeyValue label={t('profile:accountInfo.slug')} mono>
                       {organization?.slug}
                     </KeyValue>
-                    <KeyValue label="Plan">
+                    <KeyValue label={t('profile:accountInfo.plan')}>
                       <Badge tone="indigo">{organization?.plan ?? '—'}</Badge>
                     </KeyValue>
-                    <KeyValue label="Size">{organization?.sizeProfile ?? '—'}</KeyValue>
-                    <KeyValue label="Role">{me.role}</KeyValue>
-                    <KeyValue label="User ID" mono>
+                    <KeyValue label={t('profile:accountInfo.size')}>{organization?.sizeProfile ?? '—'}</KeyValue>
+                    <KeyValue label={t('profile:accountInfo.role')}>{me.role}</KeyValue>
+                    <KeyValue label={t('profile:accountInfo.userId')} mono>
                       {me.id}
                     </KeyValue>
                   </>
@@ -714,21 +713,21 @@ export default function ProfilePage() {
                   <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-cyan-500/10 text-cyan-300">
                     <KeyRound className="h-4 w-4" />
                   </span>
-                  <h2 className="text-base font-semibold text-white">Backup password</h2>
+                  <h2 className="text-base font-semibold text-white">{t('profile:password.title')}</h2>
                 </div>
 
                 <div className="mt-3 flex items-start gap-3 rounded-xl border border-white/8 bg-white/3 px-4 py-3 text-xs text-slate-400">
                   <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-cyan-400" />
                   <span dir="auto">
-                    Backup password only. It does not let anyone in because sign-in is biometric only.
+                    {t('profile:password.notice')}
                   </span>
                 </div>
 
                 <div className="mt-5 space-y-4">
                   <Field
-                    label="New password"
+                    label={t('profile:password.newPassword')}
                     error={pwdError ?? pwdServerError}
-                    hint="8–128 characters, with a lowercase letter, an uppercase letter and a number."
+                    hint={t('profile:password.hint')}
                   >
                     <div className="relative">
                       <TextInput
@@ -764,7 +763,7 @@ export default function ProfilePage() {
                     disabled={!pwd || Boolean(pwdError)}
                     onClick={() => void savePassword()}
                   >
-                    Save password
+                    {t('profile:password.save')}
                   </Button>
                 </div>
               </Card>
@@ -863,12 +862,12 @@ export default function ProfilePage() {
         }}
         icon={Trash2}
         tone="rose"
-        title="Remove this device?"
-        description={`“${deleteTarget?.deviceName || 'Passkey'}” will no longer be able to sign in to your account.`}
+        title={t('profile:devices.deleteConfirmTitle')}
+        description={t('profile:devices.deleteConfirmDesc', { name: deleteTarget?.deviceName || 'Passkey' })}
         footer={
           <>
             <Button variant="ghost" onClick={() => setDeleteTarget(null)} disabled={deleting}>
-              Cancel
+              {t('profile:devices.cancel')}
             </Button>
             <Button
               variant="danger"
@@ -876,7 +875,7 @@ export default function ProfilePage() {
               loading={deleting}
               onClick={() => void confirmDelete()}
             >
-              Remove device
+              {t('profile:devices.confirmDelete')}
             </Button>
           </>
         }

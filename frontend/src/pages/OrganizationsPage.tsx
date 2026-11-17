@@ -18,6 +18,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import {
   AlertTriangle,
   Building2,
@@ -119,6 +120,7 @@ function ProfileStat({
 // ==================================================================
 
 export default function OrganizationsPage() {
+  const { t } = useTranslation('organization')
   const toast = useToast()
   const navigate = useNavigate()
   const role = useAuthStore(selectUserRole)
@@ -158,13 +160,13 @@ export default function OrganizationsPage() {
   const errors = useMemo(() => {
     const e: Record<string, string> = {}
     const n = name.trim()
-    if (n.length < 2) e.name = 'Name must be at least 2 characters'
-    else if (n.length > 100) e.name = 'Name must be at most 100 characters'
-    if (slug.length < 2) e.slug = 'Slug must be at least 2 characters'
-    else if (slug.length > 100) e.slug = 'Slug must be at most 100 characters'
-    else if (!SLUG_REGEX.test(slug)) e.slug = 'Lowercase letters, numbers and single dashes only'
+    if (n.length < 2) e.name = t('validation.nameMin')
+    else if (n.length > 100) e.name = t('validation.nameMax')
+    if (slug.length < 2) e.slug = t('validation.slugMin')
+    else if (slug.length > 100) e.slug = t('validation.slugMax')
+    else if (!SLUG_REGEX.test(slug)) e.slug = t('validation.slugFormat')
     return e
-  }, [name, slug])
+  }, [name, slug, t])
 
   const patch = useMemo<UpdateOrganizationInput>(() => {
     if (!org) return {}
@@ -195,13 +197,13 @@ export default function OrganizationsPage() {
       if (current) {
         useAuthStore.setState({ organization: { ...current, name: merged.name, slug: merged.slug } })
       }
-      toast.success(res.message)
+      toast.success(res.message || t('details.updated'))
     } catch (err) {
       const parsed = parseApiError(err)
       // 409 = الـ slug مستخدم عند شركة تانية
       if (parsed.status === 409) setServerErrors({ slug: parsed.message })
       else setServerErrors(parsed.fieldErrors)
-      toast.error('Could not update organization', parsed.message)
+      toast.error(t('details.updateFailed'), parsed.message)
     } finally {
       setSaving(false)
     }
@@ -218,16 +220,16 @@ export default function OrganizationsPage() {
     if (!org) return
     try {
       await navigator.clipboard.writeText(org.id)
-      toast.success('Organization ID copied')
+      toast.success(t('idCopied'))
     } catch {
-      toast.error('Copy failed', 'Your browser blocked clipboard access')
+      toast.error(t('copyFailed'), t('clipboardBlocked'))
     }
   }
 
   const quickLinks: { label: string; hint: string; path: string; icon: IconType }[] = [
-    { label: 'Protected servers', hint: 'Domains, DNS and health', path: '/servers', icon: Server },
-    { label: 'Security policies', hint: 'Rules the Gateway enforces', path: '/policies', icon: SlidersHorizontal },
-    { label: 'Reports', hint: 'AI-written security reports', path: '/reports', icon: FileText },
+    { label: t('sidebar.links.servers'), hint: t('sidebar.links.serversHint'), path: '/servers', icon: Server },
+    { label: t('sidebar.links.policies'), hint: t('sidebar.links.policiesHint'), path: '/policies', icon: SlidersHorizontal },
+    { label: t('sidebar.links.reports'), hint: t('sidebar.links.reportsHint'), path: '/reports', icon: FileText },
   ]
 
   // ==================================================================
@@ -238,11 +240,11 @@ export default function OrganizationsPage() {
     <PageShell>
       <PageHeader
         icon={Building2}
-        title="Organization"
-        subtitle="Your company profile and workspace overview."
+        title={t('title')}
+        subtitle={t('subtitle')}
         actions={
           <Button icon={RefreshCw} onClick={() => void load()} disabled={loading || saving}>
-            Refresh
+            {t('refresh')}
           </Button>
         }
       />
@@ -255,7 +257,7 @@ export default function OrganizationsPage() {
           {org && !org.isActive && (
             <div className="zp-anim-fade-up flex items-center gap-3 rounded-2xl border border-rose-500/25 bg-rose-500/6 px-5 py-4 text-sm text-rose-200">
               <AlertTriangle className="h-5 w-5 shrink-0" />
-              This organization is suspended. Contact support to restore protection.
+              {t('suspendedNotice')}
             </div>
           )}
 
@@ -279,7 +281,7 @@ export default function OrganizationsPage() {
                         {org.name}
                       </h2>
                       <Badge tone={org.isActive ? 'emerald' : 'rose'} dot>
-                        {org.isActive ? 'Active' : 'Suspended'}
+                        {org.isActive ? t('status.active') : t('status.suspended')}
                       </Badge>
                     </div>
                     <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-sm text-slate-400">
@@ -290,7 +292,7 @@ export default function OrganizationsPage() {
                         className="inline-flex items-center gap-1.5 rounded-md px-1.5 py-0.5 text-xs text-slate-500 hover:bg-white/5 hover:text-cyan-300"
                       >
                         <Copy className="h-3 w-3" />
-                        Copy ID
+                        {t('copyId')}
                       </button>
                     </p>
                   </>
@@ -301,21 +303,21 @@ export default function OrganizationsPage() {
             <div className="grid grid-cols-1 divide-white/6 border-t border-white/6 sm:grid-cols-3 sm:divide-x">
               <ProfileStat
                 icon={Users}
-                label="Team members"
+                label={t('stats.teamMembers')}
                 value={formatNumber(org?._count?.users)}
                 loading={loading}
               />
               <ProfileStat
                 icon={Server}
-                label="Protected servers"
+                label={t('stats.protectedServers')}
                 value={formatNumber(org?._count?.servers)}
                 loading={loading}
               />
               <ProfileStat
                 icon={CalendarDays}
-                label="Workspace age"
-                value={org ? timeAgo(org.createdAt).replace(' ago', '') : '—'}
-                hint={org ? `Since ${formatDateTime(org.createdAt)}` : undefined}
+                label={t('stats.workspaceAge')}
+                value={org ? timeAgo(org.createdAt) : '—'}
+                hint={org ? t('stats.since', { date: formatDateTime(org.createdAt) }) : undefined}
                 loading={loading}
               />
             </div>
@@ -326,18 +328,18 @@ export default function OrganizationsPage() {
             <Card className="p-6" delay={150}>
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <h2 className="text-base font-semibold text-white">Company details</h2>
+                  <h2 className="text-base font-semibold text-white">{t('details.title')}</h2>
                   <p className="mt-1 text-sm text-slate-500">
-                    The name appears in the sidebar and in reports. The slug is your unique workspace handle.
+                    {t('details.subtitle')}
                   </p>
                 </div>
-                {dirty && !loading && <Badge tone="amber" dot>Unsaved changes</Badge>}
+                {dirty && !loading && <Badge tone="amber" dot>{t('details.unsavedChanges')}</Badge>}
               </div>
 
               {!canEdit && !loading && (
                 <div className="mt-4 flex items-center gap-3 rounded-xl border border-white/8 bg-white/3 px-4 py-3 text-sm text-slate-400">
                   <Lock className="h-4 w-4 shrink-0 text-slate-500" />
-                  Only Owners and Admins can edit organization details.
+                  {t('details.readOnlyNotice')}
                 </div>
               )}
 
@@ -348,7 +350,7 @@ export default function OrganizationsPage() {
                 </div>
               ) : (
                 <div className="mt-6 space-y-5">
-                  <Field label="Company name" error={errors.name ?? serverErrors.name}>
+                  <Field label={t('details.companyName')} error={errors.name ?? serverErrors.name}>
                     <TextInput
                       icon={Building2}
                       value={name}
@@ -360,9 +362,9 @@ export default function OrganizationsPage() {
                   </Field>
 
                   <Field
-                    label="Workspace slug"
+                    label={t('details.workspaceSlug')}
                     error={errors.slug ?? serverErrors.slug}
-                    hint="Lowercase letters, numbers and dashes — e.g. acme-corp"
+                    hint={t('details.slugHint')}
                   >
                     <TextInput
                       icon={Hash}
@@ -384,7 +386,7 @@ export default function OrganizationsPage() {
                       onClick={() => setSlug(slugify(name))}
                       className="text-xs text-cyan-400/80 hover:text-cyan-300"
                     >
-                      Use “{slugify(name)}” from the company name
+                      {t('details.useSuggestedSlug', { slug: slugify(name) })}
                     </button>
                   )}
 
@@ -392,7 +394,7 @@ export default function OrganizationsPage() {
                     <div className="flex items-center justify-end gap-2 border-t border-white/6 pt-5">
                       {dirty && (
                         <Button variant="ghost" icon={Undo2} onClick={discard} disabled={saving}>
-                          Discard
+                          {t('details.discard')}
                         </Button>
                       )}
                       <Button
@@ -402,7 +404,7 @@ export default function OrganizationsPage() {
                         disabled={!dirty || hasErrors}
                         onClick={() => void save()}
                       >
-                        Save changes
+                        {t('details.saveChanges')}
                       </Button>
                     </div>
                   )}
@@ -413,19 +415,19 @@ export default function OrganizationsPage() {
             {/* ---------- العمود الجانبي ---------- */}
             <div className="space-y-6">
               <Card className="p-6" delay={210}>
-                <h2 className="mb-2 text-base font-semibold text-white">Workspace info</h2>
+                <h2 className="mb-2 text-base font-semibold text-white">{t('sidebar.infoTitle')}</h2>
                 {loading || !org ? (
                   <div className="space-y-3 pt-2">
                     {[0, 1, 2].map((i) => <Skeleton key={i} className="h-5 w-full" />)}
                   </div>
                 ) : (
                   <>
-                    <KeyValue label="Organization ID" mono>
+                    <KeyValue label={t('sidebar.orgId')} mono>
                       <span className="inline-flex items-center gap-2">
                         {org.id}
                         <button
                           type="button"
-                          aria-label="Copy organization ID"
+                          aria-label={t('copyId')}
                           className="text-slate-500 hover:text-cyan-300"
                           onClick={() => void copyId()}
                         >
@@ -433,15 +435,15 @@ export default function OrganizationsPage() {
                         </button>
                       </span>
                     </KeyValue>
-                    <KeyValue label="Created">{formatDateTime(org.createdAt)}</KeyValue>
-                    <KeyValue label="Updated">{formatDateTime(org.updatedAt)}</KeyValue>
+                    <KeyValue label={t('sidebar.created')}>{formatDateTime(org.createdAt)}</KeyValue>
+                    <KeyValue label={t('sidebar.updated')}>{formatDateTime(org.updatedAt)}</KeyValue>
                   </>
                 )}
               </Card>
 
               <Card className="p-3" delay={270}>
                 <p className="px-3 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-                  Quick links
+                  {t('sidebar.quickLinks')}
                 </p>
                 <ul>
                   {quickLinks.map((l) => (

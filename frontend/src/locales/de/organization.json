@@ -1,0 +1,56 @@
+{
+  "title": "Organisation",
+  "subtitle": "Ihr Unternehmensprofil und Arbeitsbereich-Überblick.",
+  "refresh": "Aktualisieren",
+  "suspendedNotice": "Diese Organisation ist vorübergehend gesperrt. Kontaktieren Sie den Support, um den Schutz wiederherzustellen.",
+  "status": {
+    "active": "Aktiv",
+    "suspended": "Gesperrt"
+  },
+  "copyId": "ID kopieren",
+  "idCopied": "Organisations-ID kopiert",
+  "copyFailed": "Kopieren fehlgeschlagen",
+  "clipboardBlocked": "Zwischenablagen-Zugriff wurde vom Browser blockiert",
+  "stats": {
+    "teamMembers": "Teammitglieder",
+    "protectedServers": "Geschützte Server",
+    "workspaceAge": "Alter des Bereichs",
+    "since": "Seit {{date}}"
+  },
+  "details": {
+    "title": "Unternehmensdaten",
+    "subtitle": "Der Name erscheint in der Seitenleiste und in Berichten. Der Slug ist die eindeutige Kennung Ihres Arbeitsbereichs.",
+    "unsavedChanges": "Ungespeicherte Änderungen",
+    "readOnlyNotice": "Nur Eigentümer und Administratoren können Organisationsdaten bearbeiten.",
+    "companyName": "Unternehmensname",
+    "workspaceSlug": "Arbeitsbereich-Slug",
+    "slugHint": "Kleinbuchstaben, Zahlen und Bindestriche — z. B. acme-corp",
+    "useSuggestedSlug": "„{{slug}}“ aus dem Firmennamen verwenden",
+    "discard": "Verwerfen",
+    "saveChanges": "Änderungen speichern",
+    "updated": "Organisation aktualisiert",
+    "updateFailed": "Organisation konnte nicht aktualisiert werden"
+  },
+  "sidebar": {
+    "infoTitle": "Arbeitsbereich-Info",
+    "orgId": "Organisations-ID",
+    "created": "Erstellt",
+    "updated": "Aktualisiert",
+    "quickLinks": "Schnellzugriff",
+    "links": {
+      "servers": "Geschützte Server",
+      "serversHint": "Domains, DNS und Status",
+      "policies": "Sicherheitsrichtlinien",
+      "policiesHint": "Vom Gateway durchgesetzte Regeln",
+      "reports": "Berichte",
+      "reportsHint": "KI-verfasste Sicherheitsberichte"
+    }
+  },
+  "validation": {
+    "nameMin": "Der Name muss mindestens 2 Zeichen lang sein",
+    "nameMax": "Der Name darf höchstens 100 Zeichen lang sein",
+    "slugMin": "Der Slug muss mindestens 2 Zeichen lang sein",
+    "slugMax": "Der Slug darf höchstens 100 Zeichen lang sein",
+    "slugFormat": "Nur Kleinbuchstaben, Zahlen und einzelne Bindestriche erlaubt"
+  }
+}

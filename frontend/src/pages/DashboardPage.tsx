@@ -378,7 +378,7 @@ export default function DashboardPage() {
           {updatedAt && (
             <p className="text-center text-xs text-slate-600">
               {t('page.updatedAt', {
-                time: updatedAt.toLocaleTimeString(i18n.language.startsWith('ar') ? 'ar-EG' : 'en-GB'),
+                time: updatedAt.toLocaleTimeString(i18n.language.startsWith('ar') ? 'ar-u-nu-latn' : 'en-GB'),
               })}
             </p>
           )}

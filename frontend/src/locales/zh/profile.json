@@ -1,0 +1,68 @@
+{
+  "title": "个人资料",
+  "subtitle": "您的账户信息、已注册设备与安全设置。",
+  "refresh": "刷新",
+  "stats": {
+    "organization": "所属组织",
+    "lastLogin": "上次登录",
+    "memberSince": "注册时间"
+  },
+  "personal": {
+    "title": "个人信息",
+    "subtitle": "您的姓名将显示在侧边栏以及整个工作区中。",
+    "unsavedChanges": "未保存的更改",
+    "fullName": "姓名",
+    "email": "电子邮箱",
+    "emailHint": "电子邮箱不可更改。",
+    "discard": "放弃",
+    "saveChanges": "保存更改",
+    "updated": "个人资料已更新",
+    "updateFailed": "无法更新个人资料"
+  },
+  "devices": {
+    "title": "您的设备",
+    "subtitle": "可以使用生物特征（通行密钥 Passkeys）登录您账户的设备。",
+    "oneDeviceWarning": "必须至少保留一台设备，因此无法删除最后一台设备。",
+    "noDevicesTitle": "暂无设备",
+    "noDevicesDesc": "添加设备以便使用指纹或面容登录。",
+    "lastUsed": "上次使用 {{time}}",
+    "added": "添加于 {{date}}",
+    "remove": "移除",
+    "removeTitle": "移除此设备",
+    "cannotRemoveLast": "必须至少保留一台设备",
+    "removedToast": "设备已移除",
+    "deleteConfirmTitle": "确认移除此设备？",
+    "deleteConfirmDesc": "“{{name}}” 将无法再登录您的账户。",
+    "cancel": "取消",
+    "confirmDelete": "移除设备"
+  },
+  "accountInfo": {
+    "title": "账户信息",
+    "company": "企业名称",
+    "slug": "标识符 (Slug)",
+    "plan": "套餐计划",
+    "size": "规模配置",
+    "role": "角色权限",
+    "userId": "用户 ID"
+  },
+  "password": {
+    "title": "备用密码",
+    "notice": "仅作为备用密码。由于登录完全依赖生物识别，单纯密码无法访问系统。",
+    "newPassword": "新密码",
+    "hint": "8–128 个字符，必须包含小写字母、大写字母和数字。",
+    "save": "保存密码",
+    "saved": "备用密码已保存",
+    "failed": "设置密码失败",
+    "validation": {
+      "min": "密码长度必须至少为 8 个字符",
+      "max": "密码过长",
+      "lowercase": "必须包含至少一个小写字母",
+      "uppercase": "必须包含至少一个大写字母",
+      "number": "必须包含至少一个数字"
+    }
+  },
+  "validation": {
+    "nameMin": "姓名长度必须至少为 2 个字符",
+    "nameMax": "姓名过长"
+  }
+}

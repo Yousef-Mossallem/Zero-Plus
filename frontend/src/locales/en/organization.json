@@ -1,0 +1,56 @@
+{
+  "title": "Organization",
+  "subtitle": "Your company profile and workspace overview.",
+  "refresh": "Refresh",
+  "suspendedNotice": "This organization is suspended. Contact support to restore protection.",
+  "status": {
+    "active": "Active",
+    "suspended": "Suspended"
+  },
+  "copyId": "Copy ID",
+  "idCopied": "Organization ID copied",
+  "copyFailed": "Copy failed",
+  "clipboardBlocked": "Your browser blocked clipboard access",
+  "stats": {
+    "teamMembers": "Team members",
+    "protectedServers": "Protected servers",
+    "workspaceAge": "Workspace age",
+    "since": "Since {{date}}"
+  },
+  "details": {
+    "title": "Company details",
+    "subtitle": "The name appears in the sidebar and in reports. The slug is your unique workspace handle.",
+    "unsavedChanges": "Unsaved changes",
+    "readOnlyNotice": "Only Owners and Admins can edit organization details.",
+    "companyName": "Company name",
+    "workspaceSlug": "Workspace slug",
+    "slugHint": "Lowercase letters, numbers and dashes — e.g. acme-corp",
+    "useSuggestedSlug": "Use “{{slug}}” from the company name",
+    "discard": "Discard",
+    "saveChanges": "Save changes",
+    "updated": "Organization updated",
+    "updateFailed": "Could not update organization"
+  },
+  "sidebar": {
+    "infoTitle": "Workspace info",
+    "orgId": "Organization ID",
+    "created": "Created",
+    "updated": "Updated",
+    "quickLinks": "Quick links",
+    "links": {
+      "servers": "Protected servers",
+      "serversHint": "Domains, DNS and health",
+      "policies": "Security policies",
+      "policiesHint": "Rules the Gateway enforces",
+      "reports": "Reports",
+      "reportsHint": "AI-written security reports"
+    }
+  },
+  "validation": {
+    "nameMin": "Name must be at least 2 characters",
+    "nameMax": "Name must be at most 100 characters",
+    "slugMin": "Slug must be at least 2 characters",
+    "slugMax": "Slug must be at most 100 characters",
+    "slugFormat": "Lowercase letters, numbers and single dashes only"
+  }
+}

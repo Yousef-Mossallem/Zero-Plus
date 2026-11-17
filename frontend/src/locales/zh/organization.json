@@ -1,0 +1,56 @@
+{
+  "title": "组织架构",
+  "subtitle": "您的企业信息与工作区概览。",
+  "refresh": "刷新",
+  "suspendedNotice": "该组织已被暂停服务。请联系支持团队以恢复防护。",
+  "status": {
+    "active": "正常运行",
+    "suspended": "已暂停"
+  },
+  "copyId": "复制 ID",
+  "idCopied": "组织 ID 已复制",
+  "copyFailed": "复制失败",
+  "clipboardBlocked": "浏览器阻止了剪贴板访问",
+  "stats": {
+    "teamMembers": "团队成员",
+    "protectedServers": "受保护服务器",
+    "workspaceAge": "工作区创建时长",
+    "since": "始于 {{date}}"
+  },
+  "details": {
+    "title": "企业详情",
+    "subtitle": "名称将显示在侧边栏和报告中。标识符 (Slug) 是您独一无二的工作区网址后缀。",
+    "unsavedChanges": "未保存的更改",
+    "readOnlyNotice": "只有所有者 (Owner) 和管理员 (Admin) 可以编辑组织信息。",
+    "companyName": "企业名称",
+    "workspaceSlug": "工作区标识符 (Slug)",
+    "slugHint": "小写字母、数字和连字符 — 例如 acme-corp",
+    "useSuggestedSlug": "使用根据企业名称生成的 “{{slug}}”",
+    "discard": "放弃",
+    "saveChanges": "保存更改",
+    "updated": "组织信息已更新",
+    "updateFailed": "无法更新组织信息"
+  },
+  "sidebar": {
+    "infoTitle": "工作区信息",
+    "orgId": "组织 ID",
+    "created": "创建时间",
+    "updated": "更新时间",
+    "quickLinks": "快捷链接",
+    "links": {
+      "servers": "受保护服务器",
+      "serversHint": "域名、DNS 配置与健康状态",
+      "policies": "安全策略",
+      "policiesHint": "网关执行的安全防护规则",
+      "reports": "分析报告",
+      "reportsHint": "AI 撰写的安全分析报告"
+    }
+  },
+  "validation": {
+    "nameMin": "名称长度必须至少为 2 个字符",
+    "nameMax": "名称长度不能超过 100 个字符",
+    "slugMin": "标识符长度必须至少为 2 个字符",
+    "slugMax": "标识符长度不能超过 100 个字符",
+    "slugFormat": "仅允许小写字母、数字和单个短横线"
+  }
+}
