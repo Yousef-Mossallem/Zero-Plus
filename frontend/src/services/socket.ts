@@ -3,15 +3,13 @@
 // Zero Plus - Socket.IO Client (اتصال واحد مشترك لكل التطبيق)
 // بيتصل بـ backend/plugins/socket.plugin.ts
 //   - التوثيق: handshake auth.token (نفس JWT بتاع الـ HTTP)
-//   - فتح/قفل الاتصال بيعمله authStore (login / refresh / logout)
-//   - الـ API القديم محفوظ (getSocket / connectSocket(token) / disconnectSocket / SocketEvents)
-//     عشان باقي الصفحات تفضل شغالة.
-// الـ URL: VITE_SOCKET_URL ← أو origin بتاع VITE_API_URL ← أو http://localhost:4000
+//   - فتح/قفل الاتصال بيعمله useNotificationsLive (مش authStore)
+//   - الـ API: getSocket / connectSocket(token) / disconnectSocket / SocketEvents
+// الـ URL: VITE_SOCKET_URL ← origin بتاع VITE_API_URL ← DEV:localhost:4000 ← PROD: window.location.origin
 // ==================================================================
 
 import { io, type Socket } from 'socket.io-client'
 
-/** أسماء الأحداث (لازم تطابق SocketEvents في socket.plugin.ts) */
 export const SocketEvents = {
   NOTIFICATION_NEW: 'notification:new',
   SERVER_STATUS: 'server:status',
@@ -19,24 +17,32 @@ export const SocketEvents = {
   SECURITY_EVENT_NEW: 'security_event:new',
   TRAFFIC_UPDATE: 'traffic:update',
   REPUTATION_UPDATE: 'reputation:update',
+  SIMULATION_UPDATE: 'simulation:update',
+  SIMULATION_STATUS: 'simulation:status',
+  PING: 'ping',
+  SUBSCRIBE_TRAFFIC: 'subscribe:traffic',
+  SUBSCRIBE_SIMULATION: 'subscribe:simulation',
+  UNSUBSCRIBE_SIMULATION: 'unsubscribe:simulation',
 } as const
 
+export type SocketEventName = (typeof SocketEvents)[keyof typeof SocketEvents]
+
 function resolveUrl(): string {
-  const explicit = import.meta.env.VITE_SOCKET_URL as string | undefined
-  if (explicit) return explicit
-  const api = import.meta.env.VITE_API_URL as string | undefined
+  const explicit = (import.meta.env.VITE_SOCKET_URL as string | undefined)?.trim()
+  if (explicit) return explicit.replace(/\/$/, '')
+
+  const api = (import.meta.env.VITE_API_URL as string | undefined)?.trim()
   if (api) {
     try {
       return new URL(api, window.location.origin).origin
-    } catch {
-      /* نكمل للافتراضي */
-    }
+    } catch { /* fallthrough */ }
   }
-  return 'http://localhost:4000'
+
+  if (import.meta.env.DEV) return 'http://localhost:4000'
+  return window.location.origin
 }
 
 let socket: Socket | null = null
-// آخر token: بنستخدمه في كل محاولة reconnect (مش قيمة قديمة)
 let currentToken = ''
 
 export const getSocket = (): Socket => {
@@ -51,14 +57,37 @@ export const getSocket = (): Socket => {
       reconnectionDelay: 1000,
       reconnectionDelayMax: 10_000,
     })
+
+    if (import.meta.env.DEV) {
+      let logged = false
+      socket.on('connect', () => {
+        console.info('[socket] connected', socket?.id)
+      })
+      socket.on('connect_error', (err) => {
+        if (!logged) {
+          logged = true
+          console.warn('[socket] connect_error', err.message, (err as { description?: string }).description)
+        }
+      })
+    }
   }
   return socket
 }
 
-/** بيفتح الاتصال (آمن يتنادى أكتر من مرة) */
 export const connectSocket = (token: string): Socket => {
-  currentToken = token
+  const prev = currentToken
+  currentToken = token || ''
   const s = getSocket()
+
+  if (!currentToken) {
+    if (s.connected || s.active) s.disconnect()
+    return s
+  }
+
+  if (prev && prev !== currentToken && (s.connected || s.active)) {
+    s.disconnect()
+  }
+
   if (!s.connected && !s.active) s.connect()
   return s
 }
@@ -66,9 +95,6 @@ export const connectSocket = (token: string): Socket => {
 export const disconnectSocket = (): void => {
   currentToken = ''
   if (socket) {
-    socket.removeAllListeners()
-    socket.io.removeAllListeners()
     socket.disconnect()
-    socket = null
   }
 }

@@ -16,20 +16,22 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
+import { useTranslation } from 'react-i18next'
 
 import { Card, EmptyState, Skeleton } from '../../components/ui/kit'
 import type { RunTotals } from '../../services/simulationsService'
 import { formatNumber } from '../../utils/format'
 import { BUCKET_MS, type TimelineResult } from './shared'
 
-const EMPTY_MESSAGE = 'Start the simulation to see results.'
-
-const DECISIONS = [
-  { key: 'allowed', label: 'Allowed', color: '#34d399' },
-  { key: 'challenged', label: 'Challenged', color: '#818cf8' },
-  { key: 'rateLimited', label: 'Rate limited', color: '#fbbf24' },
-  { key: 'blocked', label: 'Blocked', color: '#fb7185' },
-] as const
+function useDecisionSeries() {
+  const { t } = useTranslation('simulation')
+  return [
+    { key: 'allowed', label: t('page.kpis.allowed'), color: '#34d399' },
+    { key: 'challenged', label: t('page.kpis.challenged'), color: '#818cf8' },
+    { key: 'rateLimited', label: t('page.kpis.rateLimited'), color: '#fbbf24' },
+    { key: 'blocked', label: t('page.kpis.blocked'), color: '#fb7185' },
+  ] as const
+}
 
 const TOOLTIP_STYLE: React.CSSProperties = {
   background: 'rgba(11, 18, 36, 0.96)',
@@ -51,6 +53,8 @@ export function TimelineChart({
   timeline: TimelineResult
   loading: boolean
 }) {
+  const { t } = useTranslation('simulation')
+  const DECISIONS = useDecisionSeries()
   const subtitle =
     timeline.source === 'live'
       ? `Grouped every ${BUCKET_MS / 1000}s from live counters`
@@ -94,7 +98,7 @@ export function TimelineChart({
           <Skeleton className="h-72 w-full rounded-xl" />
         ) : timeline.points.length === 0 ? (
           <div className="flex h-72 items-center justify-center">
-            <EmptyState icon={BarChart3} title={EMPTY_MESSAGE} />
+            <EmptyState icon={BarChart3} title={t('page.charts.emptyTimeline')} />
           </div>
         ) : (
           <div className="h-72 w-full">
@@ -182,6 +186,8 @@ export function DecisionDonut({
   totals: Partial<RunTotals> | null
   loading: boolean
 }) {
+  const { t } = useTranslation('simulation')
+  const DECISIONS = useDecisionSeries()
   const data = DECISIONS.map((d) => ({
     ...d,
     value: totals?.[d.key] ?? 0,
@@ -209,7 +215,7 @@ export function DecisionDonut({
           <Skeleton className="h-72 w-full rounded-xl" />
         ) : sum === 0 ? (
           <div className="flex h-72 items-center justify-center">
-            <EmptyState icon={PieIcon} title={EMPTY_MESSAGE} />
+            <EmptyState icon={PieIcon} title={t('page.charts.emptyTimeline')} />
           </div>
         ) : (
           <>
