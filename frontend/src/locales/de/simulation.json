@@ -1,0 +1,102 @@
+{
+  "page": {
+    "title": "Simulationslabor",
+    "subtitle": "Simulieren Sie Datenverkehr gegen einen geschützten Server und beobachten Sie Schutzentscheidungen in Echtzeit.",
+    "start": "Simulation starten",
+    "stop": "Lauf stoppen",
+    "starting": "Startet…",
+    "stopping": "Stoppt…",
+    "targetServer": "Zielserver",
+    "selectServer": "Server auswählen…",
+    "pattern": "Verkehrsmuster",
+    "targetRps": "Ziel-RPS",
+    "durationSec": "Dauer (Sekunden)",
+    "advancedSettings": "Erweiterte Optionen",
+    "resetDefaults": "Standardwerte wiederherstellen",
+    "kpis": {
+      "sent": "Gesendet gesamt",
+      "allowed": "Erlaubt",
+      "challenged": "Herausgefordert",
+      "rateLimited": "Ratenbegrenzt",
+      "blocked": "Blockiert",
+      "blockedShare": "Blockierungsrate",
+      "approxRps": "Aktuelle RPS",
+      "avgLatency": "Durchschn. Latenz"
+    },
+    "charts": {
+      "trafficDecisions": "Entscheidungsverlauf",
+      "decisionBreakdown": "Entscheidungsverteilung",
+      "emptyTimeline": "Noch keine Daten aufgezeichnet"
+    },
+    "events": {
+      "title": "Simulationsereignisse",
+      "subtitle": "Während dieses Simulationslaufs erzeugte Ereignisse"
+    },
+    "history": {
+      "title": "Vorherige Läufe",
+      "subtitle": "Vergangene Simulationsexperimente und -ergebnisse",
+      "empty": "Noch keine Simulationsläufe aufgezeichnet"
+    }
+  },
+  "patterns": {
+    "realistic_mix": {
+      "label": "Realistischer Mix",
+      "desc": "Natürlicher Verkehrsmix mit einem geringen Anteil an anomalem Verhalten. (Standard)"
+    },
+    "legit_only": {
+      "label": "Nur legitim",
+      "desc": "Ausschließlich legitime Besucher mit normalen Surfgewohnheiten."
+    },
+    "login_focus": {
+      "label": "Login-Fokus",
+      "desc": "Konzentrierter Datenverkehr auf /login und sensible Autorisierungsendpunkte."
+    },
+    "rate_stress": {
+      "label": "Ratenbelastung",
+      "desc": "Verkehr mit hohem Volumen zum Testen von Ratenbegrenzungsschwellen."
+    },
+    "bot_wave": {
+      "label": "Bot-Welle",
+      "desc": "Automatisierte Scraper-Signaturen, Headless-Browser und fehlgeschlagene JS-Challenges."
+    },
+    "ban_recovery": {
+      "label": "Sperre & Wiederherstellung",
+      "desc": "Schübe aggressiver Anfragen, Auslösen von Sperren und Beobachten der Erholung."
+    },
+    "full_pipeline": {
+      "label": "Gesamte Pipeline",
+      "desc": "Sequenzielle Ausführung durch alle Besucher-Personas."
+    },
+    "custom": {
+      "label": "Benutzerdefinierter Mix",
+      "desc": "Manuell angepasste Gewichtungen für einzelne Personas."
+    }
+  },
+  "personas": {
+    "legit_ok": "Regulärer legitimer Besucher",
+    "legit_sensitive": "Legitimer Besucher auf sensiblen Endpunkten",
+    "rate_soft": "Verkehr nahe dem Soft-Rate-Limit",
+    "rate_hard": "Verkehr überschreitet Hard-Rate-Limit",
+    "bot_ua": "Skript- oder Crawler-User-Agent",
+    "fail_js": "Client besteht stille JS-Challenge nicht",
+    "pass_js": "Client besteht JS-Challenge erfolgreich",
+    "bad_ip": "Bekannte bösartige IP / hohe Anomalie-Bewertung"
+  },
+  "status": {
+    "PENDING": "Ausstehend",
+    "RUNNING": "Wird ausgeführt",
+    "COMPLETED": "Abgeschlossen",
+    "STOPPED": "Gestoppt",
+    "FAILED": "Fehlgeschlagen"
+  },
+  "toast": {
+    "started": "Simulation gestartet",
+    "startedDesc": "Verkehrs-Worker generiert Anfragen.",
+    "completed": "Simulation abgeschlossen",
+    "completedDesc": "Endergebnisse liegen vor.",
+    "stopped": "Simulation gestoppt",
+    "failed": "Simulation fehlgeschlagen",
+    "startFailed": "Simulation konnte nicht gestartet werden",
+    "stopFailed": "Simulation konnte nicht gestoppt werden"
+  }
+}

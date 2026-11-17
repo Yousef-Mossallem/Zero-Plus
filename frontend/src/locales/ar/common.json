@@ -1,0 +1,18 @@
+{
+  "actions": {
+    "save": "حفظ",
+    "cancel": "إلغاء",
+    "delete": "حذف",
+    "search": "بحث",
+    "close": "إغلاق",
+    "back": "رجوع",
+    "tryAgain": "إعادة المحاولة"
+  },
+  "status": {
+    "loading": "جارٍ التحميل...",
+    "empty": "لا توجد بيانات بعد"
+  },
+  "language": {
+    "label": "اللغة"
+  }
+}

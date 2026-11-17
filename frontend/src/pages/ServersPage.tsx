@@ -31,6 +31,7 @@ import {
   ShieldCheck,
   X,
 } from 'lucide-react'
+import { useTranslation, Trans } from 'react-i18next'
 import { useToast } from '../components/ui/Toast'
 import {
   Button,
@@ -84,13 +85,18 @@ const STATUS_BAR: Record<ServerStatus, string> = {
 
 type SortKey = 'newest' | 'oldest' | 'updated' | 'domain-asc' | 'domain-desc' | 'status'
 
-const SORT_OPTIONS: { value: SortKey; label: string; sortBy: NonNullable<ServersQuery['sortBy']>; sortOrder: 'asc' | 'desc' }[] = [
-  { value: 'newest', label: 'Newest first', sortBy: 'createdAt', sortOrder: 'desc' },
-  { value: 'oldest', label: 'Oldest first', sortBy: 'createdAt', sortOrder: 'asc' },
-  { value: 'updated', label: 'Recently updated', sortBy: 'updatedAt', sortOrder: 'desc' },
-  { value: 'domain-asc', label: 'Domain A → Z', sortBy: 'domain', sortOrder: 'asc' },
-  { value: 'domain-desc', label: 'Domain Z → A', sortBy: 'domain', sortOrder: 'desc' },
-  { value: 'status', label: 'Status', sortBy: 'status', sortOrder: 'asc' },
+const SORT_OPTIONS: {
+  value: SortKey
+  labelKey: 'page.sort.newest' | 'page.sort.oldest' | 'page.sort.updated' | 'page.sort.domainAsc' | 'page.sort.domainDesc' | 'page.sort.status'
+  sortBy: NonNullable<ServersQuery['sortBy']>
+  sortOrder: 'asc' | 'desc'
+}[] = [
+  { value: 'newest', labelKey: 'page.sort.newest', sortBy: 'createdAt', sortOrder: 'desc' },
+  { value: 'oldest', labelKey: 'page.sort.oldest', sortBy: 'createdAt', sortOrder: 'asc' },
+  { value: 'updated', labelKey: 'page.sort.updated', sortBy: 'updatedAt', sortOrder: 'desc' },
+  { value: 'domain-asc', labelKey: 'page.sort.domainAsc', sortBy: 'domain', sortOrder: 'asc' },
+  { value: 'domain-desc', labelKey: 'page.sort.domainDesc', sortBy: 'domain', sortOrder: 'desc' },
+  { value: 'status', labelKey: 'page.sort.status', sortBy: 'status', sortOrder: 'asc' },
 ]
 
 /** The backend says ~2 minutes for a measurement; we show "measuring" for up to 150s */
@@ -111,13 +117,12 @@ function isNewer(value: string | null | undefined, base: string | null): boolean
   return Date.parse(value) > Date.parse(base)
 }
 
-const fmtInt = (n: number) => n.toLocaleString('en-US')
-
 // ==================================================================
 // Page
 // ==================================================================
 
 export default function ServersPage() {
+  const { t, i18n } = useTranslation(['servers', 'common'])
   const toast = useToast()
   const toastRef = useRef(toast)
   useEffect(() => {
@@ -126,6 +131,14 @@ export default function ServersPage() {
 
   const role = useAuthStore(selectUserRole)
   const canManage = role !== null && MANAGE_ROLES.includes(role)
+
+  const fmtInt = useCallback(
+    (n: number) =>
+      n.toLocaleString(
+        i18n.language.startsWith('ar') ? 'ar-EG' : i18n.language.startsWith('de') ? 'de-DE' : 'en-US',
+      ),
+    [i18n.language],
+  )
 
   // ---------------- Filters ----------------
   const [search, setSearch] = useState('')
@@ -190,13 +203,13 @@ export default function ServersPage() {
           if (!probeStartedWith.current.has(id)) return
           stopProbing(id)
           toastRef.current.info(
-            'Measurement is taking longer than expected',
-            'No result yet. Check back in a minute or try again.',
+            t('toast.measureSlow'),
+            t('toast.measureSlowDesc'),
           )
         }, PROBE_WAIT_MS),
       )
     },
-    [stopProbing],
+    [stopProbing, t],
   )
 
   // Clear timers on unmount
@@ -214,10 +227,10 @@ export default function ServersPage() {
       const s = servers.find((x) => x.id === id)
       if (s && isNewer(s.lastProbeAt, startedWith)) {
         stopProbing(id)
-        toastRef.current.success('Capacity measurement finished', s.domain)
+        toastRef.current.success(t('toast.measureDone'), s.domain)
       }
     }
-  }, [servers, stopProbing])
+  }, [servers, stopProbing, t])
 
   // ---------------- Load ----------------
   const sortOption = SORT_OPTIONS.find((o) => o.value === sort) ?? SORT_OPTIONS[0]!
@@ -261,13 +274,13 @@ export default function ServersPage() {
         const { message } = getApiErrorInfo(err)
         if (!silent) {
           setError(message)
-          toastRef.current.error('Failed to load servers', message)
+          toastRef.current.error(t('toast.loadFailed'), message)
         }
       } finally {
         if (id === requestId.current && !silent) setLoading(false)
       }
     },
-    [query],
+    [query, t],
   )
 
   const loadRef = useRef(load)
@@ -362,7 +375,7 @@ export default function ServersPage() {
       toast.success(res.message)
       void load(true) // summary changes
     } catch (err) {
-      toast.error('Could not change maintenance mode', getApiErrorInfo(err).message)
+      toast.error(t('toast.maintenanceFailed'), getApiErrorInfo(err).message)
     } finally {
       setBusyId(null)
     }
@@ -373,7 +386,7 @@ export default function ServersPage() {
     if (probingIds.has(server.id)) return
 
     if (!server.dnsVerified) {
-      toast.info('Verify domain ownership first', 'Capacity can only be measured for verified domains.')
+      toast.info(t('toast.verifyFirst'), t('toast.verifyFirstDesc'))
       setDnsState({ server, dns: null })
       return
     }
@@ -381,19 +394,22 @@ export default function ServersPage() {
     try {
       const res = await requestProbe(server.id)
       startProbing(server.id, server.lastProbeAt)
-      toast.info('Measurement started', res.message)
+      toast.info(t('toast.measureStarted'), res.message)
     } catch (err) {
       const { status: httpStatus, code, message, retryAfterSec } = getApiErrorInfo(err)
       if (httpStatus === 409 || code === 'OWNERSHIP_REQUIRED') {
-        toast.info('Verify domain ownership first', message)
+        toast.info(t('toast.verifyFirst'), message)
         setDnsState({ server, dns: null })
       } else if (httpStatus === 429 || code === 'PROBE_TOO_FREQUENT') {
-        toast.info(retryAfterSec ? `Please wait ${retryAfterSec}s before measuring again` : 'Please wait before measuring again', message)
+        toast.info(
+          retryAfterSec ? t('toast.waitSeconds', { s: retryAfterSec }) : t('toast.waitGeneric'),
+          message,
+        )
       } else if (httpStatus === 404) {
-        toast.error('Server not found', message)
+        toast.error(t('toast.notFound'), message)
         void load(true)
       } else {
-        toast.error('Could not start the measurement', message)
+        toast.error(t('toast.measureFailed'), message)
       }
     }
   }
@@ -425,7 +441,7 @@ export default function ServersPage() {
     // First successful ownership proof → the backend starts a full probe by itself
     if (before && !before.dnsVerified && result.dnsVerified) {
       startProbing(result.id, before.lastProbeAt)
-      toast.info('Capacity measurement started', 'It runs in the background. The numbers will appear on the server card.')
+      toast.info(t('toast.autoMeasure'), t('toast.autoMeasureDesc'))
     }
 
     void load(true)
@@ -448,10 +464,10 @@ export default function ServersPage() {
   const attention = summary ? (summary.DEGRADED ?? 0) + (summary.OFFLINE ?? 0) : 0
 
   const chips: { value: string; label: string; count: number | null; dot: string }[] = [
-    { value: '', label: 'All', count: summary ? total : null, dot: 'bg-cyan-400' },
+    { value: '', label: t('page.fleet.all'), count: summary ? total : null, dot: 'bg-cyan-400' },
     ...STATUS_ORDER.map((s) => ({
       value: s,
-      label: STATUS_META[s].label,
+      label: t(`status.${s}` as never) || STATUS_META[s].label,
       count: summary ? (summary[s] ?? 0) : null,
       dot: STATUS_BAR[s],
     })),
@@ -470,16 +486,16 @@ export default function ServersPage() {
     <PageShell>
       <PageHeader
         icon={ServerIcon}
-        title="Protected Servers"
-        subtitle="Domains protected by the Gateway: DNS setup, health and measured capacity."
+        title={t('page.title')}
+        subtitle={t('page.subtitle')}
         actions={
           <>
             <Button icon={RefreshCw} loading={loading && servers.length > 0} onClick={() => void load()}>
-              Refresh
+              {t('page.refresh')}
             </Button>
             {canManage && (
               <Button variant="primary" icon={Plus} onClick={() => setFormState({ open: true, server: null })}>
-                Add server
+                {t('page.add')}
               </Button>
             )}
           </>
@@ -494,10 +510,13 @@ export default function ServersPage() {
               <AlertTriangle className="h-5 w-5" />
             </span>
             <p className="text-sm text-rose-100">
-              <span className="font-semibold">
-                {attention} server{attention === 1 ? '' : 's'}
-              </span>{' '}
-              need attention ({summary.OFFLINE ?? 0} offline · {summary.DEGRADED ?? 0} degraded).
+              <Trans
+                ns="servers"
+                i18nKey="page.attention"
+                count={attention}
+                values={{ offline: summary.OFFLINE ?? 0, degraded: summary.DEGRADED ?? 0 }}
+                components={{ b: <span className="font-semibold" /> }}
+              />
             </p>
           </div>
           <Button
@@ -508,7 +527,7 @@ export default function ServersPage() {
               setPage(1)
             }}
           >
-            Show them
+            {t('page.showThem')}
           </Button>
         </div>
       )}
@@ -517,18 +536,19 @@ export default function ServersPage() {
       <Card accent className="p-5" delay={60}>
         <div className="flex flex-wrap items-end justify-between gap-2">
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Fleet health</p>
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{t('page.fleet.title')}</p>
             {!summary ? (
               <Skeleton className="mt-2 h-8 w-40 rounded-md" />
             ) : (
               <p className="mt-1 text-2xl font-bold tracking-tight text-white">
                 {summary.ONLINE ?? 0}
-                <span className="text-base font-medium text-slate-500"> / {total} online</span>
+                <span className="text-base font-medium text-slate-500"> {t('page.fleet.onlineSuffix', { total })}</span>
               </p>
             )}
           </div>
           <p className="text-xs text-slate-500">
-            Click a status to filter{lastSyncedAt ? ` · Updated ${timeAgo(lastSyncedAt)}` : ''}
+            {t('page.fleet.clickHint')}
+            {lastSyncedAt ? ` · ${t('page.fleet.updated', { time: timeAgo(lastSyncedAt) })}` : ''}
           </p>
         </div>
 
@@ -541,7 +561,7 @@ export default function ServersPage() {
               return n > 0 ? (
                 <div
                   key={s}
-                  title={`${STATUS_META[s].label}: ${n}`}
+                  title={`${t(`status.${s}` as never)}: ${n}`}
                   className={cn('zp-anim-bar h-full', STATUS_BAR[s])}
                   style={{ width: `${(n / total) * 100}%` }}
                 />
@@ -555,7 +575,7 @@ export default function ServersPage() {
             const active = status === c.value
             return (
               <button
-                key={c.label}
+                key={c.value || 'all'}
                 type="button"
                 onClick={() => {
                   setStatus(c.value)
@@ -583,7 +603,7 @@ export default function ServersPage() {
           <div className="mt-4 grid gap-3 border-t border-white/6 pt-4 sm:grid-cols-3">
             <div className="rounded-xl bg-black/20 px-4 py-3">
               <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-                <Gauge className="h-3.5 w-3.5 text-cyan-400" /> Safe capacity · this page
+                <Gauge className="h-3.5 w-3.5 text-cyan-400" /> {t('page.fleet.capacity')}
               </p>
               <p className="mt-1 text-xl font-bold tabular-nums text-white">
                 {measuredOnPage.length > 0 ? fmtInt(pageCapacity) : '—'}
@@ -591,7 +611,7 @@ export default function ServersPage() {
               </p>
             </div>
             <div className="rounded-xl bg-black/20 px-4 py-3">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Measured · this page</p>
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{t('page.fleet.measured')}</p>
               <p className="mt-1 text-xl font-bold tabular-nums text-white">
                 {measuredOnPage.length}
                 <span className="text-sm font-medium text-slate-500"> / {servers.length}</span>
@@ -599,7 +619,7 @@ export default function ServersPage() {
             </div>
             <div className="rounded-xl bg-black/20 px-4 py-3">
               <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-                <ShieldCheck className="h-3.5 w-3.5 text-amber-300" /> Awaiting ownership · this page
+                <ShieldCheck className="h-3.5 w-3.5 text-amber-300" /> {t('page.fleet.awaiting')}
               </p>
               <p className="mt-1 text-xl font-bold tabular-nums text-white">{unverifiedOnPage}</p>
             </div>
@@ -617,7 +637,7 @@ export default function ServersPage() {
               setSearch(e.target.value)
               setPage(1)
             }}
-            placeholder="Search by domain…"
+            placeholder={t('page.filters.search')}
           />
         </div>
         <div className="grid grid-cols-2 gap-3 lg:flex">
@@ -629,9 +649,9 @@ export default function ServersPage() {
             }}
             className="lg:w-40"
           >
-            <option value="">All modes</option>
-            <option value="PROTECT" className="bg-[#0b1224]">Protect</option>
-            <option value="MONITOR_ONLY" className="bg-[#0b1224]">Monitor only</option>
+            <option value="">{t('page.filters.allModes')}</option>
+            <option value="PROTECT" className="bg-[#0b1224]">{t('mode.PROTECT')}</option>
+            <option value="MONITOR_ONLY" className="bg-[#0b1224]">{t('mode.MONITOR_ONLY')}</option>
           </SelectInput>
           <SelectInput
             value={dnsFilter}
@@ -641,9 +661,9 @@ export default function ServersPage() {
             }}
             className="lg:w-44"
           >
-            <option value="">Any DNS state</option>
-            <option value="true" className="bg-[#0b1224]">Ownership verified</option>
-            <option value="false" className="bg-[#0b1224]">Not verified</option>
+            <option value="">{t('page.filters.anyDns')}</option>
+            <option value="true" className="bg-[#0b1224]">{t('page.filters.verified')}</option>
+            <option value="false" className="bg-[#0b1224]">{t('page.filters.notVerified')}</option>
           </SelectInput>
           <SelectInput
             value={sort}
@@ -655,14 +675,14 @@ export default function ServersPage() {
           >
             {SORT_OPTIONS.map((o) => (
               <option key={o.value} value={o.value} className="bg-[#0b1224]">
-                {o.label}
+                {t(o.labelKey as never)}
               </option>
             ))}
           </SelectInput>
         </div>
         {hasFilters && (
           <Button icon={X} variant="ghost" onClick={clearFilters}>
-            Clear
+            {t('page.filters.clear')}
           </Button>
         )}
       </div>
@@ -682,20 +702,20 @@ export default function ServersPage() {
         <Card>
           <EmptyState
             icon={ServerIcon}
-            title={hasFilters ? 'No servers match these filters' : 'No protected servers yet'}
+            title={hasFilters ? t('page.empty.filteredTitle') : t('page.empty.noneTitle')}
             description={
               hasFilters
-                ? 'Try widening the filters.'
+                ? t('page.empty.filteredDesc')
                 : canManage
-                  ? 'Add your first domain to start routing its traffic through the Gateway.'
-                  : 'An Owner or Admin needs to add the first server.'
+                  ? t('page.empty.noneManage')
+                  : t('page.empty.noneViewer')
             }
             action={
               hasFilters ? (
-                <Button icon={X} onClick={clearFilters}>Clear filters</Button>
+                <Button icon={X} onClick={clearFilters}>{t('page.filters.clearFilters')}</Button>
               ) : canManage ? (
                 <Button variant="primary" icon={Plus} onClick={() => setFormState({ open: true, server: null })}>
-                  Add server
+                  {t('page.add')}
                 </Button>
               ) : undefined
             }
@@ -717,6 +737,7 @@ export default function ServersPage() {
                 onDelete={() => setDeleting(server)}
                 onMaintenance={() => void handleMaintenance(server)}
                 onProbe={() => void handleProbe(server)}
+                onDetails={() => setDetail(server)}
               />
             ))}
           </div>
@@ -763,7 +784,7 @@ export default function ServersPage() {
       {summary && summary.ONLINE === 0 && (summary.PENDING ?? 0) > 0 && (
         <p className="flex items-center justify-center gap-2 text-xs text-slate-600">
           <Loader2 className="h-3.5 w-3.5" />
-          Protection starts once DNS ownership and routing are verified.
+          {t('page.hint')}
         </p>
       )}
     </PageShell>

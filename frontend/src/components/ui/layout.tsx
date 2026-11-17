@@ -2,6 +2,7 @@
 // الهيكل العام والكروت والـ Badges
 
 import type { ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 
 import Navbar from '../Navbar'
 import { cn } from '../../utils/format'
@@ -10,16 +11,17 @@ import { TONE_BADGE, TONE_ICON, type IconType, type Tone } from './tones'
 
 // ==================================================================
 // PageShell: الهيكل العام (Navbar + محتوى الصفحة)
-// ملاحظة: dir="ltr" لأن الـ Navbar ثابت على الشمال والـ html عليه rtl
+// i18n: شلنا dir="ltr" الثابت، فالصفحة بتاخد اتجاه <html> (rtl للعربي)
+// والـ Navbar بيبقى على اليمين تلقائياً لأنه بيستخدم start/end.
 // ==================================================================
 
 export function PageShell({ children }: { children: ReactNode }) {
   return (
-    <div dir="ltr" className="relative flex min-h-screen w-full text-white">
-      {/* توهجات خلفية ثابتة */}
+    <div className="relative flex min-h-screen w-full text-white">
+      {/* توهجات خلفية ثابتة (start/end عشان تتقلب مع الاتجاه) */}
       <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
-        <div className="absolute -left-40 top-1/4 h-105 w-105 rounded-full bg-cyan-500/8 blur-[120px]" />
-        <div className="absolute -right-40 bottom-1/4 h-95 w-95 rounded-full bg-indigo-600/10 blur-[110px]" />
+        <div className="absolute -start-40 top-1/4 h-105 w-105 rounded-full bg-cyan-500/8 blur-[120px]" />
+        <div className="absolute -end-40 bottom-1/4 h-95 w-95 rounded-full bg-indigo-600/10 blur-[110px]" />
       </div>
 
       <Navbar />
@@ -185,15 +187,17 @@ const DECISION_TONE: Record<Decision, Tone> = {
 }
 
 export function DecisionBadge({ decision }: { decision: Decision }) {
+  const { t } = useTranslation('events')
   return (
     <Badge tone={DECISION_TONE[decision] ?? 'slate'} dot>
-      {decision.replace('_', ' ')}
+      {t(`decision.${decision}`, { defaultValue: decision.replace('_', ' ') })}
     </Badge>
   )
 }
 
 // ==================================================================
 // KeyValue row (للتفاصيل في الـ Drawer والكروت)
+// text-end بدل text-right عشان القيمة تتراصّ صح في العربي
 // ==================================================================
 
 export function KeyValue({
@@ -213,7 +217,7 @@ export function KeyValue({
       <span
         dir="auto"
         className={cn(
-          'min-w-0 break-all text-right text-sm text-slate-200',
+          'min-w-0 break-all text-end text-sm text-slate-200',
           mono && 'font-mono text-xs',
         )}
       >
@@ -222,4 +226,3 @@ export function KeyValue({
     </div>
   )
 }
-

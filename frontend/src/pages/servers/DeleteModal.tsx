@@ -2,17 +2,20 @@
 
 import { useEffect, useState, type KeyboardEvent } from 'react'
 import { AlertTriangle, Trash2 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { useToast } from '../../components/ui/Toast'
 import { Button, Field, Modal, TextInput } from '../../components/ui/kit'
 import { deleteServer, getApiErrorInfo, type Server } from '../../services/serversService'
 
 // ==================================================================
 // Delete modal
-//   DELETE /servers/:id?confirmDomain=<domain>   (OWNER / ADMIN)
-//   → { success, message, data: { id, domain, deletedEvents } }
+// DELETE /servers/:id?confirmDomain=<domain> (OWNER / ADMIN)
+// → { success, message, data: { id, domain, deletedEvents } }
 //
 // The user must type the exact domain. The backend lowercases it and strips a
 // trailing dot / port, so the check here uses the same normalisation.
+//
+// i18n: النصوص من servers.delete، والدومين/الـ IP بيفضلوا LTR.
 // ==================================================================
 
 const normalize = (raw: string) => raw.trim().toLowerCase().replace(/\.$/, '')
@@ -27,6 +30,7 @@ export function DeleteModal({
   onDeleted: (id: string) => void
 }) {
   const toast = useToast()
+  const { t } = useTranslation(['servers', 'common'])
   const [confirmText, setConfirmText] = useState('')
   const [busy, setBusy] = useState(false)
 
@@ -43,21 +47,22 @@ export function DeleteModal({
     try {
       const res = await deleteServer(server.id, server.domain)
       const events = res.data.deletedEvents ?? 0
-      toast.success('Server deleted', `${server.domain} · ${events.toLocaleString('en-US')} related events removed`)
+      toast.success(
+        t('delete.toast.deleted'),
+        t('delete.toast.deletedDesc', { domain: server.domain, n: events.toLocaleString('en-US') }),
+      )
       onDeleted(server.id)
       onClose()
     } catch (err) {
       const info = getApiErrorInfo(err)
-
       // Already gone (deleted by someone else): treat it as done and refresh the list
       if (info.status === 404) {
-        toast.info('Server already deleted', server.domain)
+        toast.info(t('delete.toast.already'), server.domain)
         onDeleted(server.id)
         onClose()
         return
       }
-
-      toast.error('Could not delete server', info.message)
+      toast.error(t('delete.toast.failed'), info.message)
     } finally {
       setBusy(false)
     }
@@ -74,17 +79,17 @@ export function DeleteModal({
     <Modal
       open={server !== null}
       onClose={busy ? () => {} : onClose}
-      title="Delete server"
-      description="This stops protection for the domain and permanently deletes its security events."
+      title={t('delete.title')}
+      description={t('delete.description')}
       icon={Trash2}
       tone="rose"
       footer={
         <>
           <Button variant="ghost" onClick={onClose} disabled={busy}>
-            Cancel
+            {t('actions.cancel', { ns: 'common' })}
           </Button>
           <Button variant="danger" icon={Trash2} loading={busy} disabled={!matches} onClick={() => void submit()}>
-            Delete permanently
+            {t('delete.confirm')}
           </Button>
         </>
       }
@@ -92,24 +97,21 @@ export function DeleteModal({
       <div className="space-y-4" onKeyDown={onKeyDown}>
         {server && (
           <div className="rounded-xl border border-white/8 bg-white/3 px-4 py-3">
-            <p dir="ltr" className="break-all text-sm font-semibold text-white">
+            <p dir="ltr" className="break-all text-start text-sm font-semibold text-white">
               {server.domain}
             </p>
-            <p dir="ltr" className="mt-0.5 font-mono text-xs text-slate-500">
-              Origin {server.originIp}:{server.originPort}
+            <p dir="ltr" className="mt-0.5 text-start font-mono text-xs text-slate-500">
+              {t('delete.origin', { addr: `${server.originIp}:${server.originPort}` })}
             </p>
           </div>
         )}
 
         <div className="flex gap-2.5 rounded-xl border border-amber-400/25 bg-amber-500/6 p-3.5">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />
-          <p className="text-xs text-amber-200/90">
-            If your DNS still points to the Gateway, visitors will stop reaching your site after deletion. Point the
-            domain back to your origin server (or remove the Gateway records) as part of this change.
-          </p>
+          <p className="text-xs text-amber-200/90">{t('delete.warning')}</p>
         </div>
 
-        <Field label={`Type "${server?.domain ?? ''}" to confirm`}>
+        <Field label={t('delete.typeToConfirm', { domain: server?.domain ?? '' })}>
           <TextInput
             value={confirmText}
             disabled={busy}

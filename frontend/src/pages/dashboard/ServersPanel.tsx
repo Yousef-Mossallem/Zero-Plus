@@ -8,6 +8,7 @@
 
 import { useNavigate } from 'react-router-dom'
 import { Gauge, Server as ServerIcon } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 import { Badge, Card, EmptyState, ErrorState, Skeleton, type Tone } from '../../components/ui/kit'
 import type { ServerSummaryItem, ServersSummaryData } from '../../services/dashboardService'
@@ -24,6 +25,7 @@ const STATUS_TONE: Record<string, Tone> = {
 }
 
 function ServerRow({ s, i }: { s: ServerSummaryItem; i: number }) {
+  const { t } = useTranslation(['dashboard', 'servers'])
   const navigate = useNavigate()
   const rec = s.probeRecommendation ? REC_META[s.probeRecommendation] : undefined
   const load = s.currentLoadPercent
@@ -43,43 +45,46 @@ function ServerRow({ s, i }: { s: ServerSummaryItem; i: number }) {
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold text-white">{s.domain}</p>
             <p className="text-[11px] text-slate-500">
-              {s.mode === 'PROTECT' ? 'Protect' : 'Monitor only'} · checked {timeAgo(s.lastHealthCheckAt)}
+              {s.mode === 'PROTECT' ? t('servers.protect') : t('servers.monitor')} · {t('servers.checked', { time: timeAgo(s.lastHealthCheckAt) })}
             </p>
           </div>
         </div>
         <Badge tone={STATUS_TONE[s.status] ?? 'slate'} dot>
-          {s.status}
+          {t(`servers:status.${s.status}` as never) || s.status}
         </Badge>
       </div>
 
       <div className="mt-3 grid grid-cols-2 gap-3 text-xs sm:grid-cols-4">
         <div>
-          <p className="text-slate-500">Safe capacity</p>
+          <p className="text-slate-500">{t('servers.safeCapacity')}</p>
           <p className="mt-0.5 flex items-center gap-1 font-semibold text-white">
             <Gauge className="h-3.5 w-3.5 text-cyan-400" />
             {formatRps(s.safeRequestsPerSecond)}
           </p>
         </div>
         <div>
-          <p className="text-slate-500">Quality</p>
+          <p className="text-slate-500">{t('servers.quality')}</p>
           <div className="mt-0.5">
             {rec ? (
               <Badge tone={rec.tone} {...(s.probeConfidence && { className: 'cursor-help' })}>
                 {rec.label}
               </Badge>
             ) : (
-              <span className="text-slate-600">{s.lastProbeAt ? '—' : 'Not measured'}</span>
+              <span className="text-slate-600">{s.lastProbeAt ? '—' : t('servers.notMeasured')}</span>
             )}
           </div>
         </div>
         <div>
-          <p className="text-slate-500">Last hour</p>
+          <p className="text-slate-500">{t('servers.lastHour')}</p>
           <p className="mt-0.5 font-semibold text-white">
-            {formatNumber(s.eventsLastHour)} <span className="font-normal text-rose-300">/ {formatNumber(s.blockedLastHour)} blocked</span>
+            {formatNumber(s.eventsLastHour)}{' '}
+            <span className="font-normal text-rose-300">
+              {t('servers.blocked', { count: formatNumber(s.blockedLastHour) })}
+            </span>
           </p>
         </div>
         <div>
-          <p className="text-slate-500">Load</p>
+          <p className="text-slate-500">{t('servers.load')}</p>
           <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-white/8">
             {load !== null && <div className={cn('zp-anim-bar h-full rounded-full', loadColor)} style={{ width: `${Math.min(100, load)}%` }} />}
           </div>
@@ -100,13 +105,14 @@ export default function ServersPanel({
   section: Section<ServersSummaryData>
   onRetry: () => void
 }) {
+  const { t } = useTranslation('dashboard')
   const servers = section.data?.servers ?? []
   const totals = section.data?.totals
 
   return (
     <Card className="p-5" delay={200}>
       <div className="mb-4 flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-white">Protected servers</h3>
+        <h3 className="text-sm font-semibold text-white">{t('servers.title')}</h3>
         {totals && (
           <span className="text-xs text-slate-500">
             {totals.online}/{totals.count} online
@@ -122,7 +128,7 @@ export default function ServersPanel({
       ) : section.error && !section.data ? (
         <ErrorState message={section.error} onRetry={onRetry} />
       ) : servers.length === 0 ? (
-        <EmptyState icon={ServerIcon} title="No servers yet" description="Add a protected server to see its health here." />
+        <EmptyState icon={ServerIcon} title={t('servers.empty')} description="" />
       ) : (
         <ul className={cn('space-y-3', section.loading && 'opacity-60')}>
           {servers.map((s, i) => (

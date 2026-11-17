@@ -1,0 +1,92 @@
+{
+  "page": {
+    "title": "全局态势仪表盘",
+    "subtitle": "实时全景洞察网络流量、安全威胁与服务器集群运行健康度。",
+    "allServers": "全部受保护服务器",
+    "refresh": "刷新",
+    "noAccess": "您没有访问全局仪表盘的权限",
+    "noAccessDesc": "态势仪表盘仅面向所有者 (Owner)、管理员 (Admin) 与分析师 (Analyst) 开放。请联系所有者调整角色。",
+    "updatedAt": "最近更新于 {{time}} · 每 45 秒自动同步"
+  },
+  "overview": {
+    "totalRequests": "网络请求总量 · {{range}}",
+    "unread_one": "{{count}} 条未读告警通知 →",
+    "unread_other": "{{count}} 条未读告警通知 →",
+    "avgRisk": "全网平均风险指数",
+    "outOf": "满分 100",
+    "segments": {
+      "allowed": "安全放行",
+      "monitored": "旁路监控",
+      "challenged": "人机质询",
+      "rateLimited": "平滑限流",
+      "blocked": "主动拦截"
+    }
+  },
+  "kpi": {
+    "activeBans": "当前封禁设备数",
+    "permanent": "{{count}} 台永久封禁",
+    "criticalEntries": "高危攻击源特征",
+    "newBans": "统计周期内新增 {{count}} 次封禁",
+    "challengePass": "质询验证通过率",
+    "passedOf": "{{passed}} / {{total}} 次成功通过",
+    "serversOnline": "服务器在线率",
+    "serverHealth": "{{degraded}} 台性能下降 · {{offline}} 台离线"
+  },
+  "surge": {
+    "title": "监测到流量突发异动 (Traffic Surge)",
+    "desc_one": "在 {{range}} 内捕获到 {{count}} 次流量剧增信号。建议及时查阅时间曲线并审视加固安全策略。",
+    "desc_other": "在 {{range}} 内捕获到 {{count}} 次流量剧增信号。建议及时查阅时间曲线并审视加固安全策略。"
+  },
+  "timeline": {
+    "title": "流量时序分布曲线",
+    "noData": "当前时间范围内暂无任何时序采样点数据。",
+    "series": {
+      "total": "请求总量",
+      "allowed": "放行流量",
+      "blocked": "拦截流量",
+      "challenged": "质询流量",
+      "rateLimited": "限流流量"
+    }
+  },
+  "top": {
+    "title": "高频来源排行 (Top Sources)",
+    "tabs": {
+      "ip": "IP 地址",
+      "path": "请求路径",
+      "country": "来源国家",
+      "asn": "自治域 (ASN)",
+      "ipType": "IP 网络类型",
+      "stage": "处置阶段"
+    },
+    "empty": "当前分类维度暂无统计数据。",
+    "avgRisk": "平均风险分 {{score}}",
+    "share": "占全网流量 {{pct}}%"
+  },
+  "servers": {
+    "title": "受保护服务器集群",
+    "allServers": "查看全部服务器详情 →",
+    "empty": "尚未添加任何服务器接入防护。",
+    "safeCapacity": "安全承载能力",
+    "quality": "健康水准",
+    "lastHour": "最近 1 小时",
+    "load": "实时负载",
+    "blocked": "/ 已拦截 {{count}} 次",
+    "notMeasured": "未测算",
+    "protect": "主动防护",
+    "monitor": "仅监控",
+    "checked": "检查于 {{time}}"
+  },
+  "threatMap": {
+    "title": "全球威胁地理分布",
+    "subtitle": "按请求源国家/地区聚合呈现的威胁矩阵",
+    "empty": "暂无地理分布监测数据。",
+    "unknown": "未知地域: {{count}} 次请求",
+    "blockedPct": "{{pct}}% 已拦截",
+    "levels": {
+      "critical": "极危",
+      "high": "高危",
+      "medium": "中危",
+      "low": "低危"
+    }
+  }
+}

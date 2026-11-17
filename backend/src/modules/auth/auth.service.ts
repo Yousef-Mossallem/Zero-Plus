@@ -6,8 +6,8 @@
 // ==================================================================
 
 import type { FastifyInstance } from 'fastify'
-// بدلاً من: import bcrypt from 'bcrypt'
 import bcrypt from 'bcryptjs'
+import { randomBytes } from 'crypto'
 import {
   generateRegistrationOptions,
   verifyRegistrationResponse,
@@ -21,9 +21,9 @@ import type {
   RegisterFinishInput,
   LoginStartInput,
   LoginFinishInput,
-  AddPasskeyFinishInput,
   UpdateProfileInput,
   SetPasswordInput,
+  FinishPasskeyInviteInput,
 } from './auth.schema.js'
 
 // ------------------------------------------------------------------
@@ -47,8 +47,11 @@ function getOrigin(): string {
   return process.env.WEBAUTHN_ORIGIN || 'http://localhost:5173'
 }
 
-/** مدة صلاحية الـ challenge بالثواني */
+/** مدة صلاحية الـ challenge بالثواني (للتسجيل والدخول العادي) */
 const CHALLENGE_TTL_SEC = 60
+
+/** مدة صلاحية دعوة إضافة جهاز (بالدقائق) */
+const INVITE_TTL_MINUTES = 5
 
 // ------------------------------------------------------------------
 // Challenge store (Redis لو موجود، وإلا memory)
@@ -160,6 +163,11 @@ function toBuffer(data: Uint8Array): Buffer {
   return Buffer.from(data)
 }
 
+/** توليد توكن آمن للدعوة */
+function generateInviteToken(): string {
+  return randomBytes(32).toString('base64url')
+}
+
 // ==================================================================
 // REGISTER START
 // ينشئ challenge + يخزّن بيانات الحساب مؤقتًا لحد الـ finish
@@ -251,11 +259,10 @@ export async function registerFinish(
     throw new Error('WEBAUTHN_VERIFICATION_FAILED')
   }
 
-  const { credential: regCred, credentialDeviceType, credentialBackedUp } =
+  const { credential: regCred, credentialDeviceType } =
     verification.registrationInfo
 
   const credentialId = regCred.id
-  const publicKey = toBuffer(regCred.publicKey)
   const counter = regCred.counter
   const transports = (credential.response.transports ?? []) as string[]
   const aaguid =
@@ -404,7 +411,6 @@ export async function loginStart(
 
   // نفس الرسالة سواء الإيميل مش موجود أو مفيش passkeys (منع enumeration)
   if (!user || !user.isActive || !user.organization.isActive || user.passkeys.length === 0) {
-    // لسه نرجع options فاضي الشكل عشان الفرونت ما يفرّقش — أو نرمي خطأ موحّد
     throw new Error('INVALID_CREDENTIALS')
   }
 
@@ -550,10 +556,11 @@ export async function loginFinish(
 }
 
 // ==================================================================
-// ADD PASSKEY START (مستخدم مسجّل دخول)
+// CREATE PASSKEY INVITE
+// إنشاء دعوة إضافة جهاز جديد (QR) — مدتها 5 دقائق
 // ==================================================================
 
-export async function addPasskeyStart(
+export async function createPasskeyInvite(
   fastify: FastifyInstance,
   userId: string
 ) {
@@ -571,12 +578,15 @@ export async function addPasskeyStart(
     throw new Error('USER_NOT_FOUND')
   }
 
+  // توليد توكن آمن
+  const token = generateInviteToken()
+
+  // إنشاء registration options
   const options = await generateRegistrationOptions({
     rpName: getRpName(),
     rpID: getRpId(),
     userName: user.email,
     userDisplayName: user.fullName,
-    // استبعد الـ passkeys الموجودة عشان ما يسجّلش نفس الجهاز مرتين بالغلط
     excludeCredentials: user.passkeys.map((pk) => ({
       id: pk.credentialId,
       transports: pk.transports as AuthenticatorTransport[],
@@ -589,30 +599,151 @@ export async function addPasskeyStart(
     supportedAlgorithmIDs: [-7, -257],
   })
 
-  await saveChallenge(fastify, `addpk:${userId}`, {
-    challenge: options.challenge,
-    userId,
+  const expiresAt = new Date(Date.now() + INVITE_TTL_MINUTES * 60 * 1000)
+
+  // حفظ الدعوة في الداتابيز
+  await fastify.prisma.passkeyInvite.create({
+    data: {
+      token,
+      challenge: options.challenge,
+      expiresAt,
+      userId,
+    },
   })
 
+  // بناء الرابط اللي هيتحط في الـ QR
+  const frontendUrl = process.env.FRONTEND_URL || getOrigin()
+  const inviteUrl = `${frontendUrl}/add-device/${token}`
+
   return {
-    options,
+    token,
+    url: inviteUrl,
+    expiresAt,
+    expiresInSeconds: INVITE_TTL_MINUTES * 60,
+    options, // اختياري — لو حابب تعرض حاجة على الجهاز الأصلي
     rpId: getRpId(),
   }
 }
 
 // ==================================================================
-// ADD PASSKEY FINISH
+// GET PASSKEY INVITE OPTIONS
+// الجهاز الجديد يطلب الـ registration options باستخدام التوكن
 // ==================================================================
 
-export async function addPasskeyFinish(
+export async function getPasskeyInviteOptions(
   fastify: FastifyInstance,
-  userId: string,
-  data: AddPasskeyFinishInput
+  token: string
+) {
+  const invite = await fastify.prisma.passkeyInvite.findUnique({
+    where: { token },
+    include: {
+      user: {
+        select: {
+          id: true,
+          email: true,
+          fullName: true,
+          isActive: true,
+          passkeys: {
+            where: { isRevoked: false },
+            select: { credentialId: true, transports: true },
+          },
+        },
+      },
+    },
+  })
+
+  if (!invite) {
+    throw new Error('INVITE_NOT_FOUND')
+  }
+
+  if (invite.usedAt) {
+    throw new Error('INVITE_ALREADY_USED')
+  }
+
+  if (invite.expiresAt < new Date()) {
+    throw new Error('INVITE_EXPIRED')
+  }
+
+  if (!invite.user.isActive) {
+    throw new Error('USER_NOT_FOUND')
+  }
+
+  // نرجع الـ options من جديد (أو نستخدم الـ challenge المخزن)
+  const options = await generateRegistrationOptions({
+    rpName: getRpName(),
+    rpID: getRpId(),
+    userName: invite.user.email,
+    userDisplayName: invite.user.fullName,
+    excludeCredentials: invite.user.passkeys.map((pk) => ({
+      id: pk.credentialId,
+      transports: pk.transports as AuthenticatorTransport[],
+    })),
+    authenticatorSelection: {
+      authenticatorAttachment: 'platform',
+      userVerification: 'required',
+      residentKey: 'preferred',
+    },
+    supportedAlgorithmIDs: [-7, -257],
+  })
+
+  // نحدّث الـ challenge في الدعوة عشان نستخدمه في الـ finish
+  await fastify.prisma.passkeyInvite.update({
+    where: { id: invite.id },
+    data: { challenge: options.challenge },
+  })
+
+  return {
+    options,
+    rpId: getRpId(),
+    user: {
+      fullName: invite.user.fullName,
+      email: invite.user.email,
+    },
+    expiresAt: invite.expiresAt,
+  }
+}
+
+// ==================================================================
+// FINISH PASSKEY INVITE
+// الجهاز الجديد يبعت الـ credential ويتم إضافة الـ Passkey
+// ==================================================================
+
+export async function finishPasskeyInvite(
+  fastify: FastifyInstance,
+  token: string,
+  data: FinishPasskeyInviteInput
 ) {
   const { deviceName, credential } = data
 
-  const record = await takeChallenge(fastify, `addpk:${userId}`)
-  if (!record?.challenge) {
+  const invite = await fastify.prisma.passkeyInvite.findUnique({
+    where: { token },
+    include: {
+      user: {
+        select: {
+          id: true,
+          isActive: true,
+        },
+      },
+    },
+  })
+
+  if (!invite) {
+    throw new Error('INVITE_NOT_FOUND')
+  }
+
+  if (invite.usedAt) {
+    throw new Error('INVITE_ALREADY_USED')
+  }
+
+  if (invite.expiresAt < new Date()) {
+    throw new Error('INVITE_EXPIRED')
+  }
+
+  if (!invite.user.isActive) {
+    throw new Error('USER_NOT_FOUND')
+  }
+
+  if (!invite.challenge) {
     throw new Error('CHALLENGE_EXPIRED')
   }
 
@@ -620,7 +751,7 @@ export async function addPasskeyFinish(
   try {
     verification = await verifyRegistrationResponse({
       response: credential as any,
-      expectedChallenge: record.challenge,
+      expectedChallenge: invite.challenge,
       expectedOrigin: getOrigin(),
       expectedRPID: getRpId(),
       requireUserVerification: true,
@@ -636,6 +767,7 @@ export async function addPasskeyFinish(
   const { credential: regCred, credentialDeviceType } =
     verification.registrationInfo
 
+  // تأكد إن الـ credential مش مسجل قبل كده
   const existingCred = await fastify.prisma.passkeyCredential.findUnique({
     where: { credentialId: regCred.id },
   })
@@ -643,27 +775,40 @@ export async function addPasskeyFinish(
     throw new Error('PASSKEY_ALREADY_REGISTERED')
   }
 
-  const passkey = await fastify.prisma.passkeyCredential.create({
-    data: {
-      credentialId: regCred.id,
-      publicKey: Uint8Array.from(regCred.publicKey),
-      counter: regCred.counter,
-      transports: (credential.response.transports ?? []) as string[],
-      deviceName: deviceName ?? credentialDeviceType ?? 'Passkey',
-      aaguid:
-        (verification.registrationInfo as any).aaguid?.toString?.() ?? null,
-      userId,
-      lastUsedAt: new Date(),
-    },
-    select: {
-      id: true,
-      deviceName: true,
-      transports: true,
-      createdAt: true,
-    },
+  // إضافة الـ Passkey + تعليم الدعوة كمستخدمة في نفس الـ transaction
+  const passkey = await fastify.prisma.$transaction(async (tx) => {
+    const created = await tx.passkeyCredential.create({
+      data: {
+        credentialId: regCred.id,
+        publicKey: new Uint8Array(regCred.publicKey),
+        counter: regCred.counter,
+        transports: (credential.response.transports ?? []) as string[],
+        deviceName: deviceName ?? credentialDeviceType ?? 'Passkey',
+        aaguid:
+          (verification.registrationInfo as any).aaguid?.toString?.() ?? null,
+        userId: invite.userId,
+        lastUsedAt: new Date(),
+      },
+      select: {
+        id: true,
+        deviceName: true,
+        transports: true,
+        createdAt: true,
+      },
+    })
+
+    await tx.passkeyInvite.update({
+      where: { id: invite.id },
+      data: { usedAt: new Date() },
+    })
+
+    return created
   })
 
-  return passkey
+  return {
+    passkey,
+    message: 'Device added successfully',
+  }
 }
 
 // ==================================================================
@@ -800,6 +945,5 @@ export async function setPassword(
     where: { id: userId },
     data: { passwordHash },
   })
-  return { ok: true}
-
+  return { ok: true }
 }

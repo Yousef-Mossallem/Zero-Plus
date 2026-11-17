@@ -1,0 +1,298 @@
+{
+  "status": {
+    "ONLINE": "在线",
+    "PENDING": "等待配置",
+    "DEGRADED": "性能下降",
+    "OFFLINE": "离线",
+    "MAINTENANCE": "维护中"
+  },
+  "rec": {
+    "excellent": "优秀",
+    "good": "良好",
+    "fair": "一般",
+    "poor": "较差",
+    "down": "宕机"
+  },
+  "confidence": {
+    "high": "高置信度",
+    "medium": "中置信度",
+    "low": "低置信度"
+  },
+  "mode": {
+    "PROTECT": "主动防护",
+    "MONITOR_ONLY": "仅监控"
+  },
+  "page": {
+    "title": "受保护服务器",
+    "subtitle": "通过安全网关保护的域名：DNS 接入配置、健康状态及测算抗载能力。",
+    "refresh": "刷新",
+    "add": "添加服务器",
+    "attention_one": "<b>{{count}} 台服务器</b>需要关注（{{offline}} 台离线 · {{degraded}} 台性能下降）。",
+    "attention_other": "<b>{{count}} 台服务器</b>需要关注（{{offline}} 台离线 · {{degraded}} 台性能下降）。",
+    "showThem": "查看问题服务器",
+    "fleet": {
+      "title": "集群健康度",
+      "onlineSuffix": "/ {{total}} 台在线",
+      "clickHint": "点击状态标签以进行筛选",
+      "updated": "最近更新于 {{time}}",
+      "all": "全部",
+      "capacity": "安全抗载能力 · 当前页",
+      "measured": "已测算 · 当前页",
+      "awaiting": "待验证所有权 · 当前页"
+    },
+    "filters": {
+      "search": "按域名搜索…",
+      "allModes": "全部防护模式",
+      "anyDns": "全部 DNS 状态",
+      "verified": "已验证所有权",
+      "notVerified": "未验证",
+      "clear": "清除",
+      "clearFilters": "清空筛选条件"
+    },
+    "sort": {
+      "newest": "按最新添加",
+      "oldest": "按最早添加",
+      "updated": "按最近更新",
+      "domainAsc": "域名 A → Z",
+      "domainDesc": "域名 Z → A",
+      "status": "按运行状态"
+    },
+    "empty": {
+      "filteredTitle": "没有匹配筛选条件的服务器",
+      "filteredDesc": "尝试放宽筛选条件以查找。",
+      "noneTitle": "尚未添加任何受保护服务器",
+      "noneManage": "添加您的首个域名，将其网络流量导入安全网关开启防护。",
+      "noneViewer": "需要所有者 (Owner) 或管理员 (Admin) 权限添加首台服务器。"
+    },
+    "hint": "验证 DNS 所有权并成功切换路由后，防护将即刻生效。"
+  },
+  "toast": {
+    "loadFailed": "加载服务器列表失败",
+    "maintenanceFailed": "更改维护模式失败",
+    "verifyFirst": "请先完成域名所有权验证",
+    "verifyFirstDesc": "只有通过所有权验证的域名才支持测算抗载能力。",
+    "measureStarted": "抗载能力测算已启动",
+    "waitSeconds": "操作过于频繁，请等待 {{s}} 秒后重试",
+    "waitGeneric": "操作过于频繁，请稍候再试",
+    "notFound": "未找到该服务器",
+    "notFoundDesc": "该服务器可能已被删除。",
+    "measureFailed": "无法启动抗载能力测算",
+    "measureSlow": "测算耗时超出预期",
+    "measureSlowDesc": "暂未获取到最终结果，请稍候刷新查看或重新发起。",
+    "measureDone": "抗载能力测算已完成",
+    "autoMeasure": "已在后台启动抗载能力测算",
+    "autoMeasureDesc": "测算正在后台执行，结果稍后将自动呈现在服务器卡片上。",
+    "copied": "已成功复制 {{label}}",
+    "copyFailed": "复制失败",
+    "copyBlocked": "浏览器拒绝了剪贴板权限",
+    "copyAria": "复制 {{label}}"
+  },
+  "card": {
+    "httpsOrigin": "HTTPS 回源",
+    "httpOrigin": "HTTP 回源",
+    "safeCapacity": "安全承载能力",
+    "max": "峰值",
+    "p95": "P95 时延",
+    "p99": "P99 负载",
+    "errors": "错误率",
+    "measured": "测算于 {{time}}",
+    "measuringTitle": "正在测算抗载能力…",
+    "measuringText": "测算通常约需 2 分钟完成。",
+    "notMeasured": "尚未测算",
+    "needsOwnership": "请先完成域名所有权验证以开启测算。",
+    "clickMeasure": "点击“测算”以运行抗载基准测试。",
+    "ownerOnly": "仅管理员与所有者有权发起容量测算。",
+    "currentLoad": "当前负载",
+    "avgResponse": "平均响应时延",
+    "checked": "检查于",
+    "setup": {
+      "ownership": "所有权",
+      "routing": "路由解析",
+      "origin": "源站连通"
+    },
+    "details": "详情",
+    "dns": "DNS 配置",
+    "finishSetup": "完成接入",
+    "remeasure": "重新测算",
+    "measure": "测算",
+    "endMaintenance": "结束维护",
+    "maintenance": "进入维护",
+    "edit": "编辑",
+    "editAria": "编辑服务器",
+    "delete": "删除",
+    "deleteAria": "删除服务器"
+  },
+  "drawer": {
+    "fallbackTitle": "服务器",
+    "verified": "所有权已验证",
+    "notVerified": "未验证",
+    "routingOk": "路由正常",
+    "routingPending": "路由等待生效",
+    "safeCapacity": "安全承载能力",
+    "measuring": "正在测算…",
+    "measuringDesc": "约耗时两分钟，结果将在此处自动呈现。",
+    "notMeasured": "尚未测算",
+    "noUsable": "上次测算未产生有效结果",
+    "sections": {
+      "measurement": "基准测算",
+      "health": "运行健康度"
+    },
+    "fields": {
+      "maxRate": "最大持续吞吐率",
+      "p95": "响应 P95（空闲态）",
+      "p99": "响应 P99（高负载）",
+      "errorRate": "错误率",
+      "confidence": "结果置信度",
+      "lastMeasured": "最近测算时间",
+      "avgResponse": "平均响应时延",
+      "currentLoad": "当前实时负载",
+      "originReachable": "源站网络可达",
+      "httpsOrigin": "HTTPS 回源",
+      "lastCheck": "上次健康检查时间"
+    },
+    "yes": "是",
+    "no": "否",
+    "prove": {
+      "title": "请先证明您拥有该域名的所有权",
+      "text": "只有所有权验证通过的域名才可执行抗载能力测算。",
+      "open": "打开 DNS 配置指引"
+    },
+    "remeasure": "重新测算承载能力",
+    "retryIn": "{{s}} 秒后可重试",
+    "unverifiedHint": "请先完成域名所有权验证以解锁抗载测算。",
+    "maintenanceHint": "服务器处于维护模式中，测算功能已挂起。",
+    "ownerOnly": "仅管理员与所有者有权重新发起抗载测算。"
+  },
+  "dns": {
+    "title": "DNS 接入配置指引",
+    "verifyOwnership": "验证所有权",
+    "verifyRouting": "验证路由解析",
+    "verifyAll": "全部重新验证",
+    "loadFailed": "加载该服务器的 DNS 配置指引失败。",
+    "ownershipVerified": "所有权已验证",
+    "ownershipPending": "所有权等待验证",
+    "routingVerified": "路由已正确切换",
+    "routingPending": "路由等待切换",
+    "active": "您的域名已成功验证并路由至安全网关。抗载测算已在后台自动启动，指标稍后将显示在服务器卡片上。",
+    "step1": {
+      "badge": "第 1 步",
+      "title": "验证域名所有权",
+      "text": "在您的 DNS 域名服务商处添加此 TXT 记录，等待全球 DNS 解析生效后，点击“验证所有权”。验证成功后请长期保留此记录。"
+    },
+    "step2": {
+      "badge": "第 2 步",
+      "title": "将域名路由解析切换至安全网关"
+    },
+    "noRouting": "当前平台尚未配置网关路由解析节点，暂无路由记录，请联系技术支持。",
+    "routingMulti": "请在以下两种方式中二选一（切勿同时添加）。子域名建议使用 CNAME，主域名请使用 A 记录。",
+    "routingSingle": "添加此记录，然后点击“验证路由解析”。",
+    "option": "方案 {{n}}",
+    "how": "工作原理解析",
+    "latest": "最新探测记录",
+    "ownershipTxt": "所有权 TXT 记录",
+    "routingCheck": "路由 (CNAME / A) 探测",
+    "expected": "预期值：",
+    "found": "探测值：",
+    "nothingFound": "未探测到解析记录",
+    "cooldown": "探测过于频繁。您可在 {{s}} 秒后再次发起验证。",
+    "ownerOnly": "仅管理员与所有者有权发起解析验证。",
+    "fields": {
+      "type": "类型",
+      "name": "主机记录",
+      "value": "记录值",
+      "ttl": "TTL 缓存时间"
+    },
+    "toast": {
+      "loadFailed": "加载 DNS 指引失败",
+      "complete": "验证流程已完成",
+      "result": "验证探测结果",
+      "failed": "验证失败"
+    }
+  },
+  "delete": {
+    "title": "删除受保护服务器",
+    "description": "此操作将永久停止该域名的安全防护，并彻底清除其关联的所有安全事件记录。",
+    "confirm": "确认永久删除",
+    "origin": "源站地址 {{addr}}",
+    "warning": "若您的公共 DNS 解析仍指向安全网关，删除后公网访客将无法打开您的网站。删除前请务必将 DNS 重新解析回您的源站真实 IP。",
+    "typeToConfirm": "请输入 “{{domain}}” 以确认删除",
+    "toast": {
+      "deleted": "服务器已成功删除",
+      "deletedDesc": "{{domain}} · 已清除 {{n}} 条关联历史事件",
+      "already": "该服务器已被删除",
+      "failed": "删除服务器失败"
+    }
+  },
+  "form": {
+    "addTitle": "添加受保护服务器",
+    "editTitle": "编辑服务器配置",
+    "addDesc": "该域名的公网网络流量将全部经由 Zero Plus 安全网关清洗过滤。",
+    "editDesc": "更改域名后需要重新验证新域名的 DNS 所有权。",
+    "save": "保存修改",
+    "add": "立即添加",
+    "domain": {
+      "label": "域名",
+      "hint": "例如 shop.example.com —— 无需输入 http:// 且不含端口"
+    },
+    "originIp": {
+      "label": "源站真实 IP",
+      "hint": "源站服务器真实的 IPv4 公网地址"
+    },
+    "port": "端口",
+    "mode": {
+      "label": "防护模式",
+      "protect": {
+        "title": "主动防护",
+        "hint": "自动拦截异常攻击并实施多级限流"
+      },
+      "monitor": {
+        "title": "仅监控",
+        "hint": "仅记录决策日志，不主动阻断任何流量"
+      }
+    },
+    "tip": "建议：初期可先设置为“仅监控”模式观察流量决策，平稳后再无缝切换为“主动防护”。",
+    "https": {
+      "title": "源站支持 HTTPS 回源",
+      "hint": "若您的源站仅开放纯 HTTP 明文端口，请关闭此项。"
+    },
+    "notice": {
+      "domain": "更换域名将生成全新的验证密钥，需重新验证新域名的 DNS 所有权后防护方能生效。",
+      "origin": "更换源站真实 IP 将重置可达性检测、时延与抗载测算数据，并为新源站重新测算承载力。",
+      "ssl": "切换 HTTPS 回源设置将自动触发一轮新的基准探测。"
+    },
+    "toast": {
+      "nothing": "无任何更改需要更新",
+      "noChange": "所有配置项均未改变",
+      "same": "提交的值与当前服务器配置一致",
+      "updated": "服务器配置已成功更新",
+      "dnsReset": "DNS 所有权验证已重置",
+      "dnsResetDesc": "请添加新的 TXT 记录并重新验证。",
+      "originReset": "源站健康探测已重置",
+      "originResetDesc": "健康度与抗载能力即将重新开始测算。",
+      "added": "服务器已成功添加",
+      "addedDesc": "请按照指引完成 DNS 配置以激活防护。",
+      "updateFailed": "更新服务器失败",
+      "addFailed": "添加服务器失败"
+    }
+  },
+  "validation": {
+    "domain": {
+      "required": "请输入域名",
+      "noProtocol": "仅输入纯域名，切勿包含 http:// 或 https://",
+      "noPath": "仅输入纯域名（不能包含路径、空格或特殊字符）",
+      "noPathOrPort": "仅输入纯域名（切勿携带路径、端口或空格）",
+      "needsExtension": "域名必须包含后缀（例如 shop.example.com）",
+      "wildcard": "暂不支持泛域名通配符，请单独添加各子域名",
+      "hasPort": "域名中切勿输入端口号，请在专属的端口输入框中填写"
+    },
+    "originIp": {
+      "required": "请输入源站真实 IP",
+      "invalid": "请输入合法的 IPv4 地址",
+      "ipv6": "暂不支持直接填写 IPv6，请使用 IPv4 地址"
+    },
+    "originPort": {
+      "range": "端口范围必须在 1 到 65535 之间",
+      "reserved": "该端口已被系统预留非 Web 服务，无法作为源站端口"
+    }
+  }
+}

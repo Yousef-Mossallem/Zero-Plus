@@ -7,6 +7,7 @@
 // ==================================================================
 
 import { Check } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 import { Badge, Button } from '../../components/ui/kit'
 import type { AppNotification } from '../../services/notificationsService'
@@ -40,6 +41,7 @@ export default function NotificationItem({
   index: number
   onMarkRead: (id: string) => void
 }) {
+  const { t } = useTranslation('notifications')
   const meta = metaFor(n.type)
   const visual = visualFor(n.type, n.severity)
   const Icon = meta.icon
@@ -80,7 +82,7 @@ export default function NotificationItem({
               <p dir="auto" className="text-sm font-semibold text-white">
                 {n.title}
               </p>
-              {highlighted && <Badge tone="cyan">New</Badge>}
+              {highlighted && <Badge tone="cyan">{t('status.new')}</Badge>}
             </div>
             <p dir="auto" className="mt-1 text-sm leading-relaxed text-slate-400">
               {n.message}
@@ -109,8 +111,8 @@ export default function NotificationItem({
             </span>
           ))}
           {!n.isRead && (
-            <Button size="sm" variant="ghost" icon={Check} className="ml-auto" onClick={() => onMarkRead(n.id)}>
-              Mark read
+            <Button size="sm" variant="ghost" icon={Check} className="ms-auto" onClick={() => onMarkRead(n.id)}>
+              {t('status.markRead')}
             </Button>
           )}
         </div>

@@ -1,0 +1,42 @@
+{
+  "org_id": "a346ad5c-e97e-454c-a68e-e5dbb5a86296",
+  "kind": "anomaly",
+  "name": "anomaly_hst",
+  "version": "1",
+  "algorithm": "river.anomaly.HalfSpaceTrees",
+  "created_at": 1794708314.3312297,
+  "updated_at": 1794711619.658265,
+  "last_score_at": 1794711609.9955797,
+  "last_learn_at": 1794711609.9958885,
+  "n_learned": 11018,
+  "n_scored": 11218,
+  "n_saved": 278,
+  "n_loaded": 2,
+  "min_samples_ready": 25,
+  "feature_dim": 76,
+  "feature_keys_hash": "80bb5da5ad096532",
+  "state": "ready",
+  "extra": {
+    "hst": {
+      "n_trees": 30,
+      "height": 12,
+      "window_size": 250,
+      "seed": 42
+    },
+    "learn_skip_above": 0.92,
+    "learn_always_below": 0.55,
+    "applied_learns": 11018,
+    "last_learn_skip_reason": "dampened_borderline",
+    "skipped_learns": 200
+  },
+  "model_id": "f2915d75b60fbd9f",
+  "is_ready": true,
+  "_store": {
+    "saved_at": 1794711619.6773167,
+    "org_id": "a346ad5c-e97e-454c-a68e-e5dbb5a86296",
+    "kind": "anomaly",
+    "format": "zero-plus-model-v1"
+  },
+  "blob_path": "D:\\yprojects\\Zero-Plus\\ai-service\\models_store\\org_a346ad5c-e97e-454c-a68e-e5dbb5a86296\\anomaly.joblib",
+  "blob_size": 1913982
+}

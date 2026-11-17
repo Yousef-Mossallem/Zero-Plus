@@ -337,6 +337,8 @@ export interface GatewaySecurityEvent {
   challengeType?: ChallengeTypeValue;
   challengePassed?: boolean;
   reputationEntryId?: string;
+  /** ربط الحدث بـ Run محاكاة (SecurityEvent.simulationRunId في Prisma) */
+  simulationRunId?: string;
 }
 
 export interface EventCreated {

@@ -1,0 +1,109 @@
+{
+  "page": {
+    "title": "Schutzrichtlinien",
+    "subtitle": "Passen Sie an, wie das Gateway Risikobewertungen in Sicherheitsentscheidungen umwandelt.",
+    "reload": "Neu laden",
+    "reset": "Auf Standard zurücksetzen",
+    "readOnly": "Ihre Rolle verfügt nur über Lesezugriff. Bitten Sie einen Eigentümer, Administrator oder Analysten um Anpassung."
+  },
+  "zones": {
+    "allow": "Erlauben",
+    "rateLimit": "Ratenbegrenzung",
+    "challenge": "Challenge",
+    "block": "Blockieren"
+  },
+  "sections": {
+    "thresholds": {
+      "title": "Risikoschwellenwerte",
+      "desc": "Der Risikowert einer Anfrage (0–100) bestimmt das Vorgehen."
+    },
+    "challenges": {
+      "title": "Challenges",
+      "desc": "Stille Überprüfung für verdächtige Besucher.",
+      "silentJs": "Stille JS-Challenge",
+      "silentJsHint": "Läuft unsichtbar im Browser, um einfache Bots zu filtern.",
+      "challengeAll": "Alle neuen Besucher herausfordern",
+      "challengeAllHint": "Jeder Erstbesucher durchläuft eine stille Prüfung und erhält eine Freigabe."
+    },
+    "ai": {
+      "title": "KI-Anomalieerkennung",
+      "desc": "Verhaltensmodell, das ein Signal zum Risikowert beisteuert.",
+      "useAi": "KI-Anomaliebewertung nutzen",
+      "useAiHint": "Wenn deaktiviert, basieren Entscheidungen nur auf Regeln und Reputation.",
+      "note": "Die KI-Bewertung ist nur ein Signal. Die finale Entscheidung trifft immer die Risiko-Engine anhand dieser Schwellenwerte."
+    },
+    "rateLimiting": {
+      "title": "Ratenbegrenzung",
+      "desc": "Anfragelimits pro IP. Das weiche Limit verlangsamt den Datenverkehr, das harte Limit stoppt ihn.",
+      "banOnHard": "Sperre bei hartem Limit",
+      "banOnHardHint": "Sperrt das Gerät, sobald das harte Limit überschritten wird."
+    },
+    "autoBans": {
+      "title": "Automatische Sperren",
+      "desc": "Wann wiederholte Angreifer gesperrt werden und für welche Dauer."
+    },
+    "capacity": {
+      "title": "Serverkapazität",
+      "desc": "Dient als Vorwarnung, bevor ein Ursprungsserver überlastet wird."
+    }
+  },
+  "fields": {
+    "allowMaxScore": { "label": "Erlauben bis", "hint": "Werte bis zu dieser Grenze werden direkt zugelassen." },
+    "rateLimitMaxScore": { "label": "Ratenbegrenzung bis", "hint": "Werte bis zu dieser Grenze unterliegen der Begrenzung." },
+    "challengeMaxScore": { "label": "Challenge bis", "hint": "Oberhalb dieses Werts wird die Anfrage blockiert." },
+    "passTokenTtlMinutes": { "label": "Freigabedauer", "hint": "Wie lange ein geprüfter Besucher freigeschaltet bleibt." },
+    "rateLimitRequests": { "label": "Weiches Limit — Anfragen", "hint": "Erlaubte Anfragen pro IP im Zeitfenster." },
+    "rateLimitWindowSec": { "label": "Weiches Limit — Zeitfenster", "hint": "Fensterdauer für das weiche Limit." },
+    "maxRequestsPerIp": { "label": "Hartes Limit — Anfragen", "hint": "Absolutes Maximum pro IP im Zeitfenster." },
+    "maxRequestsWindowSec": { "label": "Hartes Limit — Zeitfenster", "hint": "Fensterdauer für das harte Limit." },
+    "maxServerRps": { "label": "Serverkapazität überschreiben", "hint": "Leer lassen, um die automatisch ermittelte Kapazität zu verwenden." },
+    "capacityWarnPercent": { "label": "Kapazitätswarnung bei", "hint": "Benachrichtigen, wenn die Auslastung diesen Prozentsatz erreicht." },
+    "autoBanAfterFails": { "label": "Automatische Sperre nach Fehlern", "hint": "Fehlgeschlagene erweiterte Prüfungen bis zur Sperre." },
+    "temporaryBanMinutes": { "label": "Temporäre Sperrdauer", "hint": "Dauer einer automatischen temporären Sperre." },
+    "permanentBanScore": { "label": "Permanenter Sperrwert", "hint": "Reputationswert (1–10), der eine permanente Sperre auslöst." }
+  },
+  "defaultSuffix": "Standard: {{val}}",
+  "auto": "automatisch",
+  "units": {
+    "pts": "Pkt",
+    "min": "Min",
+    "req": "Anfr.",
+    "sec": "Sek",
+    "rps": "Anfr./s",
+    "percent": "%",
+    "fails": "Fehlschl.",
+    "score": "Punkte"
+  },
+  "validation": {
+    "between": "Ganze Zahl zwischen {{min}} und {{max}}",
+    "allowLeRate": "Muss ≤ dem Ratenbegrenzungswert sein",
+    "rateLeChallenge": "Muss ≤ dem Challenge-Wert sein",
+    "hardGeSoft": "Die Rate des harten Limits darf nicht niedriger sein als die des weichen Limits"
+  },
+  "bar": {
+    "unsaved_one": "{{count}} ungespeicherte Änderung",
+    "unsaved_other": "{{count}} ungespeicherte Änderungen",
+    "fixErrors": "Korrigieren Sie die markierten Felder zum Speichern",
+    "review": "Überprüfen und speichern, um Änderungen anzuwenden",
+    "discard": "Verwerfen",
+    "save": "Speichern"
+  },
+  "toast": {
+    "loadFailed": "Richtlinie konnte nicht geladen werden",
+    "forbidden": "Sie sind nicht berechtigt, Richtlinien zu bearbeiten",
+    "saveFailed": "Richtlinie konnte nicht gespeichert werden",
+    "resetFailed": "Zurücksetzen fehlgeschlagen",
+    "updated_one": "{{count}} Einstellung aktualisiert",
+    "updated_other": "{{count}} Einstellungen aktualisiert"
+  },
+  "resetModal": {
+    "title": "Alle Richtlinien zurücksetzen?",
+    "description": "Jede Einstellung wird auf ihren Standardwert zurückgesetzt. Dies wird sofort wirksam.",
+    "confirm": "Alles zurücksetzen"
+  },
+  "lastChanges": {
+    "title": "Zuletzt gespeicherte Änderungen",
+    "dismiss": "Schließen"
+  },
+  "updatedAt": "Richtlinie zuletzt aktualisiert {{time}}"
+}

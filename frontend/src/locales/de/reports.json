@@ -1,0 +1,107 @@
+{
+  "page": {
+    "title": "Berichte",
+    "subtitle": "KI-verfasste Sicherheitsberichte für Ihren Datenverkehr.",
+    "newReport": "Neuer Bericht",
+    "assistantTitle": "Sicherheitsassistent",
+    "assistantDesc": "Fragen Sie nach Angriffen, blockierten IPs oder Verkehrsmustern und erhalten Sie Antworten aus Ihren eigenen Daten.",
+    "startChat": "Chat starten",
+    "all": "Alle",
+    "allServers": "Alle Server",
+    "allTypes": "Alle Typen",
+    "clearFilters": "Filter zurücksetzen",
+    "empty": {
+      "title": "Keine Berichte gefunden",
+      "description": "Erstellen Sie Ihren ersten Bericht, um eine KI-Analyse Ihres Datenverkehrs zu erhalten."
+    }
+  },
+  "status": {
+    "PENDING": "Ausstehend",
+    "GENERATING": "Wird generiert",
+    "READY": "Bereit",
+    "FAILED": "Fehlgeschlagen"
+  },
+  "types": {
+    "PERIODIC": "Periodisch",
+    "INCIDENT": "Vorfall",
+    "ON_DEMAND": "Auf Abruf"
+  },
+  "modal": {
+    "title": "Neuer Bericht",
+    "description": "Der Bericht wird im Hintergrund generiert. Sie sehen die Statusaktualisierung live.",
+    "type": "Typ",
+    "server": "Server",
+    "optional": "optional",
+    "from": "Von",
+    "to": "Bis",
+    "reportTitle": "Berichtstitel",
+    "reportTitlePlaceholder": "z. B. Wöchentliches Sicherheitsaudit",
+    "eventId": "Sicherheitsereignis-ID",
+    "eventIdPlaceholder": "UUID aus der Ereignistabelle",
+    "eventIdHint": "Verknüpft den Bericht mit den spezifischen Vorfalldetails und verdächtigen Signalen.",
+    "generate": "Generieren",
+    "cancel": "Abbrechen",
+    "presets": {
+      "h24": "Letzte 24 Std.",
+      "d7": "Letzte 7 Tage",
+      "d30": "Letzte 30 Tage"
+    }
+  },
+  "drawer": {
+    "title": "Berichtsdetails",
+    "created": "erstellt am {{date}}",
+    "events": "Ereignisse",
+    "blocked": "Blockiert",
+    "tokens": "Tokens",
+    "waitingTitlePending": "In der Warteschlange…",
+    "waitingTitleGenerating": "Bericht wird generiert…",
+    "waitingDesc": "Diese Seite aktualisiert sich automatisch, sobald der Bericht fertig ist. Sie können sie sicher schließen.",
+    "failedTitle": "Generierung fehlgeschlagen",
+    "failedDesc": "Der Bericht konnte nicht generiert werden. Versuchen Sie es erneut.",
+    "executiveSummary": "Zusammenfassung",
+    "deleteReport": "Bericht löschen",
+    "deleteConfirmTitle": "Bericht löschen?",
+    "deleteConfirmDesc": "Sind Sie sicher, dass Sie \"{{title}}\" dauerhaft löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden."
+  },
+  "chat": {
+    "title": "Sicherheitsassistent",
+    "subtitle": "Fragen Sie nach Ihrem Datenverkehr, Angriffen und Richtlinien",
+    "useMyData": "Meine Daten verwenden",
+    "includeContext": "Kontext einschließen",
+    "useMyDataTip": "7-Tage-Statistiken an den Assistenten senden (keine Origin-IPs oder Geheimnisse)",
+    "clear": "Löschen",
+    "welcomeTitle": "Wie kann ich helfen?",
+    "welcomeDesc": "Wählen Sie eine Frage oder schreiben Sie Ihre eigene.",
+    "inputPlaceholder": "Fragen Sie nach Ihrem Datenverkehr, Angriffen, IPs oder Richtlinien…",
+    "send": "Senden",
+    "thinking": "Daten werden analysiert und Antwort wird generiert…",
+    "suggestions": {
+      "weekly": "Fasse die Angriffe zusammen, denen ich diese Woche ausgesetzt war",
+      "paths": "Welche Pfade werden am häufigsten angegriffen?",
+      "policies": "Welche Richtlinienänderungen empfiehlst du?"
+    }
+  },
+  "card": {
+    "events": "{{count}} Ereignisse",
+    "blockedRatio": "{{count}} blockiert · {{pct}}%"
+  },
+  "toast": {
+    "loadFailed": "Laden der Berichte fehlgeschlagen",
+    "deleted": "Dieser Bericht wurde gelöscht",
+    "requested": "Bericht angefordert",
+    "createFailed": "Bericht konnte nicht erstellt werden",
+    "deleteSuccess": "Bericht gelöscht",
+    "deleteFailed": "Bericht konnte nicht gelöscht werden",
+    "chatFailed": "Der Assistent konnte nicht antworten"
+  },
+  "validation": {
+    "startRequired": "Startdatum ist erforderlich",
+    "endRequired": "Enddatum ist erforderlich",
+    "endAfterStart": "Enddatum muss nach dem Startdatum liegen",
+    "maxDays": "Der Zeitraum darf 31 Tage nicht überschreiten",
+    "maxPast": "Darf nicht weiter als 365 Tage zurückliegen",
+    "titleLength": "Titel muss zwischen 3 und 200 Zeichen lang sein",
+    "eventIdInvalid": "Geben Sie eine gültige Ereignis-ID (UUID) ein",
+    "messageTooLong": "Die Nachricht ist länger als {{max}} Zeichen"
+  }
+}

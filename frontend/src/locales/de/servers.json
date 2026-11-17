@@ -1,0 +1,298 @@
+{
+  "status": {
+    "ONLINE": "Online",
+    "PENDING": "Einrichtung ausstehend",
+    "DEGRADED": "Eingeschränkt",
+    "OFFLINE": "Offline",
+    "MAINTENANCE": "Wartung"
+  },
+  "rec": {
+    "excellent": "Ausgezeichnet",
+    "good": "Gut",
+    "fair": "Ausreichend",
+    "poor": "Schlecht",
+    "down": "Ausgefallen"
+  },
+  "confidence": {
+    "high": "Hohe Zuverlässigkeit",
+    "medium": "Mittlere Zuverlässigkeit",
+    "low": "Geringe Zuverlässigkeit"
+  },
+  "mode": {
+    "PROTECT": "Schutz",
+    "MONITOR_ONLY": "Nur Überwachung"
+  },
+  "page": {
+    "title": "Geschützte Server",
+    "subtitle": "Vom Gateway geschützte Domains: DNS-Einrichtung, Zustand und gemessene Kapazität.",
+    "refresh": "Aktualisieren",
+    "add": "Server hinzufügen",
+    "attention_one": "<b>{{count}} Server</b> benötigt Aufmerksamkeit ({{offline}} offline · {{degraded}} eingeschränkt).",
+    "attention_other": "<b>{{count}} Server</b> benötigen Aufmerksamkeit ({{offline}} offline · {{degraded}} eingeschränkt).",
+    "showThem": "Anzeigen",
+    "fleet": {
+      "title": "Flottenzustand",
+      "onlineSuffix": "/ {{total}} online",
+      "clickHint": "Status anklicken zum Filtern",
+      "updated": "Aktualisiert {{time}}",
+      "all": "Alle",
+      "capacity": "Sichere Kapazität · diese Seite",
+      "measured": "Gemessen · diese Seite",
+      "awaiting": "Wartet auf Besitznachweis · diese Seite"
+    },
+    "filters": {
+      "search": "Nach Domain suchen…",
+      "allModes": "Alle Modi",
+      "anyDns": "Beliebiger DNS-Status",
+      "verified": "Besitz bestätigt",
+      "notVerified": "Nicht bestätigt",
+      "clear": "Zurücksetzen",
+      "clearFilters": "Filter zurücksetzen"
+    },
+    "sort": {
+      "newest": "Neueste zuerst",
+      "oldest": "Älteste zuerst",
+      "updated": "Zuletzt aktualisiert",
+      "domainAsc": "Domain A → Z",
+      "domainDesc": "Domain Z → A",
+      "status": "Status"
+    },
+    "empty": {
+      "filteredTitle": "Keine Server entsprechen diesen Filtern",
+      "filteredDesc": "Versuchen Sie, die Filter zu erweitern.",
+      "noneTitle": "Noch keine geschützten Server",
+      "noneManage": "Fügen Sie Ihre erste Domain hinzu, um deren Datenverkehr über das Gateway zu leiten.",
+      "noneViewer": "Ein Eigentümer oder Admin muss den ersten Server hinzufügen."
+    },
+    "hint": "Der Schutz beginnt, sobald DNS-Besitz und Routing bestätigt sind."
+  },
+  "toast": {
+    "loadFailed": "Server konnten nicht geladen werden",
+    "maintenanceFailed": "Wartungsmodus konnte nicht geändert werden",
+    "verifyFirst": "Domain-Besitz zuerst bestätigen",
+    "verifyFirstDesc": "Die Kapazität kann nur für bestätigte Domains gemessen werden.",
+    "measureStarted": "Messung gestartet",
+    "waitSeconds": "Bitte warten Sie {{s}} s, bevor Sie erneut messen",
+    "waitGeneric": "Bitte warten Sie, bevor Sie erneut messen",
+    "notFound": "Server nicht gefunden",
+    "notFoundDesc": "Er wurde möglicherweise gelöscht.",
+    "measureFailed": "Messung konnte nicht gestartet werden",
+    "measureSlow": "Die Messung dauert länger als erwartet",
+    "measureSlowDesc": "Noch kein Ergebnis. Schauen Sie in einer Minute erneut nach oder versuchen Sie es erneut.",
+    "measureDone": "Kapazitätsmessung abgeschlossen",
+    "autoMeasure": "Kapazitätsmessung gestartet",
+    "autoMeasureDesc": "Sie läuft im Hintergrund. Die Werte erscheinen auf der Serverkarte.",
+    "copied": "{{label}} kopiert",
+    "copyFailed": "Kopieren fehlgeschlagen",
+    "copyBlocked": "Ihr Browser hat den Zugriff auf die Zwischenablage blockiert",
+    "copyAria": "{{label}} kopieren"
+  },
+  "card": {
+    "httpsOrigin": "HTTPS-Origin",
+    "httpOrigin": "HTTP-Origin",
+    "safeCapacity": "Sichere Kapazität",
+    "max": "Max",
+    "p95": "p95",
+    "p99": "p99 unter Last",
+    "errors": "Fehler",
+    "measured": "Gemessen {{time}}",
+    "measuringTitle": "Kapazität wird gemessen…",
+    "measuringText": "Ergebnisse treffen meist innerhalb von etwa 2 Minuten ein.",
+    "notMeasured": "Noch nicht gemessen",
+    "needsOwnership": "Bestätigen Sie den Domain-Besitz, um die Messung zu starten.",
+    "clickMeasure": "Klicken Sie auf „Messen“, um einen Kapazitätstest zu starten.",
+    "ownerOnly": "Ein Eigentümer oder Admin kann einen Kapazitätstest starten.",
+    "currentLoad": "Aktuelle Last",
+    "avgResponse": "Ø Antwortzeit",
+    "checked": "Geprüft",
+    "setup": {
+      "ownership": "Besitz",
+      "routing": "Routing",
+      "origin": "Origin"
+    },
+    "details": "Details",
+    "dns": "DNS",
+    "finishSetup": "Einrichtung abschließen",
+    "remeasure": "Neu messen",
+    "measure": "Messen",
+    "endMaintenance": "Wartung beenden",
+    "maintenance": "Wartung",
+    "edit": "Bearbeiten",
+    "editAria": "Server bearbeiten",
+    "delete": "Löschen",
+    "deleteAria": "Server löschen"
+  },
+  "drawer": {
+    "fallbackTitle": "Server",
+    "verified": "Domain bestätigt",
+    "notVerified": "Nicht bestätigt",
+    "routingOk": "Routing OK",
+    "routingPending": "Routing ausstehend",
+    "safeCapacity": "Sichere Kapazität",
+    "measuring": "Wird gemessen…",
+    "measuringDesc": "Das dauert etwa zwei Minuten. Das Ergebnis erscheint hier von selbst.",
+    "notMeasured": "Noch nicht gemessen",
+    "noUsable": "Kein verwertbares Ergebnis der letzten Messung",
+    "sections": {
+      "measurement": "Messung",
+      "health": "Zustand"
+    },
+    "fields": {
+      "maxRate": "Max. dauerhafte Rate",
+      "p95": "Antwortzeit P95 (Leerlauf)",
+      "p99": "Antwortzeit P99 (unter Last)",
+      "errorRate": "Fehlerrate",
+      "confidence": "Konfidenz",
+      "lastMeasured": "Zuletzt gemessen",
+      "avgResponse": "Ø Antwortzeit",
+      "currentLoad": "Aktuelle Last",
+      "originReachable": "Origin erreichbar",
+      "httpsOrigin": "HTTPS-Origin",
+      "lastCheck": "Letzte Zustandsprüfung"
+    },
+    "yes": "Ja",
+    "no": "Nein",
+    "prove": {
+      "title": "Weisen Sie zuerst den Besitz dieser Domain nach",
+      "text": "Die Kapazität kann nur für bestätigte Domains gemessen werden.",
+      "open": "DNS-Einrichtung öffnen"
+    },
+    "remeasure": "Kapazität neu messen",
+    "retryIn": "Erneut versuchen in {{s}} s",
+    "unverifiedHint": "Bestätigen Sie den Domain-Besitz, um die Messung zu aktivieren.",
+    "maintenanceHint": "Die Messung ist pausiert, solange sich der Server in Wartung befindet.",
+    "ownerOnly": "Nur Eigentümer und Admins können die Kapazität neu messen."
+  },
+  "dns": {
+    "title": "DNS-Einrichtung",
+    "verifyOwnership": "Besitz verifizieren",
+    "verifyRouting": "Routing verifizieren",
+    "verifyAll": "Alles verifizieren",
+    "loadFailed": "Die DNS-Anweisungen für diesen Server konnten nicht geladen werden.",
+    "ownershipVerified": "Besitz bestätigt",
+    "ownershipPending": "Besitz ausstehend",
+    "routingVerified": "Routing bestätigt",
+    "routingPending": "Routing ausstehend",
+    "active": "Ihre Domain ist verifiziert und läuft über das Gateway. Die Kapazitätsmessung läuft im Hintergrund, die Werte erscheinen in Kürze auf der Serverkarte.",
+    "step1": {
+      "badge": "Schritt 1",
+      "title": "Domain-Besitz nachweisen",
+      "text": "Fügen Sie diesen TXT-Eintrag bei Ihrem DNS-Anbieter hinzu, warten Sie auf die Verbreitung und klicken Sie dann auf „Besitz verifizieren“. Behalten Sie ihn nach der Verifizierung bei."
+    },
+    "step2": {
+      "badge": "Schritt 2",
+      "title": "Domain zum Gateway leiten"
+    },
+    "noRouting": "Das Gateway-Routing ist auf der Plattform noch nicht konfiguriert, daher gibt es keine Routing-Einträge. Bitte wenden Sie sich an den Support.",
+    "routingMulti": "Wählen Sie EINE der folgenden Optionen (nicht beide). Verwenden Sie CNAME für Subdomains und A für Root-Domains.",
+    "routingSingle": "Fügen Sie diesen Eintrag hinzu und klicken Sie dann auf „Routing verifizieren“.",
+    "option": "Option {{n}}",
+    "how": "So funktioniert es",
+    "latest": "Letzte Prüfung",
+    "ownershipTxt": "Besitz (TXT)",
+    "routingCheck": "Routing (CNAME / A)",
+    "expected": "Erwartet: ",
+    "found": "Gefunden: ",
+    "nothingFound": "Nichts gefunden",
+    "cooldown": "Zu viele Prüfungen. Sie können in {{s}} s erneut verifizieren.",
+    "ownerOnly": "Nur Eigentümer und Admins können die Verifizierung ausführen.",
+    "fields": {
+      "type": "Typ",
+      "name": "Name",
+      "value": "Wert",
+      "ttl": "TTL"
+    },
+    "toast": {
+      "loadFailed": "DNS-Anweisungen konnten nicht geladen werden",
+      "complete": "Verifizierung abgeschlossen",
+      "result": "Verifizierungsergebnis",
+      "failed": "Verifizierung fehlgeschlagen"
+    }
+  },
+  "delete": {
+    "title": "Server löschen",
+    "description": "Dadurch wird der Schutz für die Domain beendet und ihre Sicherheitsereignisse werden dauerhaft gelöscht.",
+    "confirm": "Endgültig löschen",
+    "origin": "Origin {{addr}}",
+    "warning": "Wenn Ihr DNS noch auf das Gateway zeigt, erreichen Besucher Ihre Website nach dem Löschen nicht mehr. Leiten Sie die Domain im Zuge dieser Änderung wieder auf Ihren Origin-Server um (oder entfernen Sie die Gateway-Einträge).",
+    "typeToConfirm": "Geben Sie „{{domain}}“ zur Bestätigung ein",
+    "toast": {
+      "deleted": "Server gelöscht",
+      "deletedDesc": "{{domain}} · {{n}} zugehörige Ereignisse entfernt",
+      "already": "Server bereits gelöscht",
+      "failed": "Server konnte nicht gelöscht werden"
+    }
+  },
+  "form": {
+    "addTitle": "Geschützten Server hinzufügen",
+    "editTitle": "Server bearbeiten",
+    "addDesc": "Der Datenverkehr dieser Domain läuft über das Zero Plus Gateway.",
+    "editDesc": "Das Ändern der Domain erfordert eine erneute Verifizierung des DNS-Besitzes.",
+    "save": "Änderungen speichern",
+    "add": "Server hinzufügen",
+    "domain": {
+      "label": "Domain",
+      "hint": "z. B. shop.example.com — ohne http:// und ohne Port"
+    },
+    "originIp": {
+      "label": "Origin-IP",
+      "hint": "IPv4-Adresse des echten Servers"
+    },
+    "port": "Port",
+    "mode": {
+      "label": "Modus",
+      "protect": {
+        "title": "Schutz",
+        "hint": "Blockieren und Ratenbegrenzung"
+      },
+      "monitor": {
+        "title": "Nur Überwachung",
+        "hint": "Entscheidungen protokollieren, nichts durchsetzen"
+      }
+    },
+    "tip": "Tipp: Starten Sie mit „Nur Überwachung“, um Entscheidungen zu prüfen, und wechseln Sie dann zu „Schutz“.",
+    "https": {
+      "title": "Origin nutzt HTTPS",
+      "hint": "Deaktivieren, wenn der Origin nur unverschlüsseltes HTTP spricht."
+    },
+    "notice": {
+      "domain": "Es wird ein neues Verifizierungstoken ausgestellt, und der DNS-Besitz muss erneut bestätigt werden, bevor der Schutz für die neue Domain funktioniert.",
+      "origin": "Das Ändern des Origins setzt Erreichbarkeit, Antwortzeiten und Kapazitätswerte zurück. Die Kapazität wird für den neuen Origin erneut gemessen.",
+      "ssl": "Das Ändern der HTTPS-Einstellung löst eine neue Messung aus."
+    },
+    "toast": {
+      "nothing": "Nichts zu aktualisieren",
+      "noChange": "Es wurden keine Felder geändert",
+      "same": "Die Werte entsprechen den aktuellen",
+      "updated": "Server aktualisiert",
+      "dnsReset": "DNS-Verifizierung wurde zurückgesetzt",
+      "dnsResetDesc": "Fügen Sie den neuen TXT-Eintrag hinzu und verifizieren Sie erneut.",
+      "originReset": "Origin-Prüfungen wurden zurückgesetzt",
+      "originResetDesc": "Zustands- und Kapazitätswerte werden erneut gemessen.",
+      "added": "Server hinzugefügt",
+      "addedDesc": "Folgen Sie den DNS-Schritten, um den Schutz zu aktivieren.",
+      "updateFailed": "Server konnte nicht aktualisiert werden",
+      "addFailed": "Server konnte nicht hinzugefügt werden"
+    }
+  },
+  "validation": {
+    "domain": {
+      "required": "Domain ist erforderlich",
+      "noProtocol": "Geben Sie nur die Domain ein, ohne http:// oder https://",
+      "noPath": "Geben Sie nur die Domain ein (keine Pfade, Leerzeichen oder Sonderzeichen)",
+      "noPathOrPort": "Geben Sie nur die Domain ein (kein Pfad, Port oder Leerzeichen)",
+      "needsExtension": "Die Domain braucht eine Endung, z. B. shop.example.com",
+      "wildcard": "Wildcard-Domains werden nicht unterstützt. Fügen Sie jede Subdomain einzeln hinzu",
+      "hasPort": "Geben Sie keinen Port in der Domain an. Verwenden Sie das Port-Feld"
+    },
+    "originIp": {
+      "required": "Origin-IP ist erforderlich",
+      "invalid": "Geben Sie eine gültige IPv4-Adresse ein",
+      "ipv6": "IPv6 wird noch nicht unterstützt. Verwenden Sie eine IPv4-Adresse"
+    },
+    "originPort": {
+      "range": "Der Port muss zwischen 1 und 65535 liegen",
+      "reserved": "Dieser Port ist für einen Nicht-Web-Dienst reserviert und kann nicht als Origin verwendet werden"
+    }
+  }
+}

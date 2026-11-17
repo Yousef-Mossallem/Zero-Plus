@@ -1,0 +1,118 @@
+{
+  "page": {
+    "title": "安全事件",
+    "subtitle": "安全网关检测拦截的每一个请求，附带详细判定决策与归因。",
+    "live": "实时",
+    "liveLabel": "每 10 秒自动刷新",
+    "refresh": "刷新"
+  },
+  "stats": {
+    "total": "事件总数",
+    "matching": "符合当前筛选条件",
+    "allTime": "全量时间",
+    "avgRisk": "平均风险分",
+    "blocked": "已拦截",
+    "challenged": "已质询",
+    "share": "占全部事件的 {{pct}}%"
+  },
+  "decision": {
+    "all": "全部",
+    "ALLOW": "放行",
+    "MONITOR": "监控",
+    "RATE_LIMIT": "限流",
+    "CHALLENGE": "质询",
+    "BLOCK": "拦截"
+  },
+  "filters": {
+    "search": "搜索 IP、请求路径、User Agent、请求 ID 或归因原因…",
+    "allServers": "全部服务器",
+    "more": "更多筛选",
+    "clear": "清除",
+    "method": "请求方法",
+    "ipType": "IP 类型",
+    "challenge": "质询状态",
+    "any": "不限",
+    "challenged": "已质询",
+    "notChallenged": "未质询",
+    "minRisk": "最低风险分",
+    "maxRisk": "最高风险分",
+    "range": "0–100",
+    "from": "起始时间",
+    "to": "结束时间",
+    "repFilter": "按设备信誉记录筛选",
+    "removeRepFilter": "移除信誉筛选条件",
+    "clearFilters": "清空所有筛选"
+  },
+  "ipTypes": {
+    "RESIDENTIAL": "家庭宽带",
+    "MOBILE": "蜂窝移动网络",
+    "DATACENTER": "数据中心 / 云机房",
+    "VPN_PROXY": "VPN / 代理",
+    "TOR": "Tor 匿名节点",
+    "UNKNOWN": "未知类型"
+  },
+  "table": {
+    "columns": {
+      "time": "时间",
+      "ip": "IP 地址",
+      "request": "请求详情",
+      "server": "受访服务器",
+      "risk": "风险评分",
+      "decision": "防御决策",
+      "challenge": "人机验证"
+    },
+    "passed": "通过",
+    "failed": "未通过",
+    "pending": "等待验证",
+    "empty": {
+      "title": "未找到匹配的安全事件",
+      "description": "当前筛选条件下无记录。一旦安全网关开始处理网络流量，事件将实时呈现在此处。"
+    }
+  },
+  "toast": {
+    "loadFailed": "加载安全事件失败",
+    "copied": "已成功复制 {{label}}",
+    "copyFailed": "复制失败",
+    "copyBlocked": "浏览器拒绝了剪贴板访问权限",
+    "detailsFailed": "加载事件详情失败"
+  },
+  "drawer": {
+    "title": "安全事件详情",
+    "sections": {
+      "request": "请求元数据",
+      "network": "网络与地理分布",
+      "detection": "检测判定",
+      "signals": "防御特征与归因信号",
+      "reputation": "关联设备信誉"
+    },
+    "fields": {
+      "ipAddress": "IP 地址",
+      "method": "请求方法",
+      "path": "请求路径",
+      "server": "目标服务器",
+      "requestId": "请求标识 (Request ID)",
+      "referer": "来源页面 (Referer)",
+      "userAgent": "客户端标识 (User Agent)",
+      "country": "归属国家/地区",
+      "asn": "网络自治域 (ASN)",
+      "ipType": "IP 分类",
+      "stage": "命中防御阶段",
+      "processing": "处理时延",
+      "anomaly": "AI 异常指数",
+      "confidence": "AI 置信度",
+      "challenge": "质询结果",
+      "notChallenged": "未触发质询"
+    },
+    "copyIp": "复制 IP",
+    "rep": {
+      "score": "信誉分 {{score}}/10 · {{type}}",
+      "notBanned": "未被封禁",
+      "open": "在信誉库中打开",
+      "none": "该事件暂无关联的设备信誉档案。"
+    },
+    "banStatus": {
+      "TEMPORARY": "临时封禁",
+      "PERMANENT": "永久封禁"
+    }
+  }
+}

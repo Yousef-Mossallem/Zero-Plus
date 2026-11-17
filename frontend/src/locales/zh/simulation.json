@@ -1,0 +1,102 @@
+{
+  "page": {
+    "title": "模拟实验室",
+    "subtitle": "针对受保护服务器模拟网络流量，实时观察防御决策与策略执行效果。",
+    "start": "开始模拟",
+    "stop": "停止运行",
+    "starting": "正在启动…",
+    "stopping": "正在停止…",
+    "targetServer": "目标服务器",
+    "selectServer": "选择服务器…",
+    "pattern": "流量模式",
+    "targetRps": "目标 RPS",
+    "durationSec": "持续时间（秒）",
+    "advancedSettings": "高级选项",
+    "resetDefaults": "恢复默认值",
+    "kpis": {
+      "sent": "总请求量",
+      "allowed": "已放行",
+      "challenged": "已验证",
+      "rateLimited": "已限流",
+      "blocked": "已拦截",
+      "blockedShare": "拦截比例",
+      "approxRps": "当前 RPS",
+      "avgLatency": "平均延迟"
+    },
+    "charts": {
+      "trafficDecisions": "决策时间线",
+      "decisionBreakdown": "决策分布占比",
+      "emptyTimeline": "暂无记录数据"
+    },
+    "events": {
+      "title": "模拟事件",
+      "subtitle": "当前模拟运行期间产生的安全事件"
+    },
+    "history": {
+      "title": "历史运行记录",
+      "subtitle": "过去的模拟实验与测试结果",
+      "empty": "暂无模拟运行记录"
+    }
+  },
+  "patterns": {
+    "realistic_mix": {
+      "label": "真实混合流量",
+      "desc": "自然流量混合少量异常行为。（默认推荐）"
+    },
+    "legit_only": {
+      "label": "仅正常访客",
+      "desc": "全部为合法的普通浏览行为流量。"
+    },
+    "login_focus": {
+      "label": "登录端点聚焦",
+      "desc": "针对 /login 及敏感鉴权接口的集中请求。"
+    },
+    "rate_stress": {
+      "label": "速率压力测试",
+      "desc": "高并发流量，用于测试限流阈值策略。"
+    },
+    "bot_wave": {
+      "label": "爬虫波浪冲击",
+      "desc": "模拟自动化抓取工具特征、无头浏览器与 JS 验证失败。"
+    },
+    "ban_recovery": {
+      "label": "封禁与恢复测试",
+      "desc": "突发侵略性攻击触发临时封禁，随后观察恢复过程。"
+    },
+    "full_pipeline": {
+      "label": "全链路遍历",
+      "desc": "依次执行所有预设的访客画像模式。"
+    },
+    "custom": {
+      "label": "自定义权重",
+      "desc": "手动微调各项画像的具体占比权重。"
+    }
+  },
+  "personas": {
+    "legit_ok": "正常合规访客",
+    "legit_sensitive": "访问敏感路径的正常访客",
+    "rate_soft": "接近柔性限流阈值的请求",
+    "rate_hard": "突破刚性限流阈值的请求",
+    "bot_ua": "脚本或爬虫 User-Agent 特征",
+    "fail_js": "未能通过静默 JS 验证的客户端",
+    "pass_js": "成功通过 JS 验证的客户端",
+    "bad_ip": "已知恶意 IP 或 AI 高异常评分"
+  },
+  "status": {
+    "PENDING": "等待中",
+    "RUNNING": "运行中",
+    "COMPLETED": "已完成",
+    "STOPPED": "已停止",
+    "FAILED": "失败"
+  },
+  "toast": {
+    "started": "模拟已启动",
+    "startedDesc": "流量生成 Worker 正在持续发送请求。",
+    "completed": "模拟已完成",
+    "completedDesc": "最终测试结果已生成。",
+    "stopped": "模拟已终止",
+    "failed": "模拟运行失败",
+    "startFailed": "启动模拟失败",
+    "stopFailed": "停止模拟失败"
+  }
+}

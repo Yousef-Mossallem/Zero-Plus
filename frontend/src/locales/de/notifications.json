@@ -1,0 +1,63 @@
+{
+  "page": {
+    "title": "Benachrichtigungen",
+    "subtitle": "Echtzeit-Sicherheitswarnungen und Aktivitäts-Feed.",
+    "markAllRead": "Alle als gelesen markieren",
+    "markedAll": "Alle Benachrichtigungen als gelesen markiert",
+    "refresh": "Aktualisieren",
+    "sound": "Benachrichtigungston",
+    "soundOn": "Ton an",
+    "soundOff": "Ton stummgeschaltet",
+    "search": "Benachrichtigungen durchsuchen…",
+    "allTypes": "Alle Benachrichtigungstypen",
+    "unreadOnly": "Nur ungelesene",
+    "clearFilters": "Filter löschen",
+    "emptyTitle": "Keine Benachrichtigungen entsprechen diesen Filtern",
+    "emptyTitleNone": "Noch keine Benachrichtigungen",
+    "emptyDesc": "Versuchen Sie, die Filter anzupassen.",
+    "emptyDescNone": "Sicherheitswarnungen und Systemmeldungen werden hier in Echtzeit angezeigt."
+  },
+  "days": {
+    "today": "Heute",
+    "yesterday": "Gestern"
+  },
+  "status": {
+    "new": "Neu",
+    "markRead": "Als gelesen markieren"
+  },
+  "types": {
+    "DDOS_START": "Angriff / Verkehrsspitze",
+    "NEW_BLOCK": "Neue Sperre",
+    "CRITICAL_REPUTATION": "Kritische Reputation",
+    "SERVER_CAPACITY_WARNING": "Kapazitätswarnung",
+    "SERVER_RECOVERY": "Server-Wiederherstellung",
+    "POLICY_CHANGED": "Richtlinie geändert",
+    "REPORT_READY": "Bericht bereit",
+    "SYSTEM": "System"
+  },
+  "severities": {
+    "1": "Info",
+    "2": "Hinweis",
+    "3": "Wichtig",
+    "4": "Kritisch",
+    "5": "Notfall"
+  },
+  "connection": {
+    "connected": "Live",
+    "connectedHint": "Echtzeit-Aktualisierungen sind aktiv",
+    "connecting": "Verbindung wird aufgebaut…",
+    "connectingHint": "Server wird kontaktiert",
+    "disconnected": "Offline",
+    "disconnectedHint": "Automatische Wiederverbindung",
+    "unauthorized": "Abgemeldet",
+    "unauthorizedHint": "Sitzung vom Socket abgelehnt",
+    "idle": "Inaktiv",
+    "idleHint": "Nicht verbunden"
+  },
+  "filters": {
+    "anySeverity": "Beliebige Dringlichkeit",
+    "sev2": "Hinweis+",
+    "sev3": "Wichtig+",
+    "sev4": "Kritisch+"
+  }
+}

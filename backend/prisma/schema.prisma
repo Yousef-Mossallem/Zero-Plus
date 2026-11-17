@@ -8,6 +8,7 @@
 // Reports: نوع التقرير + ربط بسيرفر + بيانات استهلاك Gemini
 // Simulation Lab: أنماط كاملة + options + ربط Events بالـ Run
 // Indexing: مزامنة الحظر للـ Gateway + فلاتر الداشبورد + الأحداث
+// Passkey Invite: دعوات إضافة جهاز جديد عبر QR (مدتها 5 دقائق)
 // ==================================================================
 
 generator client {
@@ -208,6 +209,9 @@ model User {
   // المفاتيح العامة المسجّلة (Passkeys)
   passkeys PasskeyCredential[]
 
+  // دعوات إضافة جهاز جديد (QR)
+  passkeyInvites PasskeyInvite[]
+
   // Runs بدأها المستخدم (اختياري)
   simulationRunsStarted SimulationRun[] @relation("SimulationStartedBy")
 
@@ -256,6 +260,38 @@ model PasskeyCredential {
 
   @@index([userId])
   @@index([credentialId])
+}
+
+// ==================================================================
+// PASSKEY INVITE — دعوة إضافة جهاز جديد عبر QR
+// التوكن صالح لمدة 5 دقائق ويُستخدم مرة واحدة فقط
+// ==================================================================
+
+model PasskeyInvite {
+  id String @id @default(uuid())
+
+  // التوكن اللي بيتحط في الـ QR / الرابط (unique)
+  token String @unique
+
+  // الـ challenge بتاع WebAuthn (اختياري — ممكن يتخزن في Redis كمان)
+  challenge String?
+
+  // وقت انتهاء الصلاحية (عادةً الآن + 5 دقائق)
+  expiresAt DateTime
+
+  // وقت الاستخدام (null = لسه متستخدمش)
+  usedAt DateTime?
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([token])
+  @@index([userId])
+  @@index([expiresAt])
+  @@index([usedAt])
+  @@index([userId, expiresAt])
 }
 
 // ==================================================================

@@ -8,6 +8,7 @@
 import { useMemo, useState } from 'react'
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { BarChart3 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 import { Card, EmptyState, ErrorState, Skeleton } from '../../components/ui/kit'
 import type { DashboardRange, TimelineData } from '../../services/dashboardService'
@@ -16,12 +17,12 @@ import type { Section } from './useDashboardData'
 
 type SeriesKey = 'total' | 'blocked' | 'challenged' | 'rateLimited' | 'allowed'
 
-const SERIES: Array<{ key: SeriesKey; label: string; color: string }> = [
-  { key: 'total', label: 'Total', color: '#22d3ee' },
-  { key: 'allowed', label: 'Allowed', color: '#34d399' },
-  { key: 'blocked', label: 'Blocked', color: '#fb7185' },
-  { key: 'challenged', label: 'Challenged', color: '#818cf8' },
-  { key: 'rateLimited', label: 'Rate limited', color: '#fbbf24' },
+const SERIES_CONFIG: Array<{ key: SeriesKey; color: string }> = [
+  { key: 'total', color: '#22d3ee' },
+  { key: 'allowed', color: '#34d399' },
+  { key: 'blocked', color: '#fb7185' },
+  { key: 'challenged', color: '#818cf8' },
+  { key: 'rateLimited', color: '#fbbf24' },
 ]
 
 /** 1h / 24h = ساعة:دقيقة • 7d / 30d = يوم وشهر */
@@ -42,6 +43,7 @@ export default function TimelineChart({
   range: DashboardRange
   onRetry: () => void
 }) {
+  const { t } = useTranslation('dashboard')
   const [active, setActive] = useState<Record<SeriesKey, boolean>>({
     total: true,
     allowed: false,
@@ -50,6 +52,15 @@ export default function TimelineChart({
     rateLimited: false,
   })
 
+  const series = useMemo(
+    () =>
+      SERIES_CONFIG.map((s) => ({
+        ...s,
+        label: t(`timeline.series.${s.key}` as never),
+      })),
+    [t],
+  )
+
   const points = section.data?.points ?? []
   const hasData = useMemo(() => points.some((p) => p.total > 0), [points])
 
@@ -57,13 +68,13 @@ export default function TimelineChart({
     <Card className="p-5" delay={100}>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h3 className="text-sm font-semibold text-white">Traffic over time</h3>
+          <h3 className="text-sm font-semibold text-white">{t('timeline.title')}</h3>
           <p className="text-xs text-slate-500">
             {section.data ? `Grouped every ${section.data.interval}` : 'Requests per interval'}
           </p>
         </div>
         <div className="flex flex-wrap gap-1.5">
-          {SERIES.map((s) => (
+          {series.map((s) => (
             <button
               key={s.key}
               type="button"
@@ -85,13 +96,13 @@ export default function TimelineChart({
       ) : section.error && !section.data ? (
         <ErrorState message={section.error} onRetry={onRetry} />
       ) : !hasData ? (
-        <EmptyState icon={BarChart3} title="No traffic in this period" description="Try a longer range or another server." />
+        <EmptyState icon={BarChart3} title={t('timeline.noData')} description="" />
       ) : (
         <div className={cn('h-72 w-full transition-opacity', section.loading && 'opacity-60')}>
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={points} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
               <defs>
-                {SERIES.map((s) => (
+                {series.map((s) => (
                   <linearGradient key={s.key} id={`zp-grad-${s.key}`} x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor={s.color} stopOpacity={0.35} />
                     <stop offset="100%" stopColor={s.color} stopOpacity={0} />
@@ -113,7 +124,7 @@ export default function TimelineChart({
                 labelStyle={{ color: '#94a3b8' }}
                 labelFormatter={(v) => new Date(String(v)).toLocaleString('en-GB')}
               />
-              {SERIES.filter((s) => active[s.key]).map((s) => (
+              {series.filter((s) => active[s.key]).map((s) => (
                 <Area
                   key={s.key}
                   type="monotone"

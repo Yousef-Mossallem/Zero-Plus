@@ -1,0 +1,107 @@
+{
+  "page": {
+    "title": "安全报告",
+    "subtitle": "针对您的流量由人工智能编写的安全报告。",
+    "newReport": "新建报告",
+    "assistantTitle": "安全助手",
+    "assistantDesc": "询问关于攻击事件、受阻IP或流量特征的问题，并根据您的实际数据获取解答。",
+    "startChat": "开始对话",
+    "all": "全部",
+    "allServers": "所有服务器",
+    "allTypes": "所有类型",
+    "clearFilters": "清除筛选",
+    "empty": {
+      "title": "未找到报告",
+      "description": "创建您的首份报告以获取流量的人工智能分析。"
+    }
+  },
+  "status": {
+    "PENDING": "等待中",
+    "GENERATING": "生成中",
+    "READY": "已就绪",
+    "FAILED": "失败"
+  },
+  "types": {
+    "PERIODIC": "定期报告",
+    "INCIDENT": "事件分析",
+    "ON_DEMAND": "按需生成"
+  },
+  "modal": {
+    "title": "新建报告",
+    "description": "报告将在后台生成。您可以实时查看状态更新。",
+    "type": "类型",
+    "server": "服务器",
+    "optional": "可选",
+    "from": "起始时间",
+    "to": "结束时间",
+    "reportTitle": "报告标题",
+    "reportTitlePlaceholder": "例如：每周安全审计报告",
+    "eventId": "安全事件 ID",
+    "eventIdPlaceholder": "事件表格中的 UUID",
+    "eventIdHint": "将报告与特定事件详情及可疑信号进行关联。",
+    "generate": "生成报告",
+    "cancel": "取消",
+    "presets": {
+      "h24": "最近 24 小时",
+      "d7": "最近 7 天",
+      "d30": "最近 30 天"
+    }
+  },
+  "drawer": {
+    "title": "报告详情",
+    "created": "创建于 {{date}}",
+    "events": "事件数",
+    "blocked": "已拦截",
+    "tokens": "Token 消耗",
+    "waitingTitlePending": "排队等待中…",
+    "waitingTitleGenerating": "正在生成报告…",
+    "waitingDesc": "报告生成完成后本页面将自动刷新，您可以安全关闭此抽屉。",
+    "failedTitle": "生成失败",
+    "failedDesc": "未能成功生成报告，请稍后重试。",
+    "executiveSummary": "执行摘要",
+    "deleteReport": "删除报告",
+    "deleteConfirmTitle": "删除报告？",
+    "deleteConfirmDesc": "确定要永久删除“{{title}}”吗？此操作不可逆。"
+  },
+  "chat": {
+    "title": "安全助手",
+    "subtitle": "咨询流量态势、攻击分析与防护策略",
+    "useMyData": "使用业务数据",
+    "includeContext": "包含上下文",
+    "useMyDataTip": "向助手发送近 7 天统计信息（不包含源站 IP 或机密密钥）",
+    "clear": "清空记录",
+    "welcomeTitle": "有什么可以帮您？",
+    "welcomeDesc": "选择常见问题或输入您的问题。",
+    "inputPlaceholder": "询问任何有关流量、攻击、IP 或策略的问题…",
+    "send": "发送",
+    "thinking": "正在分析数据并生成回答…",
+    "suggestions": {
+      "weekly": "总结本周遭遇的攻击情况",
+      "paths": "哪些路径被攻击最频繁？",
+      "policies": "您建议对防护策略进行哪些调整？"
+    }
+  },
+  "card": {
+    "events": "{{count}} 次事件",
+    "blockedRatio": "已拦截 {{count}} · {{pct}}%"
+  },
+  "toast": {
+    "loadFailed": "加载安全报告失败",
+    "deleted": "该报告已被删除",
+    "requested": "已提交报告生成请求",
+    "createFailed": "创建报告失败",
+    "deleteSuccess": "报告已删除",
+    "deleteFailed": "删除报告失败",
+    "chatFailed": "安全助手未能响应"
+  },
+  "validation": {
+    "startRequired": "起始日期为必填项",
+    "endRequired": "结束日期为必填项",
+    "endAfterStart": "结束日期必须晚于起始日期",
+    "maxDays": "统计周期不能超过 31 天",
+    "maxPast": "不可查询超过 365 天前的数据",
+    "titleLength": "标题长度需在 3 至 200 个字符之间",
+    "eventIdInvalid": "请输入合法的事件 ID (UUID)",
+    "messageTooLong": "消息长度超过限制（最多 {{max}} 字符）"
+  }
+}

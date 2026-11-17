@@ -1,0 +1,109 @@
+{
+  "page": {
+    "title": "Protection Policies",
+    "subtitle": "Tune how the Gateway turns a risk score into a decision for your organization.",
+    "reload": "Reload",
+    "reset": "Reset to defaults",
+    "readOnly": "Your role has read-only access. Ask an Owner, Admin or Analyst to change these settings."
+  },
+  "zones": {
+    "allow": "Allow",
+    "rateLimit": "Rate limit",
+    "challenge": "Challenge",
+    "block": "Block"
+  },
+  "sections": {
+    "thresholds": {
+      "title": "Risk thresholds",
+      "desc": "A request's risk score (0–100) decides what happens to it."
+    },
+    "challenges": {
+      "title": "Challenges",
+      "desc": "Silent verification for visitors the Gateway is unsure about.",
+      "silentJs": "Silent JS challenge",
+      "silentJsHint": "Runs invisibly in the browser to filter simple bots.",
+      "challengeAll": "Challenge all new visitors",
+      "challengeAllHint": "Every first-time visitor gets one silent check, then a clearance."
+    },
+    "ai": {
+      "title": "AI anomaly detection",
+      "desc": "Behavioral model that adds a signal to the risk score.",
+      "useAi": "Use AI anomaly score",
+      "useAiHint": "When off, decisions rely on rules and reputation only.",
+      "note": "The AI score is only one signal. The final decision always comes from the risk engine and these thresholds."
+    },
+    "rateLimiting": {
+      "title": "Rate limiting",
+      "desc": "Per-IP request limits. The soft limit slows traffic, the hard limit caps it.",
+      "banOnHard": "Ban on hard limit",
+      "banOnHardHint": "Ban the device when it exceeds the hard limit."
+    },
+    "autoBans": {
+      "title": "Automatic bans",
+      "desc": "When repeat offenders are banned, and for how long."
+    },
+    "capacity": {
+      "title": "Server capacity",
+      "desc": "Used to warn you before an origin server is overwhelmed."
+    }
+  },
+  "fields": {
+    "allowMaxScore": { "label": "Allow up to", "hint": "Scores up to this value are allowed." },
+    "rateLimitMaxScore": { "label": "Rate-limit up to", "hint": "Scores up to this value are rate limited." },
+    "challengeMaxScore": { "label": "Challenge up to", "hint": "Above this value the request is blocked." },
+    "passTokenTtlMinutes": { "label": "Clearance lifetime", "hint": "How long a visitor who passed the challenge stays cleared." },
+    "rateLimitRequests": { "label": "Soft limit — requests", "hint": "Requests allowed per IP inside the window." },
+    "rateLimitWindowSec": { "label": "Soft limit — window", "hint": "Window length for the soft limit." },
+    "maxRequestsPerIp": { "label": "Hard limit — requests", "hint": "Absolute maximum per IP inside the window." },
+    "maxRequestsWindowSec": { "label": "Hard limit — window", "hint": "Window length for the hard limit." },
+    "maxServerRps": { "label": "Server capacity override", "hint": "Leave empty to use the capacity detected for each server." },
+    "capacityWarnPercent": { "label": "Capacity warning at", "hint": "Notify when server load reaches this percentage." },
+    "autoBanAfterFails": { "label": "Auto-ban after failures", "hint": "Failed advanced checks before a device is banned." },
+    "temporaryBanMinutes": { "label": "Temporary ban length", "hint": "Duration of an automatic temporary ban." },
+    "permanentBanScore": { "label": "Permanent ban score", "hint": "Reputation score (1–10) that triggers a permanent ban." }
+  },
+  "defaultSuffix": "Default: {{val}}",
+  "auto": "auto",
+  "units": {
+    "pts": "pts",
+    "min": "min",
+    "req": "req",
+    "sec": "sec",
+    "rps": "req/s",
+    "percent": "%",
+    "fails": "fails",
+    "score": "score"
+  },
+  "validation": {
+    "between": "Whole number between {{min}} and {{max}}",
+    "allowLeRate": "Must be ≤ the rate-limit threshold",
+    "rateLeChallenge": "Must be ≤ the challenge threshold",
+    "hardGeSoft": "Hard limit rate must not be lower than the soft limit rate"
+  },
+  "bar": {
+    "unsaved_one": "{{count}} unsaved change",
+    "unsaved_other": "{{count}} unsaved changes",
+    "fixErrors": "Fix the highlighted fields to save",
+    "review": "Review and save to apply",
+    "discard": "Discard",
+    "save": "Save"
+  },
+  "toast": {
+    "loadFailed": "Failed to load policy",
+    "forbidden": "You are not allowed to edit policies",
+    "saveFailed": "Could not save policy",
+    "resetFailed": "Reset failed",
+    "updated_one": "{{count}} setting updated",
+    "updated_other": "{{count}} settings updated"
+  },
+  "resetModal": {
+    "title": "Reset all policies?",
+    "description": "Every setting returns to its default value. This applies immediately to the Gateway.",
+    "confirm": "Reset everything"
+  },
+  "lastChanges": {
+    "title": "Last saved changes",
+    "dismiss": "Dismiss"
+  },
+  "updatedAt": "Policy last updated {{time}}"
+}

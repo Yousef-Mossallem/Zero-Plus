@@ -1,0 +1,165 @@
+{
+  "home": {
+    "hero": {
+      "titleLine": "Protect your site from DDoS",
+      "titleHighlight": "with a guard that checks every visitor by reputation",
+      "description": "Zero Plus sits as a reverse proxy between visitors and your real server. It does not treat everyone the same: it builds memory of devices it has seen and decides quickly who passes straight through and who needs a deeper check.",
+      "learnMore": "Learn about the project",
+      "ctaStart": "Start protection now",
+      "ctaDashboard": "Go to Dashboard"
+    },
+    "demo": {
+      "title": "Engine decisions (example)",
+      "active": "Protection Active",
+      "allow": "Allow",
+      "block": "Block",
+      "rows": {
+        "newVisitor": "New visitor · JS Challenge passed",
+        "lowReputation": "Device reputation 2 · light check",
+        "datacenterIp": "Data-center IP · suspicious JA3 fingerprint",
+        "federated": "Known fingerprint from federated memory"
+      }
+    },
+    "stats": {
+      "title": "The problem grows every year",
+      "description": "Any cheap, insecure IoT device in a home can become a weapon for a third party without the owner knowing. Traditional solutions are either very expensive or annoy visitors with CAPTCHAs.",
+      "items": {
+        "attacks": "DDoS attacks observed by Cloudflare in 2025",
+        "increase": "Increase in attacks vs. the previous year",
+        "largest": "Largest recorded attack in internet history (Dec 2025)",
+        "passRate": "Of legitimate visitors pass a light, fast check"
+      }
+    },
+    "features": {
+      "title": "What does Zero Plus offer?",
+      "description": "Smarter protection that uses fewer resources, with clear, explainable logic instead of a black box.",
+      "items": {
+        "tiered": {
+          "title": "Tiered Detection",
+          "desc": "New devices get a light check; devices with a bad history get deeper inspection. Heavy checks are spent only where needed."
+        },
+        "reputation": {
+          "title": "Reputation Score 1–10",
+          "desc": "Cumulative reputation per device based only on real bad events, so new devices get a fair chance."
+        },
+        "silent": {
+          "title": "Silent verification (no CAPTCHA)",
+          "desc": "A JS Challenge runs in the browser without bothering real visitors, and tightens as suspicion rises."
+        },
+        "federated": {
+          "title": "Federated Threat Memory",
+          "desc": "The first customer hit by an attack immediately hardens the rest by sharing only the attacker device fingerprint—no sensitive data."
+        },
+        "isolation": {
+          "title": "Strict Tenant Isolation",
+          "desc": "Each company lives in its own data environment with its own encryption keys. A breach of one tenant does not spread to others."
+        },
+        "reports": {
+          "title": "Human-readable reports",
+          "desc": "Clear text summaries for every security event, not just raw numbers—plus instant alerts when something urgent happens."
+        }
+      }
+    },
+    "pipeline": {
+      "title": "Nine stages, one job each",
+      "description": "Every request passes through sequential stages. Each stage only advances who deserves the next level—so heavy checks stay rare and targeted.",
+      "roles": {
+        "intake": "Classifies the request: new device or known history?",
+        "baseline": "Silent JS Challenge for first-time visitors",
+        "ipScanner": "Flags traffic coming from data centers",
+        "similarity": "Compares IP + device fingerprint + location to history",
+        "deep": "Deeper match when an initial similarity is found",
+        "fingerprint": "TLS/JA3/JA4 checks only for suspicious devices",
+        "orchestrator": "Routes safe requests to your origin servers",
+        "dashboard": "UI that adapts to each user’s workflow",
+        "isolation": "Data isolation and shared threat immunity"
+      }
+    },
+    "flow": {
+      "title": "How does the request path change?",
+      "description": "No software to install. Change DNS only—we run the infrastructure.",
+      "before": "Before Zero Plus",
+      "after": "After Zero Plus",
+      "internet": "Internet",
+      "server": "Company Server",
+      "direct": "Anyone reaches you directly"
+    },
+    "steps": {
+      "title": "From signup to protection in five steps",
+      "items": {
+        "create": { "title": "Create your account", "desc": "An Organization is created with an Admin user." },
+        "addServer": { "title": "Add a server", "desc": "Enter the domain, origin server address, and port." },
+        "dns": { "title": "Update DNS", "desc": "We give you the records so your domain points to Zero Plus." },
+        "verify": { "title": "We verify setup", "desc": "We confirm both the Gateway and Origin are reachable." },
+        "live": { "title": "Protection is live", "desc": "All traffic passes through Zero Plus before your server." }
+      }
+    },
+    "cta": {
+      "title": "Ready to protect your server?",
+      "description": "Create an account and add your first protected server, or contact us if you have any questions.",
+      "contact": "Contact us"
+    }
+  },
+  "about": {
+    "hero": {
+      "titleLine": "Rethinking protection",
+      "titleHighlight": "the smarter way",
+      "description": "Zero Plus aims to make DDoS protection accessible and transparent for small and medium businesses—without enterprise cost and without annoying visitors."
+    },
+    "vision": {
+      "title": "Our vision",
+      "text": "That every service on the internet keeps running even during an attack, and that a real visitor reaches the site smoothly as if nothing happened."
+    },
+    "mission": {
+      "title": "Our mission",
+      "text": "Deliver graduated, smart protection: trust who deserves it, inspect deeply who raises suspicion, and share immunity across customers without compromising anyone’s privacy."
+    },
+    "why": {
+      "title": "Why we built Zero Plus",
+      "p1": "DDoS attacks are no longer a fringe issue. Cloudflare observed about 47.1 million attacks in 2025—a 121% increase over the previous year—and in December 2025 the largest attack in history was recorded at 31.4 Tbps.",
+      "p2": "What makes this worse is that these attacks no longer rely only on compromised PCs, but on IoT devices—smart TVs, cameras, insecure routers—sitting in ordinary homes, owned by people who have no idea they are being abused.",
+      "p3": "Small companies face two options: expensive global solutions, or CAPTCHA-heavy systems that frustrate users and sometimes block real visitors by mistake. Zero Plus is a third path: protection that checks by reputation, so it stays fast and light for legitimate visitors."
+    },
+    "principles": {
+      "title": "Principles we build on",
+      "items": {
+        "clear": {
+          "title": "Clear logic, not a black box",
+          "desc": "Allow or block decisions pass through known stages, each with one job. You can understand and review why any decision was made."
+        },
+        "fair": {
+          "title": "A fair chance for every new device",
+          "desc": "We only register a device when a real bad event occurs (Lazy Registration). A new device is innocent until proven otherwise."
+        },
+        "heavy": {
+          "title": "Heavy checks only when needed",
+          "desc": "Deeper inspection (e.g. TLS/JA3/JA4) is spent on a small suspicious share, so we save resources and keep latency low."
+        },
+        "privacy": {
+          "title": "Privacy that is not compromised",
+          "desc": "Each company’s data stays in its isolated environment. The only thing shared is a threat fingerprint stripped of any identity."
+        }
+      }
+    },
+    "deciders": {
+      "title": "Who decides, and who explains?",
+      "description": "A clear split between making the security decision and phrasing it in plain language—so no sensitive decision depends on an external service.",
+      "engine": {
+        "title": "Zero Plus AI Engine",
+        "desc": "The decision engine is built and owned entirely by the project. It decides allow, block, or extra checks for every request based on the request itself (IP, device fingerprint, reputation, TLS)—with no external cloud service in the loop."
+      },
+      "gemini": {
+        "title": "Gemini API",
+        "desc": "It does not make any security decision. Its role starts after the decision is made: turning event data into a clear sentence or paragraph shown on the reports page and in notification text."
+      }
+    },
+    "stack": {
+      "title": "Technology stack",
+      "iot": "ESP32 + MicroPython to simulate legitimate and attacking devices"
+    },
+    "cta": {
+      "question": "Have a question about the project or want to try protection?",
+      "contact": "Contact us"
+    }
+  }
+}

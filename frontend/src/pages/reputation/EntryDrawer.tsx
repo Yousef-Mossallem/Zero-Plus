@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Ban, Lock, RotateCcw, ShieldCheck, ShieldOff, Unlock, ExternalLink } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { useToast } from '../../components/ui/Toast'
 import { Badge, Button, Drawer, KeyValue, Skeleton } from '../../components/ui/kit'
 import { parseApiError } from '../../services/apiError'
@@ -10,7 +11,6 @@ import { listChallenges, type ChallengeLog, type ReputationEntry } from '../../s
 import { formatDateTime, formatNumber, timeAgo } from '../../utils/format'
 import { BAND_META, BanBadge, ScorePips, isCurrentlyBanned } from './shared'
 import type { ActionKind } from './ActionModal'
-
 
 // ==================================================================
 // Entry Drawer (التفاصيل + سجل الاختبارات)
@@ -31,6 +31,7 @@ export function EntryDrawer({
   onAction: (kind: ActionKind) => void
   onToggleAllow: () => void
 }) {
+  const { t } = useTranslation('reputation')
   const toast = useToast()
   const navigate = useNavigate()
   const [challenges, setChallenges] = useState<ChallengeLog[]>([])
@@ -47,7 +48,7 @@ export function EntryDrawer({
         if (!cancelled) setChallenges(res.data)
       })
       .catch((err) => {
-        if (!cancelled) toast.error('Failed to load challenge history', parseApiError(err).message)
+        if (!cancelled) toast.error(t('toast.challengeFailed'), parseApiError(err).message)
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
@@ -55,7 +56,7 @@ export function EntryDrawer({
     return () => {
       cancelled = true
     }
-  }, [entryId, toast])
+  }, [entryId, t, toast])
 
   const banned = entry ? isCurrentlyBanned(entry) : false
 
@@ -64,7 +65,7 @@ export function EntryDrawer({
       open={entry !== null}
       onClose={onClose}
       title={entry?.ipAddress ?? ''}
-      subtitle={entry ? `First seen ${formatDateTime(entry.firstSeenAt)}` : undefined}
+      subtitle={entry ? t('drawer.firstSeen', { time: formatDateTime(entry.firstSeenAt) }) : undefined}
     >
       {entry && (
         <div className="space-y-6">
@@ -78,13 +79,13 @@ export function EntryDrawer({
             </div>
             <div className="mt-4 flex flex-wrap gap-2">
               <BanBadge entry={entry} />
-              {entry.isAllowlisted && <Badge tone="emerald">Trusted</Badge>}
-              {entry.isKnownBotnet && <Badge tone="rose">Known botnet</Badge>}
-              {entry.isManualBan && <Badge tone="slate">Manual ban</Badge>}
+              {entry.isAllowlisted && <Badge tone="emerald">{t('filters.trusted')}</Badge>}
+              {entry.isKnownBotnet && <Badge tone="rose">{t('filters.botnet')}</Badge>}
+              {entry.isManualBan && <Badge tone="slate">{t('filters.manualBan')}</Badge>}
             </div>
             {entry.banReason && (
               <p dir="auto" className="mt-3 text-sm text-slate-400">
-                <span className="text-slate-500">Ban reason: </span>
+                <span className="text-slate-500">{t('drawer.banReason')}</span>
                 {entry.banReason}
               </p>
             )}
@@ -96,11 +97,11 @@ export function EntryDrawer({
               <>
                 {banned ? (
                   <Button variant="success" icon={Unlock} disabled={busy} onClick={() => onAction('unban')}>
-                    Lift ban
+                    {t('drawer.liftBan')}
                   </Button>
                 ) : (
                   <Button variant="danger" icon={Ban} disabled={busy} onClick={() => onAction('ban')}>
-                    Ban device
+                    {t('drawer.banDevice')}
                   </Button>
                 )}
                 <Button
@@ -108,60 +109,60 @@ export function EntryDrawer({
                   disabled={busy}
                   onClick={onToggleAllow}
                 >
-                  {entry.isAllowlisted ? 'Remove trust' : 'Mark trusted'}
+                  {entry.isAllowlisted ? t('drawer.removeTrust') : t('drawer.markTrusted')}
                 </Button>
                 <Button icon={RotateCcw} disabled={busy} onClick={() => onAction('reset')}>
-                  Reset score
+                  {t('drawer.resetScore')}
                 </Button>
               </>
             ) : (
               <p className="col-span-2 rounded-xl border border-white/8 bg-white/3 px-4 py-3 text-sm text-slate-500">
-                <Lock className="mr-2 inline h-4 w-4" />
-                Your role has read-only access to reputation.
+                <Lock className="me-2 inline h-4 w-4" />
+                {t('drawer.readOnly')}
               </p>
             )}
             <Button
               icon={ExternalLink}
               onClick={() => navigate(`/security-events?entry=${encodeURIComponent(entry.id)}`)}
             >
-              View events
+              {t('drawer.viewEvents')}
             </Button>
           </div>
 
           {/* ---------- Details ---------- */}
           <section>
             <h4 className="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-cyan-400/80">
-              Activity
+              {t('drawer.activity')}
             </h4>
-            <KeyValue label="Total requests">{formatNumber(entry.totalRequests)}</KeyValue>
-            <KeyValue label="Failed checks">{entry.failedChecksCount}</KeyValue>
-            <KeyValue label="Successful checks">{entry.successfulChecks}</KeyValue>
-            <KeyValue label="Avg request rate">
+            <KeyValue label={t('drawer.totalRequests')}>{formatNumber(entry.totalRequests)}</KeyValue>
+            <KeyValue label={t('drawer.failedChecks')}>{entry.failedChecksCount}</KeyValue>
+            <KeyValue label={t('drawer.successfulChecks')}>{entry.successfulChecks}</KeyValue>
+            <KeyValue label={t('drawer.avgRate')}>
               {entry.avgRequestRate !== null ? `${entry.avgRequestRate.toFixed(1)} /s` : undefined}
             </KeyValue>
-            <KeyValue label="Last seen">{formatDateTime(entry.lastSeenAt)}</KeyValue>
-            <KeyValue label="Last failed">{formatDateTime(entry.lastFailedAt)}</KeyValue>
-            <KeyValue label="Last path" mono>{entry.lastPath}</KeyValue>
+            <KeyValue label={t('drawer.lastSeen')}>{formatDateTime(entry.lastSeenAt)}</KeyValue>
+            <KeyValue label={t('drawer.lastFailed')}>{formatDateTime(entry.lastFailedAt)}</KeyValue>
+            <KeyValue label={t('drawer.lastPath')} mono>{entry.lastPath}</KeyValue>
           </section>
 
           <section>
             <h4 className="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-cyan-400/80">
-              Identity
+              {t('drawer.identity')}
             </h4>
-            <KeyValue label="IP type">{entry.ipType.replace('_', ' / ')}</KeyValue>
-            <KeyValue label="Country">{entry.countryCode}</KeyValue>
-            <KeyValue label="ASN">{entry.asn ?? undefined}</KeyValue>
-            <KeyValue label="Organization">{entry.asOrg}</KeyValue>
-            <KeyValue label="Device fingerprint" mono>{entry.deviceFingerprint}</KeyValue>
-            <KeyValue label="JA3" mono>{entry.ja3Fingerprint}</KeyValue>
-            <KeyValue label="JA4" mono>{entry.ja4Fingerprint}</KeyValue>
-            <KeyValue label="User agent" mono>{entry.lastUserAgent}</KeyValue>
+            <KeyValue label={t('drawer.ipType')}>{entry.ipType.replace('_', ' / ')}</KeyValue>
+            <KeyValue label={t('drawer.country')}>{entry.countryCode}</KeyValue>
+            <KeyValue label={t('drawer.asn')}>{entry.asn ?? undefined}</KeyValue>
+            <KeyValue label={t('drawer.org')}>{entry.asOrg}</KeyValue>
+            <KeyValue label={t('drawer.fingerprint')} mono>{entry.deviceFingerprint}</KeyValue>
+            <KeyValue label={t('drawer.ja3')} mono>{entry.ja3Fingerprint}</KeyValue>
+            <KeyValue label={t('drawer.ja4')} mono>{entry.ja4Fingerprint}</KeyValue>
+            <KeyValue label={t('drawer.userAgent')} mono>{entry.lastUserAgent}</KeyValue>
           </section>
 
           {/* ---------- Challenge history ---------- */}
           <section>
             <h4 className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-cyan-400/80">
-              Recent challenges
+              {t('drawer.challenges')}
             </h4>
             {loading ? (
               <div className="space-y-2">
@@ -169,7 +170,7 @@ export function EntryDrawer({
                 <Skeleton className="h-12 w-full rounded-xl" />
               </div>
             ) : challenges.length === 0 ? (
-              <p className="text-sm text-slate-600">No challenges recorded for this device.</p>
+              <p className="text-sm text-slate-600">{t('drawer.noChallenges')}</p>
             ) : (
               <ul className="space-y-2">
                 {challenges.map((c) => (
@@ -185,7 +186,7 @@ export function EntryDrawer({
                         {c.failureReason ? ` · ${c.failureReason}` : ''}
                       </p>
                     </div>
-                    <Badge tone={c.passed ? 'emerald' : 'rose'}>{c.passed ? 'Passed' : 'Failed'}</Badge>
+                    <Badge tone={c.passed ? 'emerald' : 'rose'}>{c.passed ? t('drawer.passed') : t('drawer.failed')}</Badge>
                   </li>
                 ))}
               </ul>

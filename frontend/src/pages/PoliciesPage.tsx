@@ -18,22 +18,55 @@
 // ==================================================================
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Bot, Gauge, Lock, RefreshCw, RotateCcw, Save, Server, ShieldAlert, ShieldCheck, SlidersHorizontal, Timer, Undo2, X } from 'lucide-react'
+import {
+  Bot,
+  Gauge,
+  Lock,
+  RefreshCw,
+  RotateCcw,
+  Save,
+  Server,
+  ShieldAlert,
+  ShieldCheck,
+  SlidersHorizontal,
+  Timer,
+  Undo2,
+  X,
+} from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { useToast } from '../components/ui/Toast'
 import { Button, Card, ErrorState, Field, Modal, PageHeader, PageShell, Skeleton, TextInput } from '../components/ui/kit'
 import { parseApiError } from '../services/apiError'
-import { getMyPolicy, getPolicyDefaults, resetMyPolicy, updateMyPolicy, type Policy, type PolicyChange, type PolicyValues } from '../services/policiesService'
+import {
+  getMyPolicy,
+  getPolicyDefaults,
+  resetMyPolicy,
+  updateMyPolicy,
+  type Policy,
+  type PolicyChange,
+  type PolicyValues,
+} from '../services/policiesService'
 import { selectUserRole, useAuthStore } from '../store/authStore'
 import { cn, timeAgo } from '../utils/format'
-import { BOOL_KEYS, NUM_META, buildPatch, parseInt10, toDraft, validate, type BoolKey, type Draft, type NumKey } from './policies/form'
+import {
+  BOOL_KEYS,
+  NUM_META,
+  buildPatch,
+  parseInt10,
+  toDraft,
+  validate,
+  type BoolKey,
+  type Draft,
+  type NumKey,
+} from './policies/form'
 import { Section, ToggleRow } from './policies/blocks'
-
 
 // ==================================================================
 // Page
 // ==================================================================
 
 export default function PoliciesPage() {
+  const { t } = useTranslation(['policies', 'common'])
   const toast = useToast()
   const role = useAuthStore(selectUserRole)
   const canEdit = role !== null && ['OWNER', 'ADMIN', 'ANALYST'].includes(role)
@@ -60,18 +93,21 @@ export default function PoliciesPage() {
     } catch (err) {
       const { message } = parseApiError(err)
       setError(message)
-      toast.error('Failed to load policy', message)
+      toast.error(t('toast.loadFailed'), message)
     } finally {
       setLoading(false)
     }
-  }, [toast])
+  }, [t, toast])
 
   useEffect(() => {
     void load()
   }, [load])
 
   // ---------------- Derived ----------------
-  const errors = useMemo(() => (draft ? validate(draft) : {}), [draft])
+  const errors = useMemo(
+    () => (draft ? validate(draft, (k, opts) => String(t(k as never, (opts || {}) as never))) : {}),
+    [draft, t],
+  )
   const hasErrors = Object.keys(errors).length > 0
   const patch = useMemo(() => (draft && policy ? buildPatch(draft, policy) : {}), [draft, policy])
   const dirtyCount = Object.keys(patch).length
@@ -105,10 +141,10 @@ export default function PoliciesPage() {
       setPolicy(res.policy)
       setDraft(toDraft(res.policy))
       setLastChanges(res.changes)
-      toast.success(res.message, `${res.changes.length} setting${res.changes.length === 1 ? '' : 's'} updated`)
+      toast.success(res.message, t('toast.updated', { count: res.changes.length }))
     } catch (err) {
       const { message, status } = parseApiError(err)
-      toast.error(status === 403 ? 'You are not allowed to edit policies' : 'Could not save policy', message)
+      toast.error(status === 403 ? t('toast.forbidden') : t('toast.saveFailed'), message)
     } finally {
       setSaving(false)
     }
@@ -124,7 +160,7 @@ export default function PoliciesPage() {
       setResetOpen(false)
       toast.success(res.message)
     } catch (err) {
-      toast.error('Reset failed', parseApiError(err).message)
+      toast.error(t('toast.resetFailed'), parseApiError(err).message)
     } finally {
       setSaving(false)
     }
@@ -140,24 +176,27 @@ export default function PoliciesPage() {
     const rate = Math.max(allow, read('rateLimitMaxScore'))
     const challenge = Math.max(rate, read('challengeMaxScore'))
     return [
-      { name: 'Allow', range: `0 – ${allow}`, width: allow + 1, cls: 'bg-emerald-400' },
-      { name: 'Rate limit', range: `${allow + 1} – ${rate}`, width: rate - allow, cls: 'bg-amber-400' },
-      { name: 'Challenge', range: `${rate + 1} – ${challenge}`, width: challenge - rate, cls: 'bg-indigo-400' },
-      { name: 'Block', range: `${challenge + 1} – 100`, width: 100 - challenge, cls: 'bg-rose-500' },
+      { name: t('zones.allow'), range: `0 – ${allow}`, width: allow + 1, cls: 'bg-emerald-400' },
+      { name: t('zones.rateLimit'), range: `${allow + 1} – ${rate}`, width: rate - allow, cls: 'bg-amber-400' },
+      { name: t('zones.challenge'), range: `${rate + 1} – ${challenge}`, width: challenge - rate, cls: 'bg-indigo-400' },
+      { name: t('zones.block'), range: `${challenge + 1} – 100`, width: 100 - challenge, cls: 'bg-rose-500' },
     ]
-  }, [draft, errors, policy])
+  }, [draft, errors, policy, t])
 
   // ---------------- Numeric field renderer ----------------
   const num = (key: NumKey) => {
     if (!draft || !defaults) return null
     const meta = NUM_META[key]
     const def = defaults[key]
+    const defStr = def === null ? t('auto') : String(def)
+    const hintText = `${t(`fields.${key}.hint` as never)} ${t('defaultSuffix', { val: defStr })}${meta.unit && def !== null ? ` ${meta.unit}` : ''}`
+
     return (
       <Field
         key={key}
-        label={meta.label}
+        label={t(`fields.${key}.label` as never) || meta.label}
         error={errors[key]}
-        hint={`${meta.hint} Default: ${def === null ? 'auto' : def}${meta.unit && def !== null ? ` ${meta.unit}` : ''}`}
+        hint={hintText}
       >
         <div className="relative">
           <TextInput
@@ -165,12 +204,12 @@ export default function PoliciesPage() {
             value={draft[key]}
             disabled={!canEdit || saving}
             invalid={Boolean(errors[key])}
-            placeholder={meta.nullable ? 'Auto' : undefined}
+            placeholder={meta.nullable ? t('auto') : undefined}
             onChange={(e) => setNum(key, e.target.value)}
-            className={cn(isModified(key) && 'border-amber-400/40', meta.unit && 'pr-16')}
+            className={cn(isModified(key) && 'border-amber-400/40', meta.unit && 'pe-16')}
           />
           {meta.unit && (
-            <span className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-xs text-slate-500">
+            <span className="pointer-events-none absolute end-3.5 top-1/2 -translate-y-1/2 text-xs text-slate-500">
               {meta.unit}
             </span>
           )}
@@ -187,16 +226,16 @@ export default function PoliciesPage() {
     <PageShell>
       <PageHeader
         icon={SlidersHorizontal}
-        title="Protection Policies"
-        subtitle="Tune how the Gateway turns a risk score into a decision for your organization."
+        title={t('page.title')}
+        subtitle={t('page.subtitle')}
         actions={
           <>
             <Button icon={RefreshCw} onClick={() => void load()} disabled={loading || saving}>
-              Reload
+              {t('page.reload')}
             </Button>
             {canEdit && (
               <Button icon={RotateCcw} variant="danger" onClick={() => setResetOpen(true)} disabled={loading || saving}>
-                Reset to defaults
+                {t('page.reset')}
               </Button>
             )}
           </>
@@ -206,7 +245,7 @@ export default function PoliciesPage() {
       {!canEdit && !loading && (
         <div className="zp-anim-fade-up flex items-center gap-3 rounded-xl border border-white/8 bg-white/3 px-4 py-3 text-sm text-slate-400">
           <Lock className="h-4 w-4 shrink-0 text-slate-500" />
-          Your role has read-only access. Ask an Owner, Admin or Analyst to change these settings.
+          {t('page.readOnly')}
         </div>
       )}
 
@@ -225,8 +264,8 @@ export default function PoliciesPage() {
           {/* ============ Risk thresholds + live preview ============ */}
           <Section
             icon={Gauge}
-            title="Risk thresholds"
-            description="A request's risk score (0–100) decides what happens to it."
+            title={t('sections.thresholds.title')}
+            description={t('sections.thresholds.desc')}
             delay={0}
           >
             {/* معاينة المناطق: بتتحدث مباشرة مع كل تعديل */}
@@ -264,7 +303,7 @@ export default function PoliciesPage() {
                     value={Math.min(99, Math.max(0, parseInt10(draft[key]) ?? 0))}
                     onChange={(e) => setNum(key, e.target.value)}
                     className="h-1.5 w-full cursor-pointer accent-cyan-400 disabled:cursor-not-allowed disabled:opacity-40"
-                    aria-label={NUM_META[key].label}
+                    aria-label={t(`fields.${key}.label` as never) || NUM_META[key].label}
                   />
                 </div>
               ))}
@@ -275,21 +314,21 @@ export default function PoliciesPage() {
             {/* ============ Challenges ============ */}
             <Section
               icon={ShieldCheck}
-              title="Challenges"
-              description="Silent verification for visitors the Gateway is unsure about."
+              title={t('sections.challenges.title')}
+              description={t('sections.challenges.desc')}
               delay={60}
             >
               <ToggleRow
-                label="Silent JS challenge"
-                hint="Runs invisibly in the browser to filter simple bots."
+                label={t('sections.challenges.silentJs')}
+                hint={t('sections.challenges.silentJsHint')}
                 checked={draft.enableJsChallenge}
                 modified={isModified('enableJsChallenge')}
                 disabled={!canEdit || saving}
                 onChange={(v) => setBool('enableJsChallenge', v)}
               />
               <ToggleRow
-                label="Challenge all new visitors"
-                hint="Every first-time visitor gets one silent check, then a clearance."
+                label={t('sections.challenges.challengeAll')}
+                hint={t('sections.challenges.challengeAllHint')}
                 checked={draft.challengeAllVisitors}
                 modified={isModified('challengeAllVisitors')}
                 disabled={!canEdit || saving}
@@ -301,29 +340,28 @@ export default function PoliciesPage() {
             {/* ============ AI ============ */}
             <Section
               icon={Bot}
-              title="AI anomaly detection"
-              description="Behavioral model that adds a signal to the risk score."
+              title={t('sections.ai.title')}
+              description={t('sections.ai.desc')}
               delay={120}
             >
               <ToggleRow
-                label="Use AI anomaly score"
-                hint="When off, decisions rely on rules and reputation only."
+                label={t('sections.ai.useAi')}
+                hint={t('sections.ai.useAiHint')}
                 checked={draft.enableAiAnomaly}
                 modified={isModified('enableAiAnomaly')}
                 disabled={!canEdit || saving}
                 onChange={(v) => setBool('enableAiAnomaly', v)}
               />
               <p className="rounded-xl border border-cyan-400/15 bg-cyan-500/5 px-4 py-3 text-xs leading-relaxed text-slate-400">
-                The AI score is only one signal. The final decision always comes from the risk engine
-                and these thresholds.
+                {t('sections.ai.note')}
               </p>
             </Section>
 
             {/* ============ Rate limiting ============ */}
             <Section
               icon={Timer}
-              title="Rate limiting"
-              description="Per-IP request limits. The soft limit slows traffic, the hard limit caps it."
+              title={t('sections.rateLimiting.title')}
+              description={t('sections.rateLimiting.desc')}
               delay={180}
             >
               <div className="grid gap-5 sm:grid-cols-2">
@@ -333,8 +371,8 @@ export default function PoliciesPage() {
                 {num('maxRequestsWindowSec')}
               </div>
               <ToggleRow
-                label="Ban on hard limit"
-                hint="Ban the device when it exceeds the hard limit."
+                label={t('sections.rateLimiting.banOnHard')}
+                hint={t('sections.rateLimiting.banOnHardHint')}
                 checked={draft.banOnMaxRequests}
                 modified={isModified('banOnMaxRequests')}
                 disabled={!canEdit || saving}
@@ -345,8 +383,8 @@ export default function PoliciesPage() {
             {/* ============ Automatic bans ============ */}
             <Section
               icon={ShieldAlert}
-              title="Automatic bans"
-              description="When repeat offenders are banned, and for how long."
+              title={t('sections.autoBans.title')}
+              description={t('sections.autoBans.desc')}
               delay={240}
             >
               <div className="grid gap-5 sm:grid-cols-2">
@@ -360,8 +398,8 @@ export default function PoliciesPage() {
           {/* ============ Server capacity ============ */}
           <Section
             icon={Server}
-            title="Server capacity"
-            description="Used to warn you before an origin server is overwhelmed."
+            title={t('sections.capacity.title')}
+            description={t('sections.capacity.desc')}
             delay={300}
           >
             <div className="grid gap-5 sm:grid-cols-2">
@@ -374,12 +412,12 @@ export default function PoliciesPage() {
           {lastChanges.length > 0 && (
             <Card className="p-5" accent>
               <div className="mb-3 flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-white">Last saved changes</h3>
+                <h3 className="text-sm font-semibold text-white">{t('lastChanges.title')}</h3>
                 <button
                   type="button"
                   onClick={() => setLastChanges([])}
                   className="text-slate-500 hover:text-white"
-                  aria-label="Dismiss"
+                  aria-label={t('lastChanges.dismiss')}
                 >
                   <X className="h-4 w-4" />
                 </button>
@@ -388,9 +426,9 @@ export default function PoliciesPage() {
                 {lastChanges.map((c) => (
                   <li key={c.field} className="flex flex-wrap items-center gap-2 text-sm">
                     <span className="font-mono text-xs text-slate-300">{c.field}</span>
-                    <span className="text-slate-600">{String(c.from ?? 'auto')}</span>
+                    <span className="text-slate-600">{String(c.from ?? t('auto'))}</span>
                     <span className="text-slate-600">→</span>
-                    <span className="text-emerald-300">{String(c.to ?? 'auto')}</span>
+                    <span className="text-emerald-300">{String(c.to ?? t('auto'))}</span>
                   </li>
                 ))}
               </ul>
@@ -398,7 +436,7 @@ export default function PoliciesPage() {
           )}
 
           <p className="text-center text-xs text-slate-600">
-            Policy last updated {timeAgo(policy.updatedAt)}
+            {t('updatedAt', { time: timeAgo(policy.updatedAt) })}
           </p>
 
           {/* ============ شريط الحفظ (بيظهر مع وجود تعديلات) ============ */}
@@ -407,18 +445,18 @@ export default function PoliciesPage() {
               <div className="zp-anim-scale-in flex w-full max-w-xl items-center justify-between gap-4 rounded-2xl border border-amber-400/25 bg-[#0b1224]/95 px-5 py-3.5 shadow-2xl shadow-black/60 backdrop-blur-xl">
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-white">
-                    {dirtyCount} unsaved change{dirtyCount === 1 ? '' : 's'}
+                    {t('bar.unsaved', { count: dirtyCount })}
                   </p>
                   <p className="truncate text-xs text-slate-500">
-                    {hasErrors ? 'Fix the highlighted fields to save' : 'Review and save to apply'}
+                    {hasErrors ? t('bar.fixErrors') : t('bar.review')}
                   </p>
                 </div>
                 <div className="flex shrink-0 gap-2">
                   <Button variant="ghost" icon={Undo2} disabled={saving} onClick={() => policy && setDraft(toDraft(policy))}>
-                    Discard
+                    {t('bar.discard')}
                   </Button>
                   <Button variant="primary" icon={Save} loading={saving} disabled={hasErrors} onClick={() => void save()}>
-                    Save
+                    {t('bar.save')}
                   </Button>
                 </div>
               </div>
@@ -431,17 +469,17 @@ export default function PoliciesPage() {
       <Modal
         open={resetOpen}
         onClose={() => !saving && setResetOpen(false)}
-        title="Reset all policies?"
-        description="Every setting returns to its default value. This applies immediately to the Gateway."
+        title={t('resetModal.title')}
+        description={t('resetModal.description')}
         icon={RotateCcw}
         tone="amber"
         footer={
           <>
             <Button variant="ghost" onClick={() => setResetOpen(false)} disabled={saving}>
-              Cancel
+              {t('actions.cancel', { ns: 'common' })}
             </Button>
             <Button variant="danger" loading={saving} onClick={() => void resetAll()}>
-              Reset everything
+              {t('resetModal.confirm')}
             </Button>
           </>
         }

@@ -1,4 +1,6 @@
 // frontend/src/pages/servers/ServerCard.tsx — Server card
+// i18n: كل النصوص من servers.card (+ status / rec / confidence / mode).
+// الـ IP:Port والدومين LTR، والنقطة والأزرار بتتقلب في العربي (end / ms-auto).
 
 import {
   Activity,
@@ -15,6 +17,7 @@ import {
   Trash2,
   Wrench,
 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { Badge, Button, Card } from '../../components/ui/kit'
 import {
   canRequestProbe,
@@ -30,36 +33,35 @@ import { STATUS_META } from './shared'
 // Server card
 //
 // Sections:
-//   1. Header         → domain, origin, status
-//   2. Tags           → mode, HTTP/HTTPS origin
-//   3. Capacity       → safe RPS (primary), recommendation, confidence,
-//                       max RPS, p95, p99 under load, error rate, last probe
-//   4. Health         → current load bar, avg response, last health check
-//   5. Setup          → ownership / routing / origin reachability
-//   6. Actions        → DNS, re-measure capacity, maintenance, edit, delete
+//   1. Header → domain, origin, status
+//   2. Tags   → mode, HTTP/HTTPS origin
+//   3. Capacity → safe RPS (primary), recommendation, confidence,
+//                 max RPS, p95, p99 under load, error rate, last probe
+//   4. Health → current load bar, avg response, last health check
+//   5. Setup  → ownership / routing / origin reachability
+//   6. Actions → DNS, re-measure capacity, maintenance, edit, delete
 //
 // Probe numbers can be null (not measured yet / reset after an origin change),
 // so every value has an empty state.
 // ==================================================================
 
-const RECOMMENDATION_META: Record<ProbeRecommendation, { label: string; cls: string }> = {
-  excellent: { label: 'Excellent', cls: 'border-emerald-400/30 bg-emerald-500/10 text-emerald-300' },
-  good: { label: 'Good', cls: 'border-cyan-400/30 bg-cyan-500/10 text-cyan-300' },
-  fair: { label: 'Fair', cls: 'border-amber-400/30 bg-amber-500/10 text-amber-300' },
-  poor: { label: 'Poor', cls: 'border-orange-400/30 bg-orange-500/10 text-orange-300' },
-  down: { label: 'Down', cls: 'border-rose-500/30 bg-rose-500/10 text-rose-300' },
+// المفتاح بيتترجم (rec.<key>) والباقي ألوان
+const RECOMMENDATION_CLS: Record<ProbeRecommendation, string> = {
+  excellent: 'border-emerald-400/30 bg-emerald-500/10 text-emerald-300',
+  good:      'border-cyan-400/30 bg-cyan-500/10 text-cyan-300',
+  fair:      'border-amber-400/30 bg-amber-500/10 text-amber-300',
+  poor:      'border-orange-400/30 bg-orange-500/10 text-orange-300',
+  down:      'border-rose-500/30 bg-rose-500/10 text-rose-300',
 }
 
-const CONFIDENCE_LEVEL: Record<ProbeConfidence, { bars: number; label: string }> = {
-  high: { bars: 3, label: 'High confidence' },
-  medium: { bars: 2, label: 'Medium confidence' },
-  low: { bars: 1, label: 'Low confidence' },
-}
+const CONFIDENCE_BARS: Record<ProbeConfidence, number> = { high: 3, medium: 2, low: 1 }
 
 const fmtInt = (n: number) => n.toLocaleString('en-US')
 
 function ConfidenceBars({ value }: { value: ProbeConfidence }) {
-  const { bars, label } = CONFIDENCE_LEVEL[value]
+  const { t } = useTranslation('servers')
+  const bars = CONFIDENCE_BARS[value]
+  const label = t(`confidence.${value}`)
   return (
     <span className="inline-flex items-center gap-1.5 text-[11px] text-slate-500" title={label}>
       <span className="flex items-end gap-0.5" aria-hidden>
@@ -125,16 +127,17 @@ export function ServerCard({
   /** Re-measure capacity (POST /servers/:id/probe → 202) */
   onProbe?: () => void
 }) {
+  const { t } = useTranslation('servers')
   const meta = STATUS_META[server.status]
   const inMaintenance = server.status === 'MAINTENANCE'
   const fullySetUp = server.dnsVerified && server.gatewayReachable
-
   const load = server.currentLoadPercent
-  const loadTone = load === null ? '' : load >= 85 ? 'bg-rose-500' : load >= 60 ? 'bg-amber-400' : 'bg-emerald-400'
+  const loadTone =
+    load === null ? '' : load >= 85 ? 'bg-rose-500' : load >= 60 ? 'bg-amber-400' : 'bg-emerald-400'
 
   const measured = hasProbeData(server)
   const probeAllowed = canRequestProbe(server)
-  const recommendation = server.probeRecommendation ? RECOMMENDATION_META[server.probeRecommendation] : null
+  const recKey = server.probeRecommendation
   const errorRate = server.probeErrorRate
   const errorTone =
     errorRate === null ? undefined : errorRate >= 5 ? 'text-rose-300' : errorRate >= 1 ? 'text-amber-300' : 'text-emerald-300'
@@ -143,10 +146,10 @@ export function ServerCard({
   const capacityState: 'ready' | 'measuring' | 'needs-ownership' | 'not-measured' = measured
     ? 'ready'
     : probing
-      ? 'measuring'
-      : !probeAllowed
-        ? 'needs-ownership'
-        : 'not-measured'
+    ? 'measuring'
+    : !probeAllowed
+    ? 'needs-ownership'
+    : 'not-measured'
 
   return (
     <Card delay={Math.min(index, 8) * 50} className={cn('flex flex-col overflow-hidden p-0', busy && 'opacity-60')}>
@@ -169,18 +172,23 @@ export function ServerCard({
             <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/5 text-cyan-300">
               <ServerIcon className="h-5 w-5" />
               {server.status === 'ONLINE' && (
-                <span className="zp-anim-pulse-ring absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-emerald-400" />
+                <span className="zp-anim-pulse-ring absolute -end-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-emerald-400" />
               )}
             </div>
             <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-white" title={server.domain}>
+              <p
+                dir="ltr"
+                className="truncate text-start text-sm font-semibold text-white"
+                title={server.domain}
+              >
                 {server.domain}
               </p>
-              <p dir="ltr" className="truncate font-mono text-xs text-slate-500">
+              <p dir="ltr" className="truncate text-start font-mono text-xs text-slate-500">
                 {server.originIp}:{server.originPort}
               </p>
             </div>
           </div>
+
           <Badge tone={meta.tone} dot>
             {meta.label}
           </Badge>
@@ -189,8 +197,9 @@ export function ServerCard({
         {/* ---------- Tags ---------- */}
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <Badge tone={server.mode === 'PROTECT' ? 'cyan' : 'amber'}>
-            {server.mode === 'PROTECT' ? 'Protect' : 'Monitor only'}
+            {t(`mode.${server.mode}`)}
           </Badge>
+
           <span
             className={cn(
               'inline-flex items-center gap-1 text-xs',
@@ -198,7 +207,7 @@ export function ServerCard({
             )}
           >
             {server.sslEnabled ? <Lock className="h-3.5 w-3.5" /> : <LockOpen className="h-3.5 w-3.5" />}
-            {server.sslEnabled ? 'HTTPS origin' : 'HTTP origin'}
+            {server.sslEnabled ? t('card.httpsOrigin') : t('card.httpOrigin')}
           </span>
         </div>
 
@@ -207,16 +216,17 @@ export function ServerCard({
           <div className="flex items-center justify-between gap-2">
             <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
               <Gauge className="h-3.5 w-3.5" />
-              Safe capacity
+              {t('card.safeCapacity')}
             </span>
-            {recommendation && (
+
+            {recKey && (
               <span
                 className={cn(
                   'inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium',
-                  recommendation.cls,
+                  RECOMMENDATION_CLS[recKey],
                 )}
               >
-                {recommendation.label}
+                {t(`rec.${recKey}`)}
               </span>
             )}
           </div>
@@ -232,8 +242,8 @@ export function ServerCard({
 
               <div className="mt-1 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
                 <span className="text-[11px] text-slate-500">
-                  Max{' '}
-                  <span className="text-slate-300">
+                  {t('card.max')}{' '}
+                  <span dir="ltr" className="inline-block text-slate-300">
                     {server.maxRequestsPerSecond !== null ? `${fmtInt(server.maxRequestsPerSecond)} req/s` : '—'}
                   </span>
                 </span>
@@ -242,15 +252,15 @@ export function ServerCard({
 
               <div className="mt-3 grid grid-cols-3 gap-2">
                 <MiniStat
-                  label="p95"
+                  label={t('card.p95')}
                   value={server.p95ResponseTimeMs !== null ? `${fmtInt(server.p95ResponseTimeMs)} ms` : '—'}
                 />
                 <MiniStat
-                  label="p99 load"
+                  label={t('card.p99')}
                   value={server.loadLatencyP99Ms !== null ? `${fmtInt(server.loadLatencyP99Ms)} ms` : '—'}
                 />
                 <MiniStat
-                  label="Errors"
+                  label={t('card.errors')}
                   value={errorRate !== null ? `${errorRate.toFixed(1)}%` : '—'}
                   tone={errorTone}
                 />
@@ -258,7 +268,7 @@ export function ServerCard({
 
               <p className="mt-3 flex items-center gap-1 text-[11px] text-slate-600">
                 <Clock className="h-3 w-3" />
-                Measured {timeAgo(server.lastProbeAt)}
+                {t('card.measured', { time: timeAgo(server.lastProbeAt) })}
               </p>
             </>
           ) : (
@@ -270,20 +280,20 @@ export function ServerCard({
                     <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-cyan-400" />
                   </span>
                   <p className="text-slate-300">
-                    Measuring capacity…
-                    <span className="block text-xs text-slate-500">Results usually arrive within about 2 minutes.</span>
+                    {t('card.measuringTitle')}
+                    <span className="block text-xs text-slate-500">{t('card.measuringText')}</span>
                   </p>
                 </>
               ) : capacityState === 'needs-ownership' ? (
                 <p className="text-slate-400">
-                  Not measured yet
-                  <span className="block text-xs text-slate-500">Verify domain ownership to start measuring.</span>
+                  {t('card.notMeasured')}
+                  <span className="block text-xs text-slate-500">{t('card.needsOwnership')}</span>
                 </p>
               ) : (
                 <p className="text-slate-400">
-                  Not measured yet
+                  {t('card.notMeasured')}
                   <span className="block text-xs text-slate-500">
-                    {canManage ? 'Click “Measure” to run a capacity test.' : 'An Owner or Admin can run a capacity test.'}
+                    {canManage ? t('card.clickMeasure') : t('card.ownerOnly')}
                   </span>
                 </p>
               )}
@@ -296,7 +306,7 @@ export function ServerCard({
           <div>
             <div className="mb-1 flex justify-between text-[11px] text-slate-500">
               <span className="flex items-center gap-1">
-                <Cpu className="h-3 w-3" /> Current load
+                <Cpu className="h-3 w-3" /> {t('card.currentLoad')}
               </span>
               <span className="text-slate-300">{load !== null ? `${load.toFixed(0)}%` : '—'}</span>
             </div>
@@ -309,35 +319,37 @@ export function ServerCard({
               )}
             </div>
           </div>
+
           <div className="flex flex-wrap justify-between gap-x-3 gap-y-1 text-[11px] text-slate-500">
             <span className="flex items-center gap-1">
-              <Activity className="h-3 w-3" />
-              Avg response{' '}
-              <span className="text-slate-300">
+              <Activity className="h-3 w-3" /> {t('card.avgResponse')}{' '}
+              <span dir="ltr" className="inline-block text-slate-300">
                 {server.avgResponseTimeMs !== null ? `${fmtInt(server.avgResponseTimeMs)} ms` : '—'}
               </span>
             </span>
             <span>
-              Checked <span className="text-slate-300">{timeAgo(server.lastHealthCheckAt)}</span>
+              {t('card.checked')} <span className="text-slate-300">{timeAgo(server.lastHealthCheckAt)}</span>
             </span>
           </div>
         </div>
 
         {/* ---------- Setup checklist ---------- */}
         <div className="mt-4 grid grid-cols-3 gap-2">
-          <SetupItem label="Ownership" ok={server.dnsVerified} />
-          <SetupItem label="Routing" ok={server.gatewayReachable} />
-          <SetupItem label="Origin" ok={server.originReachable} />
+          <SetupItem label={t('card.setup.ownership')} ok={server.dnsVerified} />
+          <SetupItem label={t('card.setup.routing')} ok={server.gatewayReachable} />
+          <SetupItem label={t('card.setup.origin')} ok={server.originReachable} />
         </div>
-{onDetails && (
-  <Button size="sm" variant="ghost" icon={Gauge} onClick={onDetails}>
-    Details
-  </Button>
-)}
+
+        {onDetails && (
+          <Button size="sm" variant="ghost" icon={Gauge} onClick={onDetails}>
+            {t('card.details')}
+          </Button>
+        )}
+
         {/* ---------- Actions ---------- */}
         <div className="mt-5 flex flex-wrap items-center gap-2 border-t border-white/6 pt-4">
           <Button size="sm" variant={fullySetUp ? 'outline' : 'primary'} icon={Globe} onClick={onDns}>
-            {fullySetUp ? 'DNS' : 'Finish setup'}
+            {fullySetUp ? t('card.dns') : t('card.finishSetup')}
           </Button>
 
           {canManage && (
@@ -350,18 +362,20 @@ export function ServerCard({
                   disabled={busy || probing || !probeAllowed}
                   onClick={onProbe}
                 >
-                  {measured ? 'Re-measure' : 'Measure'}
+                  {measured ? t('card.remeasure') : t('card.measure')}
                 </Button>
               )}
+
               <Button size="sm" icon={Wrench} disabled={busy} onClick={onMaintenance}>
-                {inMaintenance ? 'End maintenance' : 'Maintenance'}
+                {inMaintenance ? t('card.endMaintenance') : t('card.maintenance')}
               </Button>
-              <div className="ml-auto flex gap-1">
+
+              <div className="ms-auto flex gap-1">
                 <button
                   type="button"
                   onClick={onEdit}
-                  title="Edit"
-                  aria-label="Edit server"
+                  title={t('card.edit')}
+                  aria-label={t('card.editAria')}
                   className="rounded-lg p-2 text-slate-400 hover:bg-white/5 hover:text-white"
                 >
                   <Pencil className="h-4 w-4" />
@@ -369,8 +383,8 @@ export function ServerCard({
                 <button
                   type="button"
                   onClick={onDelete}
-                  title="Delete"
-                  aria-label="Delete server"
+                  title={t('card.delete')}
+                  aria-label={t('card.deleteAria')}
                   className="rounded-lg p-2 text-slate-400 hover:bg-rose-500/10 hover:text-rose-300"
                 >
                   <Trash2 className="h-4 w-4" />

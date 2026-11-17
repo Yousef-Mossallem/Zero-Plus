@@ -2,13 +2,16 @@
 // ==================================================================
 // Zero Plus - Events Table
 // جدول عرض الأحداث الأمنية (قابل لإعادة الاستخدام في Dashboard/LiveTraffic لاحقًا)
-// - الترتيب بالضغط على عنوان العمود (بيستدعي onSort والصفحة هي اللي تبعت للباك)
-// - حالة تحميل (Skeleton) وحالة فاضي
-// - الضغط على الصف بيفتح التفاصيل
+//   - الترتيب بالضغط على عنوان العمود (بيستدعي onSort والصفحة هي اللي تبعت للباك)
+//   - حالة تحميل (Skeleton) وحالة فاضي
+//   - الضغط على الصف بيفتح التفاصيل
+//
+// i18n: عناوين الأعمدة والحالات من events.table. الـ IP والمسار والـ method
+// بيفضلوا LTR جوه الصفحة العربية، والسهم بيتعكس.
 // ==================================================================
 
 import { ArrowDown, ArrowUp, ArrowUpDown, ChevronRight, ShieldQuestion } from 'lucide-react'
-
+import { useTranslation } from 'react-i18next'
 import RiskGauge from './RiskGauge'
 import { Badge, DecisionBadge, EmptyState, Skeleton } from './ui/kit'
 import { cn, formatDateTime, timeAgo, truncate } from '../utils/format'
@@ -25,15 +28,17 @@ interface EventsTableProps {
   emptyAction?: React.ReactNode
 }
 
+type ColumnKey = 'time' | 'ip' | 'request' | 'server' | 'risk' | 'decision' | 'challenge' | ''
+
 // الأعمدة اللي ينفع الترتيب بيها (الباك بيدعمها بس)
-const SORTABLE: Partial<Record<string, EventSortBy>> = {
-  Time: 'createdAt',
-  IP: 'ipAddress',
-  Risk: 'riskScore',
-  Decision: 'decision',
+const SORTABLE: Partial<Record<ColumnKey, EventSortBy>> = {
+  time: 'createdAt',
+  ip: 'ipAddress',
+  risk: 'riskScore',
+  decision: 'decision',
 }
 
-const COLUMNS = ['Time', 'IP', 'Request', 'Server', 'Risk', 'Decision', 'Challenge', '']
+const COLUMNS: ColumnKey[] = ['time', 'ip', 'request', 'server', 'risk', 'decision', 'challenge', '']
 
 const METHOD_TONE: Record<string, string> = {
   GET: 'text-emerald-400',
@@ -53,10 +58,11 @@ function SortIcon({ active, order }: { active: boolean; order: 'asc' | 'desc' })
 }
 
 function ChallengeCell({ event }: { event: SecurityEvent }) {
+  const { t } = useTranslation('events')
   if (!event.isChallenged) return <span className="text-slate-600">—</span>
-  if (event.challengePassed === true) return <Badge tone="emerald">Passed</Badge>
-  if (event.challengePassed === false) return <Badge tone="rose">Failed</Badge>
-  return <Badge tone="amber">Pending</Badge>
+  if (event.challengePassed === true) return <Badge tone="emerald">{t('table.passed')}</Badge>
+  if (event.challengePassed === false) return <Badge tone="rose">{t('table.failed')}</Badge>
+  return <Badge tone="amber">{t('table.pending')}</Badge>
 }
 
 export default function EventsTable({
@@ -68,17 +74,25 @@ export default function EventsTable({
   onRowClick,
   emptyAction,
 }: EventsTableProps) {
+  const { t } = useTranslation('events')
+
+  // نوع الـ IP جاي من الباك (قيمة ديناميكية): لو مفيش ترجمة بيتعرض زي ما هو
+  const ts = t as unknown as (key: string, opts?: object) => string
+  const ipTypeLabel = (type?: string | null) =>
+    type ? ts(`ipTypes.${type}`, { defaultValue: type.replace('_', '/') }) : null
+
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-205 text-left">
+      <table className="w-full min-w-205 text-start">
         <thead>
           <tr className="border-b border-white/6">
             {COLUMNS.map((col) => {
               const field = SORTABLE[col]
+              const label = col ? t(`table.columns.${col}` as never) : ''
               return (
                 <th
                   key={col || 'actions'}
-                  className="px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500"
+                  className="px-5 py-3 text-start text-[11px] font-semibold uppercase tracking-wider text-slate-500"
                 >
                   {field ? (
                     <button
@@ -89,11 +103,11 @@ export default function EventsTable({
                         sortBy === field && 'text-slate-300',
                       )}
                     >
-                      {col}
+                      {label}
                       <SortIcon active={sortBy === field} order={sortOrder} />
                     </button>
                   ) : (
-                    col
+                    label
                   )}
                 </th>
               )
@@ -134,15 +148,20 @@ export default function EventsTable({
               </td>
 
               <td className="px-5 py-3.5">
-                <p className="font-mono text-sm text-white">{event.ipAddress}</p>
+                <p dir="ltr" className="text-start font-mono text-sm text-white">{event.ipAddress}</p>
                 <p className="text-[11px] text-slate-500">
-                  {[event.countryCode, event.ipType?.replace('_', '/')].filter(Boolean).join(' · ') || '—'}
+                  {[event.countryCode, ipTypeLabel(event.ipType)].filter(Boolean).join(' · ') || '—'}
                 </p>
               </td>
 
               <td className="max-w-60 px-5 py-3.5">
-                <p className="truncate font-mono text-sm text-slate-200" title={event.path}>
-                  <span className={cn('mr-2 font-semibold', METHOD_TONE[event.method] ?? 'text-slate-400')}>
+                {/* الـ method + المسار: تقنيين فبيفضلوا LTR */}
+                <p
+                  dir="ltr"
+                  className="truncate text-start font-mono text-sm text-slate-200"
+                  title={event.path}
+                >
+                  <span className={cn('me-2 font-semibold', METHOD_TONE[event.method] ?? 'text-slate-400')}>
                     {event.method}
                   </span>
                   {truncate(event.path, 36)}
@@ -155,7 +174,7 @@ export default function EventsTable({
               </td>
 
               <td className="px-5 py-3.5 text-sm text-slate-400">
-                {event.server?.domain ?? '—'}
+                <span dir="ltr" className="inline-block">{event.server?.domain ?? '—'}</span>
               </td>
 
               <td className="px-5 py-3.5">
@@ -171,7 +190,7 @@ export default function EventsTable({
               </td>
 
               <td className="px-3 py-3.5 text-slate-600">
-                <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5 group-hover:text-cyan-400" />
+                <ChevronRight className="h-4 w-4 transition-transform rtl:rotate-180 group-hover:text-cyan-400 ltr:group-hover:translate-x-0.5 rtl:group-hover:-translate-x-0.5" />
               </td>
             </tr>
           ))}
@@ -182,8 +201,8 @@ export default function EventsTable({
       {!loading && events.length === 0 && (
         <EmptyState
           icon={ShieldQuestion}
-          title="No security events found"
-          description="Nothing matches the current filters. Events appear here once the Gateway starts processing traffic."
+          title={t('table.empty.title')}
+          description={t('table.empty.description')}
           action={emptyAction}
         />
       )}

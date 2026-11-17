@@ -1,0 +1,53 @@
+{
+  "brand": { "tagline": "Security Gateway" },
+  "groups": {
+    "overview": "Overview",
+    "security": "Security",
+    "infrastructure": "Infrastructure",
+    "workspace": "Workspace"
+  },
+  "items": {
+    "dashboard": "Dashboard",
+    "securityEvents": "Security Events",
+    "reputation": "Reputation",
+    "simulation": "Simulation Lab",
+    "servers": "Servers",
+    "policies": "Policies",
+    "reports": "Reports",
+    "organization": "Organization",
+    "notifications": "Notifications",
+    "profile": "Profile"
+  },
+  "user": {
+    "fallback": "User",
+    "organizationFallback": "Organization"
+  },
+  "signOut": "Sign out",
+  "landing": {
+    "links": {
+      "home": "Home",
+      "about": "About",
+      "contact": "Contact",
+      "policies": "Policies"
+    },
+    "auth": {
+      "dashboard": "Dashboard",
+      "login": "Log in",
+      "signup": "Sign up"
+    },
+    "menu": "Menu",
+    "footer": {
+      "tagline": "Smart multi-layer DDoS protection built for small and medium businesses.",
+      "pages": "Pages",
+      "legal": "Legal",
+      "contact": "Contact",
+      "address": "Cairo, Egypt",
+      "rights": "© {{year}} Zero Plus. All rights reserved.",
+      "legalLinks": {
+        "privacy": "Privacy Policy",
+        "terms": "Terms of Service",
+        "security": "Security & Data Isolation"
+      }
+    }
+  }
+}

@@ -1,0 +1,53 @@
+{
+  "brand": { "tagline": "Sicherheits-Gateway" },
+  "groups": {
+    "overview": "Übersicht",
+    "security": "Sicherheit",
+    "infrastructure": "Infrastruktur",
+    "workspace": "Arbeitsbereich"
+  },
+  "items": {
+    "dashboard": "Dashboard",
+    "securityEvents": "Sicherheitsereignisse",
+    "reputation": "Reputation",
+    "simulation": "Simulationslabor",
+    "servers": "Server",
+    "policies": "Richtlinien",
+    "reports": "Berichte",
+    "organization": "Organisation",
+    "notifications": "Benachrichtigungen",
+    "profile": "Profil"
+  },
+  "user": {
+    "fallback": "Benutzer",
+    "organizationFallback": "Organisation"
+  },
+  "signOut": "Abmelden",
+  "landing": {
+    "links": {
+      "home": "Startseite",
+      "about": "Über uns",
+      "contact": "Kontakt",
+      "policies": "Richtlinien"
+    },
+    "auth": {
+      "dashboard": "Dashboard",
+      "login": "Anmelden",
+      "signup": "Registrieren"
+    },
+    "menu": "Menü",
+    "footer": {
+      "tagline": "Intelligenter mehrschichtiger DDoS-Schutz für kleine und mittlere Unternehmen.",
+      "pages": "Seiten",
+      "legal": "Rechtliches",
+      "contact": "Kontakt",
+      "address": "Kairo, Ägypten",
+      "rights": "© {{year}} Zero Plus. Alle Rechte vorbehalten.",
+      "legalLinks": {
+        "privacy": "Datenschutzerklärung",
+        "terms": "Nutzungsbedingungen",
+        "security": "Sicherheit & Datenisolierung"
+      }
+    }
+  }
+}

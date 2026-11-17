@@ -1,0 +1,15 @@
+{
+  "boundary": {
+    "title": "Beim Ausführen der Oberfläche ist ein Fehler aufgetreten (Runtime Error)",
+    "intro": "Die App wurde angehalten, statt einen leeren Bildschirm zu zeigen. Dies ist der Fehler:",
+    "hint": "Öffnen Sie die Browser-Konsole (F12) für mehr Details und prüfen Sie die Import-Pfade in AppRouter."
+  },
+  "validation": {
+    "email": {
+      "required": "Geschäftliche E-Mail ist erforderlich",
+      "tooShort": "E-Mail-Adresse ist zu kurz",
+      "tooLong": "E-Mail-Adresse ist zu lang",
+      "invalid": "Ungültiges E-Mail-Format"
+    }
+  }
+}

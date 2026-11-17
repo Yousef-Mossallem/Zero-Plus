@@ -2,11 +2,11 @@
 
 import { useEffect, useState } from 'react'
 import { Ban, RotateCcw, Unlock } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { Button, Field, Modal, TextArea, TextInput, type Tone } from '../../components/ui/kit'
 import { type BanInput, type ReputationEntry } from '../../services/reputationService'
 import { cn } from '../../utils/format'
 import { BAN_PRESETS } from './shared'
-
 
 // ==================================================================
 // Action Modal (ban / unban / reset)
@@ -29,6 +29,7 @@ export function ActionModal({
   onUnban: (input: { reason?: string; resetScore: boolean }) => Promise<boolean>
   onReset: (reason?: string) => Promise<boolean>
 }) {
+  const { t } = useTranslation(['reputation', 'common'])
   const [banType, setBanType] = useState<'TEMPORARY' | 'PERMANENT'>('TEMPORARY')
   const [minutes, setMinutes] = useState('120')
   const [reason, setReason] = useState('')
@@ -58,16 +59,16 @@ export function ActionModal({
 
     // نفس قواعد الباك (manualBanBodySchema): السبب 3-300 حرف، الدقائق 1-43200
     if (kind === 'ban') {
-      if (trimmed.length < 3) next.reason = 'Reason must be at least 3 characters'
-      if (trimmed.length > 300) next.reason = 'Reason must be at most 300 characters'
+      if (trimmed.length < 3) next.reason = t('modal.errReasonMin')
+      if (trimmed.length > 300) next.reason = t('modal.errReasonMax')
       if (banType === 'TEMPORARY') {
         const m = Number(minutes)
-        if (!Number.isInteger(m) || m < 1 || m > 43_200) next.minutes = 'Enter 1 – 43,200 minutes'
+        if (!Number.isInteger(m) || m < 1 || m > 43_200) next.minutes = t('modal.errMinutes')
       }
     } else if (trimmed && (trimmed.length < 3 || trimmed.length > 300)) {
-      next.reason = 'Reason must be 3 – 300 characters'
+      next.reason = t('modal.errReasonMin')
     }
-    if (kind === 'reset' && !confirmed) next.confirm = 'Please confirm to continue'
+    if (kind === 'reset' && !confirmed) next.confirm = t('modal.errConfirm')
 
     setErrors(next)
     if (Object.keys(next).length > 0) return
@@ -90,9 +91,27 @@ export function ActionModal({
   }
 
   const META = {
-    ban: { title: 'Ban device', icon: Ban, tone: 'rose' as Tone, cta: 'Apply ban', variant: 'danger' as const },
-    unban: { title: 'Lift ban', icon: Unlock, tone: 'emerald' as Tone, cta: 'Lift ban', variant: 'success' as const },
-    reset: { title: 'Reset reputation', icon: RotateCcw, tone: 'amber' as Tone, cta: 'Reset', variant: 'danger' as const },
+    ban: {
+      title: t('modal.banTitle'),
+      icon: Ban,
+      tone: 'rose' as Tone,
+      cta: t('modal.banCta'),
+      variant: 'danger' as const,
+    },
+    unban: {
+      title: t('modal.unbanTitle'),
+      icon: Unlock,
+      tone: 'emerald' as Tone,
+      cta: t('modal.unbanCta'),
+      variant: 'success' as const,
+    },
+    reset: {
+      title: t('modal.resetTitle'),
+      icon: RotateCcw,
+      tone: 'amber' as Tone,
+      cta: t('modal.resetCta'),
+      variant: 'danger' as const,
+    },
   }[kind]
 
   return (
@@ -106,7 +125,7 @@ export function ActionModal({
       footer={
         <>
           <Button variant="ghost" onClick={onClose} disabled={busy}>
-            Cancel
+            {t('actions.cancel', { ns: 'common' })}
           </Button>
           <Button variant={META.variant} loading={busy} onClick={() => void submit()}>
             {META.cta}
@@ -118,25 +137,25 @@ export function ActionModal({
       {kind === 'ban' && (
         <>
           <div className="grid grid-cols-2 gap-2">
-            {(['TEMPORARY', 'PERMANENT'] as const).map((t) => (
+            {(['TEMPORARY', 'PERMANENT'] as const).map((typ) => (
               <button
-                key={t}
+                key={typ}
                 type="button"
-                onClick={() => setBanType(t)}
+                onClick={() => setBanType(typ)}
                 className={cn(
                   'rounded-xl border px-4 py-3 text-sm font-medium',
-                  banType === t
+                  banType === typ
                     ? 'border-rose-400/40 bg-rose-500/10 text-rose-200'
                     : 'border-white/10 bg-white/3 text-slate-400 hover:border-white/20',
                 )}
               >
-                {t === 'TEMPORARY' ? 'Temporary' : 'Permanent'}
+                {typ === 'TEMPORARY' ? t('modal.temp') : t('modal.perm')}
               </button>
             ))}
           </div>
 
           {banType === 'TEMPORARY' && (
-            <Field label="Duration (minutes)" error={errors.minutes}>
+            <Field label={t('modal.duration')} error={errors.minutes}>
               <div className="mb-2 flex flex-wrap gap-2">
                 {BAN_PRESETS.map((p) => (
                   <button
@@ -169,9 +188,9 @@ export function ActionModal({
 
       {/* ---------------- Reason (كل الأنواع) ---------------- */}
       <Field
-        label={kind === 'ban' ? 'Reason' : 'Reason (optional)'}
+        label={kind === 'ban' ? t('modal.reason') : t('modal.reasonOptional')}
         error={errors.reason}
-        hint="Saved in the audit trail"
+        hint={t('modal.reasonHint')}
       >
         <TextArea
           rows={3}
@@ -180,7 +199,9 @@ export function ActionModal({
           invalid={Boolean(errors.reason)}
           onChange={(e) => setReason(e.target.value)}
           placeholder={
-            kind === 'ban' ? 'e.g. Repeated credential stuffing on /login' : 'Add a short note…'
+            kind === 'ban'
+              ? t('modal.reasonPlaceholderBan')
+              : t('modal.reasonPlaceholderNote')
           }
         />
       </Field>
@@ -194,9 +215,9 @@ export function ActionModal({
             className="mt-0.5 h-4 w-4 accent-cyan-400"
           />
           <span className="text-sm text-slate-300">
-            Also reset the reputation score
+            {t('modal.unbanReset')}
             <span className="block text-xs text-slate-500">
-              Otherwise the device may be re-banned quickly if its score is still high.
+              {t('modal.unbanResetHint')}
             </span>
           </span>
         </label>
@@ -212,7 +233,7 @@ export function ActionModal({
               className="mt-0.5 h-4 w-4 accent-amber-400"
             />
             <span className="text-sm text-slate-300">
-              I understand this clears the score and lifts any ban on this device.
+              {t('modal.resetConfirm')}
             </span>
           </label>
           {errors.confirm && <p className="mt-1.5 text-xs text-rose-400">{errors.confirm}</p>}

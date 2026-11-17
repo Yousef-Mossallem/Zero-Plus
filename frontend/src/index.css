@@ -42,6 +42,7 @@
 
   /* -------------------------------------------------------------------------- */
   /* Zero Plus Font                                                             */
+  /* (الافتراضي للاتيني. للعربي useDirection بيستبدله بـ Cairo على <html>)       */
   /* -------------------------------------------------------------------------- */
 
   --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -107,14 +108,8 @@ body {
 
   color: var(--zp-text-primary);
 
-  font-family:
-    Inter,
-    ui-sans-serif,
-    system-ui,
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    sans-serif;
+  /* الخط بيتغير مع اللغة: --font-sans بيتظبط من hooks/useDirection */
+  font-family: var(--font-sans);
 
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -401,3 +396,123 @@ html {
 }
 
 /* -------------------------------------------------------------------------- */
+/* RTL (العربي)                                                               */
+/* -------------------------------------------------------------------------- */
+
+/* المسافة بين الحروف بتقطّع اتصال الحروف العربية، فنلغيها في RTL
+   (CSS غير مُطبّق في layer فبيكسب على كلاسات tracking-* بتاعة Tailwind) */
+html[dir='rtl'] * {
+  letter-spacing: normal;
+}
+
+/* أشرطة التقدم بتنمو من اليمين في العربي */
+html[dir='rtl'] .zp-anim-bar {
+  transform-origin: right;
+}
+
+
+/* ============================================================
+   Landing Page — Refined Premium Animations
+   ============================================================ */
+
+/* Float — ناعم ومريح للعين */
+@keyframes zp-float {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(-8px); }
+}
+
+/* Glow orbs — بطيء جداً وخفيف */
+@keyframes zp-glow-drift {
+  0%   { transform: scale(1)    translateX(0px)   translateY(0px);   opacity: 0.5; }
+  33%  { transform: scale(1.06) translateX(18px)  translateY(-12px); opacity: 0.65; }
+  66%  { transform: scale(0.97) translateX(-10px) translateY(8px);   opacity: 0.45; }
+  100% { transform: scale(1)    translateX(0px)   translateY(0px);   opacity: 0.5; }
+}
+
+/* Aurora nebula — تدرج لوني بطيء في الخلفية */
+@keyframes zp-aurora {
+  0%   { background-position: 0%   30%; }
+  25%  { background-position: 50%  60%; }
+  50%  { background-position: 100% 20%; }
+  75%  { background-position: 60%  80%; }
+  100% { background-position: 0%   30%; }
+}
+
+/* Mesh drift — شبكة تتحرك ببطء شديد */
+@keyframes zp-mesh-drift {
+  0%   { background-position: 0px 0px; }
+  100% { background-position: 64px 64px; }
+}
+
+/* Particles — ارتفاع خفيف وتلاشي */
+@keyframes zp-particle-rise {
+  0%   { transform: translateY(0)   translateX(0px)              scale(1);   opacity: 0;    }
+  8%   { opacity: 0.6; }
+  85%  { opacity: 0.25; }
+  100% { transform: translateY(-90px) translateX(var(--tx, 15px)) scale(0.4); opacity: 0;    }
+}
+
+/* Rotate slow — للحلقات */
+@keyframes zp-rotate-slow {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* Ping gentle — للحلقات الخارجة من الشيلد */
+@keyframes zp-ping-gentle {
+  0%   { transform: scale(1);   opacity: 0.5; }
+  100% { transform: scale(2.2); opacity: 0; }
+}
+
+/* Shield subtle glow — نبضة ناعمة بدون scale */
+@keyframes zp-shield-glow {
+  0%, 100% { filter: drop-shadow(0 0 6px rgba(56, 189, 248, 0.4)); }
+  50%       { filter: drop-shadow(0 0 16px rgba(56, 189, 248, 0.7)); }
+}
+
+/* Gradient text shift — بديل للflicker */
+@keyframes zp-gradient-shift {
+  0%   { background-position: 0%   50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0%   50%; }
+}
+
+/* Fade-up reveal (scroll) */
+@keyframes zp-reveal-up {
+  from { opacity: 0; transform: translateY(28px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Scan line — خفيف جداً خلف كل شيء */
+@keyframes zp-line-scan {
+  0%   { transform: translateY(-4%); }
+  100% { transform: translateY(104%); }
+}
+
+/* ---- Utility classes ---- */
+
+.zp-float        { animation: zp-float 5s ease-in-out infinite; }
+.zp-rotate-slow  { animation: zp-rotate-slow 28s linear infinite; }
+.zp-shield-glow  { animation: zp-shield-glow 4s ease-in-out infinite; }
+.zp-gradient-animated {
+  background-size: 200% 200%;
+  animation: zp-gradient-shift 6s ease infinite;
+}
+
+/* Scroll-reveal helpers */
+.zp-reveal-up           { opacity: 0; }
+.zp-reveal-up.in-view   { animation: zp-reveal-up 0.65s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+
+.zp-stagger-1 { animation-delay: 0.08s; }
+.zp-stagger-2 { animation-delay: 0.16s; }
+.zp-stagger-3 { animation-delay: 0.24s; }
+.zp-stagger-4 { animation-delay: 0.32s; }
+.zp-stagger-5 { animation-delay: 0.40s; }
+.zp-stagger-6 { animation-delay: 0.48s; }
+
+/* glow-pulse — مستخدم في PageHero ومناطق أخرى */
+@keyframes zp-glow-pulse {
+  0%, 100% { opacity: 0.5; }
+  50%       { opacity: 0.85; }
+}
+.zp-glow-pulse { animation: zp-glow-pulse 3s ease-in-out infinite; }

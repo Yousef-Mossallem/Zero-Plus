@@ -1,0 +1,92 @@
+{
+  "page": {
+    "title": "Dashboard",
+    "subtitle": "Live overview of traffic, threats and server health.",
+    "allServers": "All servers",
+    "refresh": "Refresh",
+    "noAccess": "You don't have access to the dashboard",
+    "noAccessDesc": "The dashboard is available to Owners, Admins and Analysts. Ask an Owner to change your role.",
+    "updatedAt": "Updated {{time}} · refreshes every 45 seconds"
+  },
+  "overview": {
+    "totalRequests": "Total requests · {{range}}",
+    "unread_one": "{{count}} unread notification →",
+    "unread_other": "{{count}} unread notifications →",
+    "avgRisk": "Avg risk score",
+    "outOf": "out of 100",
+    "segments": {
+      "allowed": "Allowed",
+      "monitored": "Monitored",
+      "challenged": "Challenged",
+      "rateLimited": "Rate limited",
+      "blocked": "Blocked"
+    }
+  },
+  "kpi": {
+    "activeBans": "Active bans",
+    "permanent": "{{count}} permanent",
+    "criticalEntries": "Critical entries",
+    "newBans": "{{count}} new bans in range",
+    "challengePass": "Challenge pass rate",
+    "passedOf": "{{passed}} of {{total}} passed",
+    "serversOnline": "Servers online",
+    "serverHealth": "{{degraded}} degraded · {{offline}} offline"
+  },
+  "surge": {
+    "title": "Traffic surge detected",
+    "desc_one": "{{count}} surge signal in {{range}}. Review the timeline and consider tightening your policies.",
+    "desc_other": "{{count}} surge signals in {{range}}. Review the timeline and consider tightening your policies."
+  },
+  "timeline": {
+    "title": "Traffic timeline",
+    "noData": "No data points in this time range.",
+    "series": {
+      "total": "Total",
+      "allowed": "Allowed",
+      "blocked": "Blocked",
+      "challenged": "Challenged",
+      "rateLimited": "Rate limited"
+    }
+  },
+  "top": {
+    "title": "Top sources",
+    "tabs": {
+      "ip": "IPs",
+      "path": "Paths",
+      "country": "Countries",
+      "asn": "ASN",
+      "ipType": "IP type",
+      "stage": "Stage"
+    },
+    "empty": "No data for this breakdown.",
+    "avgRisk": "Avg risk {{score}}",
+    "share": "{{pct}}% of traffic"
+  },
+  "servers": {
+    "title": "Protected servers",
+    "allServers": "View all servers →",
+    "empty": "No servers added yet.",
+    "safeCapacity": "Safe capacity",
+    "quality": "Quality",
+    "lastHour": "Last hour",
+    "load": "Load",
+    "blocked": "/ {{count}} blocked",
+    "notMeasured": "Not measured",
+    "protect": "Protect",
+    "monitor": "Monitor only",
+    "checked": "checked {{time}}"
+  },
+  "threatMap": {
+    "title": "Geographic distribution",
+    "subtitle": "Requests grouped by originating country",
+    "empty": "No geographical data available.",
+    "unknown": "Unknown country: {{count}} requests",
+    "blockedPct": "{{pct}}% blocked",
+    "levels": {
+      "critical": "Critical",
+      "high": "High",
+      "medium": "Medium",
+      "low": "Low"
+    }
+  }
+}

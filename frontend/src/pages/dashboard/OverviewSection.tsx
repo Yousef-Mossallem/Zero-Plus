@@ -6,6 +6,7 @@
 
 import { Activity, AlertTriangle, Ban, CheckCircle2, Gauge, ShieldCheck, Timer, Users } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 
 import { Card, Skeleton, StatCard } from '../../components/ui/kit'
 import type { OverviewData } from '../../services/dashboardService'
@@ -36,6 +37,7 @@ function Row({ label, value, tone = 'text-white' }: { label: string; value: stri
 
 /** تنبيه ارتفاع غير طبيعي في الترافيك (risk.surgeDetected) */
 export function SurgeBanner({ data }: { data: OverviewData | null }) {
+  const { t } = useTranslation('dashboard')
   if (!data?.risk.surgeDetected) return null
   return (
     <div className="zp-anim-fade-up flex items-center gap-4 rounded-2xl border border-amber-400/30 bg-amber-500/8 px-5 py-4">
@@ -43,10 +45,12 @@ export function SurgeBanner({ data }: { data: OverviewData | null }) {
         <AlertTriangle className="h-5 w-5" />
       </span>
       <div>
-        <p className="text-sm font-semibold text-amber-100">Traffic surge detected</p>
+        <p className="text-sm font-semibold text-amber-100">{t('surge.title')}</p>
         <p className="text-xs text-amber-200/70">
-          {data.risk.surgeCount.toLocaleString('en-US')} surge signal{data.risk.surgeCount === 1 ? '' : 's'} in{' '}
-          {data.rangeLabel}. Review the timeline and consider tightening your policies.
+          {t('surge.desc', {
+            count: data.risk.surgeCount,
+            range: data.rangeLabel,
+          })}
         </p>
       </div>
     </div>

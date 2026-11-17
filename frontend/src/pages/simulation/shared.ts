@@ -3,6 +3,7 @@
 // Simulation Lab - الثوابت والـ Validation وبناء الـ Payload والـ Timeline
 // ==================================================================
 
+import i18n from '../../i18n'
 import type { SecurityEvent } from '../../services/eventsService'
 import type {
   AiMode,
@@ -37,30 +38,62 @@ export const SIM_ROLES = ['OWNER', 'ADMIN']
 // Patterns
 // ------------------------------------------------------------------
 
-export const PATTERNS: Array<{ value: SimulationPattern; label: string; description: string }> = [
-  { value: 'realistic_mix', label: 'realistic_mix', description: 'حركة طبيعية مع نسبة قليلة من السلوك غير الطبيعي. (Default)' },
-  { value: 'legit_only', label: 'legit_only', description: 'زوار شرعيون فقط.' },
-  { value: 'login_focus', label: 'login_focus', description: 'تركيز على /login والمسارات الحساسة.' },
-  { value: 'rate_stress', label: 'rate_stress', description: 'اختبار الضغط على Rate Limit.' },
-  { value: 'bot_wave', label: 'bot_wave', description: 'سلوك Bots مع User-Agent غير طبيعي وفشل التحديات.' },
-  { value: 'ban_recovery', label: 'ban_recovery', description: 'اندفاع في الطلبات، ثم الحظر، ثم التعافي.' },
-  { value: 'full_pipeline', label: 'full_pipeline', description: 'المرور على جميع الشخصيات بالتتابع.' },
-  { value: 'custom', label: 'custom', description: 'تخصيص أوزان الشخصيات يدويًا.' },
+export const PATTERNS: Array<{ value: SimulationPattern; readonly label: string; readonly description: string }> = [
+  {
+    value: 'realistic_mix',
+    get label() { return i18n.t('simulation:patterns.realistic_mix.label', 'Realistic mix') },
+    get description() { return i18n.t('simulation:patterns.realistic_mix.desc', 'Natural traffic blend with a small percentage of anomalous behavior. (Default)') },
+  },
+  {
+    value: 'legit_only',
+    get label() { return i18n.t('simulation:patterns.legit_only.label', 'Legitimate only') },
+    get description() { return i18n.t('simulation:patterns.legit_only.desc', 'Only legitimate visitors with standard browsing patterns.') },
+  },
+  {
+    value: 'login_focus',
+    get label() { return i18n.t('simulation:patterns.login_focus.label', 'Login focus') },
+    get description() { return i18n.t('simulation:patterns.login_focus.desc', 'Concentrated traffic on /login and sensitive authorization endpoints.') },
+  },
+  {
+    value: 'rate_stress',
+    get label() { return i18n.t('simulation:patterns.rate_stress.label', 'Rate stress') },
+    get description() { return i18n.t('simulation:patterns.rate_stress.desc', 'High-volume traffic testing rate limit thresholds.') },
+  },
+  {
+    value: 'bot_wave',
+    get label() { return i18n.t('simulation:patterns.bot_wave.label', 'Bot wave') },
+    get description() { return i18n.t('simulation:patterns.bot_wave.desc', 'Automated scraper signatures, headless browsers, and failed JS challenges.') },
+  },
+  {
+    value: 'ban_recovery',
+    get label() { return i18n.t('simulation:patterns.ban_recovery.label', 'Ban & recovery') },
+    get description() { return i18n.t('simulation:patterns.ban_recovery.desc', 'Bursts of aggressive requests, trigger bans, and observe recovery.') },
+  },
+  {
+    value: 'full_pipeline',
+    get label() { return i18n.t('simulation:patterns.full_pipeline.label', 'Full pipeline') },
+    get description() { return i18n.t('simulation:patterns.full_pipeline.desc', 'Sequential execution through all visitor personas.') },
+  },
+  {
+    value: 'custom',
+    get label() { return i18n.t('simulation:patterns.custom.label', 'Custom mix') },
+    get description() { return i18n.t('simulation:patterns.custom.desc', 'Manually customized weights across individual personas.') },
+  },
 ]
 
 // ------------------------------------------------------------------
 // Personas
 // ------------------------------------------------------------------
 
-export const PERSONAS: Array<{ key: PersonaKey; description: string }> = [
-  { key: 'legit_ok', description: 'زائر طبيعي، وغالبًا يحصل على ALLOW أو ينجح في JS Challenge.' },
-  { key: 'legit_sensitive', description: 'زائر شرعي يتعامل مع مسارات حساسة.' },
-  { key: 'rate_soft', description: 'طلبات قريبة من Soft Rate Limit أو أعلى منه.' },
-  { key: 'rate_hard', description: 'ضغط يتجاوز Hard Rate Limit.' },
-  { key: 'bot_ua', description: 'طلبات باستخدام User-Agent يشير إلى سكربت.' },
-  { key: 'fail_js', description: 'زائر يفشل في اجتياز التحدي.' },
-  { key: 'pass_js', description: 'زائر ينجح صراحةً في التحدي.' },
-  { key: 'bad_ip', description: 'عنوان IP بسمعة سيئة أو درجة AI مرتفعة.' },
+export const PERSONAS: Array<{ key: PersonaKey; readonly description: string }> = [
+  { key: 'legit_ok', get description() { return i18n.t('simulation:personas.legit_ok', 'Regular legitimate visitor') } },
+  { key: 'legit_sensitive', get description() { return i18n.t('simulation:personas.legit_sensitive', 'Legitimate visitor accessing sensitive endpoints') } },
+  { key: 'rate_soft', get description() { return i18n.t('simulation:personas.rate_soft', 'Traffic approaching soft rate limit') } },
+  { key: 'rate_hard', get description() { return i18n.t('simulation:personas.rate_hard', 'Traffic breaching hard rate limit') } },
+  { key: 'bot_ua', get description() { return i18n.t('simulation:personas.bot_ua', 'Scripted or automated crawler user agent') } },
+  { key: 'fail_js', get description() { return i18n.t('simulation:personas.fail_js', 'Client failing silent JS challenge') } },
+  { key: 'pass_js', get description() { return i18n.t('simulation:personas.pass_js', 'Client explicitly passing JS challenge') } },
+  { key: 'bad_ip', get description() { return i18n.t('simulation:personas.bad_ip', 'Known malicious IP / high anomaly score') } },
 ]
 
 const REALISTIC_MIX: PersonaWeights = {

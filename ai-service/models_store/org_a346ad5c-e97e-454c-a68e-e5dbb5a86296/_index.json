@@ -1,0 +1,22 @@
+{
+  "org_id": "a346ad5c-e97e-454c-a68e-e5dbb5a86296",
+  "models": {
+    "anomaly": {
+      "kind": "anomaly",
+      "n_learned": 11018,
+      "state": "ready",
+      "version": "1",
+      "saved_at": 1794711619.6773167,
+      "blob_size": 1913982
+    },
+    "surge": {
+      "kind": "surge",
+      "n_learned": 11250,
+      "state": "ready",
+      "version": "1",
+      "saved_at": 1794711629.293683,
+      "blob_size": 3155
+    }
+  },
+  "updated_at": 1794711629.313532
+}

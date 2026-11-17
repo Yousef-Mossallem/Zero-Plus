@@ -12,6 +12,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Bot, FilePlus2, FileText, MessageSquareText, RefreshCw, X } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 import { useToast } from '../components/ui/Toast'
 import {
@@ -55,6 +56,7 @@ function isReportPayload(v: unknown): v is ReportSocketPayload {
 }
 
 export default function ReportsPage() {
+  const { t } = useTranslation(['reports', 'common'])
   const toast = useToast()
   const role = useAuthStore(selectUserRole)
   const canDelete = role !== null && MANAGE_ROLES.includes(role)
@@ -110,13 +112,13 @@ export default function ReportsPage() {
         const { message } = parseApiError(err)
         if (!silent) {
           setError(message)
-          toast.error('Failed to load reports', message)
+          toast.error(t('reports:toast.loadFailed', 'Failed to load reports'), message)
         }
       } finally {
         if (id === reqId.current && !silent) setLoading(false)
       }
     },
-    [query, toast],
+    [query, toast, t],
   )
 
   useEffect(() => {
@@ -142,7 +144,7 @@ export default function ReportsPage() {
       if (payload.action === 'deleted') {
         setReports((prev) => prev.filter((r) => r.id !== payload.id))
         setSelectedId((cur) => {
-          if (cur === payload.id) toast.info('This report was deleted')
+          if (cur === payload.id) toast.info(t('reports:toast.deleted', 'This report was deleted'))
           return cur === payload.id ? null : cur
         })
         void loadRef.current(true) // الأعداد والصفحات
@@ -181,11 +183,11 @@ export default function ReportsPage() {
   const total = Object.values(summary).reduce((n, v) => n + (v ?? 0), 0)
 
   const tabs: { value: string; label: string; count: number; dot: string }[] = [
-    { value: '', label: 'All', count: total, dot: 'bg-cyan-400' },
-    { value: 'READY', label: 'Ready', count: summary.READY ?? 0, dot: 'bg-emerald-400' },
-    { value: 'GENERATING', label: 'Generating', count: summary.GENERATING ?? 0, dot: 'bg-amber-400' },
-    { value: 'PENDING', label: 'Pending', count: summary.PENDING ?? 0, dot: 'bg-slate-400' },
-    { value: 'FAILED', label: 'Failed', count: summary.FAILED ?? 0, dot: 'bg-rose-400' },
+    { value: '', label: t('reports:page.all', 'All'), count: total, dot: 'bg-cyan-400' },
+    { value: 'READY', label: t('reports:status.READY', 'Ready'), count: summary.READY ?? 0, dot: 'bg-emerald-400' },
+    { value: 'GENERATING', label: t('reports:status.GENERATING', 'Generating'), count: summary.GENERATING ?? 0, dot: 'bg-amber-400' },
+    { value: 'PENDING', label: t('reports:status.PENDING', 'Pending'), count: summary.PENDING ?? 0, dot: 'bg-slate-400' },
+    { value: 'FAILED', label: t('reports:status.FAILED', 'Failed'), count: summary.FAILED ?? 0, dot: 'bg-rose-400' },
   ]
   const firstLoad = loading && reports.length === 0
 
@@ -193,12 +195,12 @@ export default function ReportsPage() {
     <PageShell>
       <PageHeader
         icon={FileText}
-        title="Reports"
-        subtitle="AI-written security reports for your traffic."
+        title={t('reports:page.title', 'Reports')}
+        subtitle={t('reports:page.subtitle', 'AI-written security reports for your traffic.')}
         actions={
           <>
-            <Button icon={RefreshCw} loading={loading && reports.length > 0} onClick={() => void load()}>Refresh</Button>
-            <Button variant="primary" icon={FilePlus2} onClick={() => setCreating(true)}>New report</Button>
+            <Button icon={RefreshCw} loading={loading && reports.length > 0} onClick={() => void load()}>{t('common:actions.refresh', 'Refresh')}</Button>
+            <Button variant="primary" icon={FilePlus2} onClick={() => setCreating(true)}>{t('reports:page.newReport', 'New report')}</Button>
           </>
         }
       />
@@ -211,26 +213,26 @@ export default function ReportsPage() {
               <Bot className="h-6 w-6" />
             </span>
             <div>
-              <p className="text-sm font-semibold text-white">Security assistant</p>
+              <p className="text-sm font-semibold text-white">{t('reports:page.assistantTitle', 'Security assistant')}</p>
               <p className="mt-0.5 text-xs text-slate-400">
-                Ask about attacks, blocked IPs or traffic patterns, and get answers from your own data.
+                {t('reports:page.assistantDesc', 'Ask about attacks, blocked IPs or traffic patterns, and get answers from your own data.')}
               </p>
             </div>
           </div>
-          <Button icon={MessageSquareText} onClick={() => setChatOpen(true)}>Start a chat</Button>
+          <Button icon={MessageSquareText} onClick={() => setChatOpen(true)}>{t('reports:page.startChat', 'Start a chat')}</Button>
         </div>
       </Card>
 
       {/* ---------- Status tabs + secondary filters ---------- */}
       <div className="space-y-3">
         <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
-          {tabs.map((t) => {
-            const active = status === t.value
+          {tabs.map((tItem) => {
+            const active = status === tItem.value
             return (
               <button
-                key={t.label}
+                key={tItem.label}
                 type="button"
-                onClick={() => { setStatus(t.value); setPage(1) }}
+                onClick={() => { setStatus(tItem.value); setPage(1) }}
                 className={cn(
                   'flex shrink-0 items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition',
                   active
@@ -238,10 +240,10 @@ export default function ReportsPage() {
                     : 'border-white/10 bg-white/3 text-slate-400 hover:border-white/20 hover:text-white',
                 )}
               >
-                <span className={cn('h-2 w-2 rounded-full', t.dot, t.value === 'GENERATING' && t.count > 0 && 'animate-pulse')} />
-                {t.label}
+                <span className={cn('h-2 w-2 rounded-full', tItem.dot, tItem.value === 'GENERATING' && tItem.count > 0 && 'animate-pulse')} />
+                {tItem.label}
                 <span className={cn('rounded-md px-1.5 text-xs', active ? 'bg-white/15 text-white' : 'bg-white/5 text-slate-500')}>
-                  {firstLoad ? '–' : formatNumber(t.count)}
+                  {firstLoad ? '–' : formatNumber(tItem.count)}
                 </span>
               </button>
             )
@@ -250,18 +252,18 @@ export default function ReportsPage() {
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <SelectInput className="sm:w-48" value={type} onChange={(e) => { setType(e.target.value); setPage(1) }}>
-            <option value="">All types</option>
-            {(Object.keys(TYPE_META) as ReportType[]).map((t) => (
-              <option key={t} value={t} className="bg-[#0b1224]">{TYPE_META[t].label}</option>
+            <option value="">{t('reports:page.allTypes', 'All types')}</option>
+            {(Object.keys(TYPE_META) as ReportType[]).map((tType) => (
+              <option key={tType} value={tType} className="bg-[#0b1224]">{TYPE_META[tType].label}</option>
             ))}
           </SelectInput>
           <SelectInput className="sm:w-64" value={serverId} onChange={(e) => { setServerId(e.target.value); setPage(1) }}>
-            <option value="">All servers</option>
+            <option value="">{t('reports:page.allServers', 'All servers')}</option>
             {servers.map((s) => (
               <option key={s.id} value={s.id} className="bg-[#0b1224]">{s.domain}</option>
             ))}
           </SelectInput>
-          {hasFilters && <Button icon={X} variant="ghost" onClick={clearFilters}>Clear</Button>}
+          {hasFilters && <Button icon={X} variant="ghost" onClick={clearFilters}>{t('reports:page.clearFilters', 'Clear filters')}</Button>}
           {inProgressHint(summary) && (
             <span className="text-xs text-amber-300/80 sm:ml-auto">Reports in progress update live</span>
           )}
@@ -279,11 +281,11 @@ export default function ReportsPage() {
         <Card>
           <EmptyState
             icon={FileText}
-            title={hasFilters ? 'No reports match these filters' : 'No reports yet'}
-            description={hasFilters ? 'Try widening the filters.' : 'Generate your first AI security report for any period up to 31 days.'}
+            title={t('reports:page.empty.title', 'No reports found')}
+            description={t('reports:page.empty.description', 'Create your first report to get an AI analysis of your traffic.')}
             action={hasFilters
-              ? <Button icon={X} onClick={clearFilters}>Clear filters</Button>
-              : <Button variant="primary" icon={FilePlus2} onClick={() => setCreating(true)}>New report</Button>}
+              ? <Button icon={X} onClick={clearFilters}>{t('reports:page.clearFilters', 'Clear filters')}</Button>
+              : <Button variant="primary" icon={FilePlus2} onClick={() => setCreating(true)}>{t('reports:page.newReport', 'New report')}</Button>}
           />
         </Card>
       ) : (
@@ -322,7 +324,7 @@ export default function ReportsPage() {
         onDeleted={(id) => { setReports((prev) => prev.filter((r) => r.id !== id)); void load(true) }}
       />
 
-      <Drawer open={chatOpen} onClose={() => setChatOpen(false)} title="Security assistant" subtitle="Powered by Gemini · your data stays in your organization">
+      <Drawer open={chatOpen} onClose={() => setChatOpen(false)} title={t('reports:chat.title', 'Security assistant')} subtitle="Powered by Gemini · your data stays in your organization">
         <ChatPanel servers={servers} />
       </Drawer>
     </PageShell>

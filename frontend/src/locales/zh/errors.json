@@ -1,0 +1,15 @@
+{
+  "boundary": {
+    "title": "界面运行时发生错误 (Runtime Error)",
+    "intro": "应用程序已暂停以防止白屏，错误信息如下：",
+    "hint": "打开浏览器控制台 (F12) 查看详情，并检查 AppRouter 中的引用路径。"
+  },
+  "validation": {
+    "email": {
+      "required": "请输入工作邮箱",
+      "tooShort": "邮箱长度过短",
+      "tooLong": "邮箱长度过长",
+      "invalid": "邮箱格式不正确"
+    }
+  }
+}

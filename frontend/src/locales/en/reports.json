@@ -1,0 +1,107 @@
+{
+  "page": {
+    "title": "Reports",
+    "subtitle": "AI-written security reports for your traffic.",
+    "newReport": "New report",
+    "assistantTitle": "Security assistant",
+    "assistantDesc": "Ask about attacks, blocked IPs or traffic patterns, and get answers from your own data.",
+    "startChat": "Start a chat",
+    "all": "All",
+    "allServers": "All servers",
+    "allTypes": "All types",
+    "clearFilters": "Clear filters",
+    "empty": {
+      "title": "No reports found",
+      "description": "Create your first report to get an AI analysis of your traffic."
+    }
+  },
+  "status": {
+    "PENDING": "Pending",
+    "GENERATING": "Generating",
+    "READY": "Ready",
+    "FAILED": "Failed"
+  },
+  "types": {
+    "PERIODIC": "Periodic",
+    "INCIDENT": "Incident",
+    "ON_DEMAND": "On demand"
+  },
+  "modal": {
+    "title": "New report",
+    "description": "The report is generated in the background. You'll see its status update live.",
+    "type": "Type",
+    "server": "Server",
+    "optional": "optional",
+    "from": "From",
+    "to": "To",
+    "reportTitle": "Report title",
+    "reportTitlePlaceholder": "e.g. Weekly Security Audit",
+    "eventId": "Security event ID",
+    "eventIdPlaceholder": "UUID from the Events table",
+    "eventIdHint": "Links the report to the specific incident details and suspicious signals.",
+    "generate": "Generate",
+    "cancel": "Cancel",
+    "presets": {
+      "h24": "Last 24h",
+      "d7": "Last 7 days",
+      "d30": "Last 30 days"
+    }
+  },
+  "drawer": {
+    "title": "Report details",
+    "created": "created {{date}}",
+    "events": "Events",
+    "blocked": "Blocked",
+    "tokens": "Tokens",
+    "waitingTitlePending": "Waiting in the queue…",
+    "waitingTitleGenerating": "Generating your report…",
+    "waitingDesc": "This page updates by itself as soon as the report is ready. You can close it safely.",
+    "failedTitle": "Generation failed",
+    "failedDesc": "The report could not be generated. Try creating it again.",
+    "executiveSummary": "Executive summary",
+    "deleteReport": "Delete report",
+    "deleteConfirmTitle": "Delete report?",
+    "deleteConfirmDesc": "Are you sure you want to permanently delete \"{{title}}\"? This action cannot be undone."
+  },
+  "chat": {
+    "title": "Security assistant",
+    "subtitle": "Ask about your traffic, attacks and policies",
+    "useMyData": "Use my data",
+    "includeContext": "Include context",
+    "useMyDataTip": "Send 7-day statistics to the assistant (no origin IPs or secrets)",
+    "clear": "Clear",
+    "welcomeTitle": "How can I help?",
+    "welcomeDesc": "Pick a question or write your own.",
+    "inputPlaceholder": "Ask anything about your traffic, attacks, IPs or policies…",
+    "send": "Send",
+    "thinking": "Analyzing data and generating answer…",
+    "suggestions": {
+      "weekly": "Summarize the attacks I faced this week",
+      "paths": "Which paths are targeted the most?",
+      "policies": "What policy changes do you recommend?"
+    }
+  },
+  "card": {
+    "events": "{{count}} events",
+    "blockedRatio": "{{count}} blocked · {{pct}}%"
+  },
+  "toast": {
+    "loadFailed": "Failed to load reports",
+    "deleted": "This report was deleted",
+    "requested": "Report requested",
+    "createFailed": "Could not create the report",
+    "deleteSuccess": "Report deleted",
+    "deleteFailed": "Could not delete the report",
+    "chatFailed": "The assistant could not answer"
+  },
+  "validation": {
+    "startRequired": "Start date is required",
+    "endRequired": "End date is required",
+    "endAfterStart": "End must be after start",
+    "maxDays": "The period cannot exceed 31 days",
+    "maxPast": "Cannot go back more than 365 days",
+    "titleLength": "Title must be 3 – 200 characters",
+    "eventIdInvalid": "Enter a valid event ID (UUID)",
+    "messageTooLong": "The message is longer than {{max}} characters"
+  }
+}

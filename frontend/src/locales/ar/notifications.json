@@ -1,0 +1,63 @@
+{
+  "page": {
+    "title": "الإشعارات",
+    "subtitle": "تنبيهات أمنية حية وتحديثات الأنشطة في الوقت الفعلي.",
+    "markAllRead": "تحديد الكل كمقروء",
+    "markedAll": "تم تحديد جميع الإشعارات كمقروءة",
+    "refresh": "تحديث",
+    "sound": "صوت التنبيهات",
+    "soundOn": "الصوت مفعّل",
+    "soundOff": "الصوت مكتوم",
+    "search": "ابحث في الإشعارات…",
+    "allTypes": "جميع أنواع الإشعارات",
+    "unreadOnly": "غير المقروء فقط",
+    "clearFilters": "مسح الفلاتر",
+    "emptyTitle": "لا توجد إشعارات مطابقة لهذه الفلاتر",
+    "emptyTitleNone": "لا توجد إشعارات بعد",
+    "emptyDesc": "جرب تعديل خيارات التصفية.",
+    "emptyDescNone": "ستظهر التنبيهات الأمنية وإشعارات النظام هنا فور وقوعها في الوقت الفعلي."
+  },
+  "days": {
+    "today": "اليوم",
+    "yesterday": "أمس"
+  },
+  "status": {
+    "new": "جديد",
+    "markRead": "تحديد كمقروء"
+  },
+  "types": {
+    "DDOS_START": "هجوم / ارتفاع مفاجئ",
+    "NEW_BLOCK": "حظر جديد",
+    "CRITICAL_REPUTATION": "سمعة حرجة",
+    "SERVER_CAPACITY_WARNING": "تحذير سعة السيرفر",
+    "SERVER_RECOVERY": "تعافي السيرفر",
+    "POLICY_CHANGED": "تغيير في السياسات",
+    "REPORT_READY": "التقرير جاهز",
+    "SYSTEM": "إشعار نظام"
+  },
+  "severities": {
+    "1": "معلوماتي",
+    "2": "ملاحظة",
+    "3": "هام",
+    "4": "حرج",
+    "5": "طارئ"
+  },
+  "connection": {
+    "connected": "مباشر",
+    "connectedHint": "التحديثات اللحظية مفعلة",
+    "connecting": "جارٍ الاتصال…",
+    "connectingHint": "جارٍ الاتصال بالبوابة",
+    "disconnected": "غير متصل",
+    "disconnectedHint": "تتم المحاولة تلقائياً",
+    "unauthorized": "جلسة منتهية",
+    "unauthorizedHint": "تم رفض الجلسة من قبل السوكيت",
+    "idle": "خامل",
+    "idleHint": "غير متصل"
+  },
+  "filters": {
+    "anySeverity": "أي شدة",
+    "sev2": "ملاحظة وأعلى",
+    "sev3": "هام وأعلى",
+    "sev4": "حرج وأعلى"
+  }
+}
