@@ -46,8 +46,16 @@ import { reportRoutes } from './modules/reports/reports.routes.js'
 
 import { dashboardRoutes } from './modules/dashboard/dashboard.routes.js'
 
-// Simulation Lab — اسم المجلد/التصدير كما اتفقنا
+// Simulation Lab
 import { simulationsRoutes } from './modules/simulations/simulations.routes.js'
+
+// Team & Permissions
+import teamRoutes from './modules/team/team.routes.js'
+
+// Agent — نفق + Heartbeat (من غير تعديل modules/servers)
+import agentsServerRoutes, {
+  agentsInternalRoutes,
+} from './modules/agents/agents.routes.js'
 
 // ------------------------------------------------------------------
 // بناء التطبيق
@@ -146,6 +154,32 @@ export async function buildApp() {
     )
   }
 
+  // Resend (Team invites)
+  if (!process.env.RESEND_API_KEY) {
+    app.log.warn(
+      'RESEND_API_KEY مش مضبوط: إرسال دعوات الفريق والإيميلات هيتخطّى أو يفشل',
+    )
+  } else if (
+    !process.env.RESEND_FROM_EMAIL &&
+    process.env.NODE_ENV === 'production'
+  ) {
+    app.log.warn(
+      'RESEND_FROM_EMAIL مش مضبوط في الإنتاج: استخدم دومين متحقّق في Resend',
+    )
+  }
+
+  // Agent — روابط التثبيت و API
+  if (!process.env.AGENT_INSTALL_SCRIPT_URL && !process.env.AGENT_DOWNLOAD_BASE_URL) {
+    app.log.warn(
+      'AGENT_INSTALL_SCRIPT_URL / AGENT_DOWNLOAD_BASE_URL مش مضبوطين: أمر تثبيت الـ Agent هيستخدم رابط GitHub افتراضي',
+    )
+  }
+  if (!process.env.AGENT_API_BASE_URL && !process.env.GATEWAY_PUBLIC_URL) {
+    app.log.warn(
+      'AGENT_API_BASE_URL مش مضبوط: الـ Agent هيستخدم http://127.0.0.1:3000 في أمر التثبيت',
+    )
+  }
+
   // ================================================================
   // 3. Error Handlers
   // ================================================================
@@ -197,14 +231,27 @@ export async function buildApp() {
 
   await app.register(organizationRoutes, { prefix: '/organizations' })
 
+  // Team & Permissions
+  await app.register(teamRoutes, { prefix: '/team' })
+
   await app.register(policiesRoutes, { prefix: '/policies' })
   await app.register(policiesInternalRoutes, {
     prefix: '/internal/gateway',
   })
 
+  // Servers (القديم — بدون تعديل)
   await app.register(serverRoutes, { prefix: '/servers' })
   await app.register(serversInternalRoutes, {
     prefix: '/internal/gateway',
+  })
+
+  // Agent على نفس بادئ /servers (enable-tunnel, status, heartbeats, ...)
+  // من غير ما نلمس modules/servers
+  await app.register(agentsServerRoutes, { prefix: '/servers' })
+
+  // Heartbeat من الـ Agent (مصادقة AGENT_TOKEN)
+  await app.register(agentsInternalRoutes, {
+    prefix: '/internal/agent',
   })
 
   await app.register(reputationRoutes, { prefix: '/reputation' })
@@ -223,7 +270,7 @@ export async function buildApp() {
 
   await app.register(dashboardRoutes, { prefix: '/dashboard' })
 
-  // Simulation Lab (الفرونت: /simulations)
+  // Simulation Lab
   await app.register(simulationsRoutes, { prefix: '/simulations' })
 
   return app
