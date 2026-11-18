@@ -1,7 +1,10 @@
-// ==================================================================
-// Zero Plus - Auth Routes
-// WebAuthn / Passkeys (بصمة إصبع أو وجه)
-// ==================================================================
+/**
+ * backend/src/modules/auth/auth.routes.ts
+ * ==================================================================
+ * Zero Plus - Auth Routes
+ * WebAuthn / Passkeys + Team Invite accept
+ * ==================================================================
+ */
 
 import type {
   FastifyInstance,
@@ -19,6 +22,8 @@ import {
   setPasswordSchema,
   createPasskeyInviteSchema,
   finishPasskeyInviteSchema,
+  teamInviteRegisterStartSchema,
+  teamInviteRegisterFinishSchema,
 } from './auth.schema.js'
 
 import {
@@ -34,6 +39,9 @@ import {
   createPasskeyInvite,
   getPasskeyInviteOptions,
   finishPasskeyInvite,
+  getTeamInvitePreview,
+  teamInviteRegisterStart,
+  teamInviteRegisterFinish,
 } from './auth.service.js'
 
 // ------------------------------------------------------------------
@@ -41,7 +49,7 @@ import {
 // ------------------------------------------------------------------
 
 function isZodError(
-  error: unknown
+  error: unknown,
 ): error is { name: string; issues: unknown[] } {
   return (
     !!error &&
@@ -60,7 +68,7 @@ function sendZodError(reply: FastifyReply, error: { issues: unknown[] }) {
 }
 
 function mapAuthError(
-  message: string
+  message: string,
 ): { status: number; message: string } | null {
   const table: Record<string, { status: number; message: string }> = {
     EMAIL_ALREADY_EXISTS: {
@@ -115,6 +123,10 @@ function mapAuthError(
       status: 400,
       message: 'Invite expired',
     },
+    INVITE_REVOKED: {
+      status: 400,
+      message: 'Invite was revoked',
+    },
   }
   return table[message] ?? null
 }
@@ -122,7 +134,7 @@ function mapAuthError(
 async function handleError(
   error: unknown,
   request: FastifyRequest,
-  reply: FastifyReply
+  reply: FastifyReply,
 ) {
   if (error instanceof Error) {
     const mapped = mapAuthError(error.message)
@@ -152,9 +164,7 @@ async function handleError(
 export async function authRoutes(fastify: FastifyInstance) {
   // ================================================================
   // POST /auth/register/start
-  // بيانات الشركة + المستخدم → WebAuthn registration options
   // ================================================================
-
   fastify.post(
     '/register/start',
     async (request: FastifyRequest, reply: FastifyReply) => {
@@ -169,14 +179,12 @@ export async function authRoutes(fastify: FastifyInstance) {
       } catch (error: unknown) {
         return handleError(error, request, reply)
       }
-    }
+    },
   )
 
   // ================================================================
   // POST /auth/register/finish
-  // بعد ما المستخدم حط بصمته → إنشاء الحساب + حفظ Public Key + JWT
   // ================================================================
-
   fastify.post(
     '/register/finish',
     async (request: FastifyRequest, reply: FastifyReply) => {
@@ -192,14 +200,12 @@ export async function authRoutes(fastify: FastifyInstance) {
       } catch (error: unknown) {
         return handleError(error, request, reply)
       }
-    }
+    },
   )
 
   // ================================================================
   // POST /auth/login/start
-  // email → WebAuthn authentication options
   // ================================================================
-
   fastify.post(
     '/login/start',
     async (request: FastifyRequest, reply: FastifyReply) => {
@@ -214,14 +220,12 @@ export async function authRoutes(fastify: FastifyInstance) {
       } catch (error: unknown) {
         return handleError(error, request, reply)
       }
-    }
+    },
   )
 
   // ================================================================
   // POST /auth/login/finish
-  // بعد البصمة → تحقق من التوقيع + JWT
   // ================================================================
-
   fastify.post(
     '/login/finish',
     async (request: FastifyRequest, reply: FastifyReply) => {
@@ -237,13 +241,12 @@ export async function authRoutes(fastify: FastifyInstance) {
       } catch (error: unknown) {
         return handleError(error, request, reply)
       }
-    }
+    },
   )
 
   // ================================================================
-  // GET /auth/me
+  // GET /auth/me  — يرجع permissions + groups
   // ================================================================
-
   fastify.get(
     '/me',
     {
@@ -260,13 +263,12 @@ export async function authRoutes(fastify: FastifyInstance) {
       } catch (error: unknown) {
         return handleError(error, request, reply)
       }
-    }
+    },
   )
 
   // ================================================================
   // PATCH /auth/profile
   // ================================================================
-
   fastify.patch(
     '/profile',
     {
@@ -285,13 +287,12 @@ export async function authRoutes(fastify: FastifyInstance) {
       } catch (error: unknown) {
         return handleError(error, request, reply)
       }
-    }
+    },
   )
 
   // ================================================================
   // GET /auth/passkeys
   // ================================================================
-
   fastify.get(
     '/passkeys',
     {
@@ -308,14 +309,12 @@ export async function authRoutes(fastify: FastifyInstance) {
       } catch (error: unknown) {
         return handleError(error, request, reply)
       }
-    }
+    },
   )
 
   // ================================================================
-  // POST /auth/passkeys/invite
-  // إنشاء دعوة إضافة جهاز جديد (QR) — مدتها 5 دقائق
+  // POST /auth/passkeys/invite  — إضافة جهاز لمستخدم موجود (QR)
   // ================================================================
-
   fastify.post(
     '/passkeys/invite',
     {
@@ -323,7 +322,8 @@ export async function authRoutes(fastify: FastifyInstance) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
-        createPasskeyInviteSchema.parse(request.body)
+        // body اختياري / فاضي
+        createPasskeyInviteSchema.parse(request.body ?? {})
         const result = await createPasskeyInvite(fastify, request.user.id)
 
         return reply.status(200).send({
@@ -333,19 +333,17 @@ export async function authRoutes(fastify: FastifyInstance) {
       } catch (error: unknown) {
         return handleError(error, request, reply)
       }
-    }
+    },
   )
 
   // ================================================================
   // GET /auth/passkeys/invite/:token
-  // الجهاز الجديد يطلب الـ options بتاعة الـ WebAuthn (عام بدون توكن)
   // ================================================================
-
   fastify.get(
     '/passkeys/invite/:token',
     async (
       request: FastifyRequest<{ Params: { token: string } }>,
-      reply: FastifyReply
+      reply: FastifyReply,
     ) => {
       try {
         const { token } = request.params
@@ -358,19 +356,17 @@ export async function authRoutes(fastify: FastifyInstance) {
       } catch (error: unknown) {
         return handleError(error, request, reply)
       }
-    }
+    },
   )
 
   // ================================================================
   // POST /auth/passkeys/invite/:token/finish
-  // إنهاء إضافة الجهاز من الرابط العام
   // ================================================================
-
   fastify.post(
     '/passkeys/invite/:token/finish',
     async (
       request: FastifyRequest<{ Params: { token: string } }>,
-      reply: FastifyReply
+      reply: FastifyReply,
     ) => {
       try {
         const { token } = request.params
@@ -385,14 +381,12 @@ export async function authRoutes(fastify: FastifyInstance) {
       } catch (error: unknown) {
         return handleError(error, request, reply)
       }
-    }
+    },
   )
 
   // ================================================================
   // DELETE /auth/passkeys
-  // body: { passkeyId }
   // ================================================================
-
   fastify.delete(
     '/passkeys',
     {
@@ -410,14 +404,12 @@ export async function authRoutes(fastify: FastifyInstance) {
       } catch (error: unknown) {
         return handleError(error, request, reply)
       }
-    }
+    },
   )
 
   // ================================================================
   // POST /auth/password
-  // باسورد اختياري — مش للدخول الأساسي
   // ================================================================
-
   fastify.post(
     '/password',
     {
@@ -435,6 +427,84 @@ export async function authRoutes(fastify: FastifyInstance) {
       } catch (error: unknown) {
         return handleError(error, request, reply)
       }
-    }
+    },
+  )
+
+  // ================================================================
+  // ✅ جديد — TEAM INVITE (عضو جديد للمنظمة)
+  // مسار عام بدون JWT — التوكن في الـ URL من الإيميل
+  // ================================================================
+
+  // معاينة الدعوة قبل ما يبدأ Passkey
+  // GET /auth/team-invite/:token
+  fastify.get(
+    '/team-invite/:token',
+    async (
+      request: FastifyRequest<{ Params: { token: string } }>,
+      reply: FastifyReply,
+    ) => {
+      try {
+        const { token } = request.params
+        const result = await getTeamInvitePreview(fastify, token)
+
+        return reply.status(200).send({
+          success: true,
+          data: result,
+        })
+      } catch (error: unknown) {
+        return handleError(error, request, reply)
+      }
+    },
+  )
+
+  // بداية تسجيل Passkey للمدعو
+  // POST /auth/team-invite/:token/start
+  fastify.post(
+    '/team-invite/:token/start',
+    async (
+      request: FastifyRequest<{ Params: { token: string } }>,
+      reply: FastifyReply,
+    ) => {
+      try {
+        const { token } = request.params
+        const body = teamInviteRegisterStartSchema.parse(request.body ?? {})
+        const result = await teamInviteRegisterStart(
+          fastify,
+          token,
+          body.fullName,
+        )
+
+        return reply.status(200).send({
+          success: true,
+          data: result,
+        })
+      } catch (error: unknown) {
+        return handleError(error, request, reply)
+      }
+    },
+  )
+
+  // إنهاء التسجيل → User + Passkey + مجموعات + JWT
+  // POST /auth/team-invite/:token/finish
+  fastify.post(
+    '/team-invite/:token/finish',
+    async (
+      request: FastifyRequest<{ Params: { token: string } }>,
+      reply: FastifyReply,
+    ) => {
+      try {
+        const { token } = request.params
+        const body = teamInviteRegisterFinishSchema.parse(request.body)
+        const result = await teamInviteRegisterFinish(fastify, token, body)
+
+        return reply.status(201).send({
+          success: true,
+          message: 'Invite accepted successfully',
+          data: result,
+        })
+      } catch (error: unknown) {
+        return handleError(error, request, reply)
+      }
+    },
   )
 }
