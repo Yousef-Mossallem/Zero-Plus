@@ -1,9 +1,12 @@
-// backend/src/modules/auth/auth.service.ts
-// ==================================================================
-// Zero Plus - Auth Service
-// WebAuthn / Passkeys (بصمة إصبع أو وجه)
-// السيرفر يخزّن Public Key فقط — Private Key ما بيسيبش الجهاز
-// ==================================================================
+/**
+ * backend/src/modules/auth/auth.service.ts
+ * ==================================================================
+ * Zero Plus - Auth Service
+ * WebAuthn / Passkeys + JWT بصلاحيات + قبول TeamInvite
+ *
+ * التوكن يحتوي: id · email · role · organizationId · permissions[] · passkeyId?
+ * ==================================================================
+ */
 
 import type { FastifyInstance } from 'fastify'
 import bcrypt from 'bcryptjs'
@@ -16,6 +19,8 @@ import {
   type VerifiedRegistrationResponse,
   type VerifiedAuthenticationResponse,
 } from '@simplewebauthn/server'
+import type { UserRole } from '@prisma/client'
+import { computeUserPermissions } from '../../lib/permissions.js'
 import type {
   RegisterStartInput,
   RegisterFinishInput,
@@ -27,40 +32,37 @@ import type {
 } from './auth.schema.js'
 
 // ------------------------------------------------------------------
-// Config — من Environment
+// Config
 // ------------------------------------------------------------------
 
 const SALT_ROUNDS = 12
 
-/** Domain بتاع الـ Relying Party (مثال: localhost أو zeroplus.com) */
 function getRpId(): string {
   return process.env.WEBAUTHN_RP_ID || 'localhost'
 }
 
-/** اسم يظهر للمستخدم في نافذة البصمة */
 function getRpName(): string {
   return process.env.WEBAUTHN_RP_NAME || 'Zero Plus'
 }
 
-/** Origin المسموح (مثال: http://localhost:5173) */
 function getOrigin(): string {
   return process.env.WEBAUTHN_ORIGIN || 'http://localhost:5173'
 }
 
-/** مدة صلاحية الـ challenge بالثواني (للتسجيل والدخول العادي) */
-const CHALLENGE_TTL_SEC = 60
+function getFrontendUrl(): string {
+  return process.env.FRONTEND_URL || process.env.APP_URL || getOrigin()
+}
 
-/** مدة صلاحية دعوة إضافة جهاز (بالدقائق) */
-const INVITE_TTL_MINUTES = 5
+const CHALLENGE_TTL_SEC = Number(process.env.WEBAUTHN_CHALLENGE_TTL_SEC ?? 60)
+const INVITE_TTL_MINUTES = Number(process.env.PASSKEY_INVITE_TTL_MINUTES ?? 5)
+const TEAM_INVITE_CHALLENGE_PREFIX = 'team-reg:'
 
 // ------------------------------------------------------------------
-// Challenge store (Redis لو موجود، وإلا memory)
-// المفتاح: challenge:{email} أو challenge:user:{userId}
+// Challenge store (Redis أو memory)
 // ------------------------------------------------------------------
 
 type ChallengeRecord = {
   challenge: string
-  // بيانات مؤقتة للـ register/start قبل ما الـ finish يكمل
   pending?: {
     organizationName: string
     fullName: string
@@ -69,43 +71,58 @@ type ChallengeRecord = {
     passwordHash: string | null
   }
   userId?: string
+  /** قبول دعوة فريق */
+  teamInviteToken?: string
+}
+
+type RedisLike = {
+  set: (key: string, value: string, mode: string, ttl: number) => Promise<unknown>
+  get: (key: string) => Promise<string | null>
+  del: (key: string) => Promise<unknown>
+}
+
+function getRedis(fastify: FastifyInstance): RedisLike | null {
+  const r = (fastify as FastifyInstance & { redis?: RedisLike }).redis
+  return r && typeof r.set === 'function' && typeof r.get === 'function' ? r : null
 }
 
 async function saveChallenge(
   fastify: FastifyInstance,
   key: string,
-  record: ChallengeRecord
+  record: ChallengeRecord,
+  ttlSec: number = CHALLENGE_TTL_SEC,
 ): Promise<void> {
   const payload = JSON.stringify(record)
-  const redis = (fastify as FastifyInstance & { redis?: { set: Function } }).redis
-  if (redis?.set) {
-    await redis.set(`webauthn:${key}`, payload, 'EX', CHALLENGE_TTL_SEC)
+  const redis = getRedis(fastify)
+  if (redis) {
+    await redis.set(`webauthn:${key}`, payload, 'EX', ttlSec)
     return
   }
-  // fallback memory
-  if (!(globalThis as any).__zpChallenges) {
-    ;(globalThis as any).__zpChallenges = new Map<string, { exp: number; data: string }>()
+  const g = globalThis as unknown as {
+    __zpChallenges?: Map<string, { exp: number; data: string }>
   }
-  ;(globalThis as any).__zpChallenges.set(key, {
-    exp: Date.now() + CHALLENGE_TTL_SEC * 1000,
+  if (!g.__zpChallenges) g.__zpChallenges = new Map()
+  g.__zpChallenges.set(key, {
+    exp: Date.now() + ttlSec * 1000,
     data: payload,
   })
 }
 
 async function takeChallenge(
   fastify: FastifyInstance,
-  key: string
+  key: string,
 ): Promise<ChallengeRecord | null> {
-  const redis = (fastify as FastifyInstance & { redis?: { get: Function; del: Function } }).redis
-  if (redis?.get) {
+  const redis = getRedis(fastify)
+  if (redis) {
     const raw = await redis.get(`webauthn:${key}`)
     if (!raw) return null
     await redis.del(`webauthn:${key}`)
     return JSON.parse(raw) as ChallengeRecord
   }
-  const store = (globalThis as any).__zpChallenges as
-    | Map<string, { exp: number; data: string }>
-    | undefined
+  const g = globalThis as unknown as {
+    __zpChallenges?: Map<string, { exp: number; data: string }>
+  }
+  const store = g.__zpChallenges
   if (!store) return null
   const entry = store.get(key)
   store.delete(key)
@@ -130,55 +147,127 @@ function generateSlug(name: string): string {
     .replace(/^-+|-+$/g, '')
 }
 
-function signToken(
+function generateInviteToken(): string {
+  return randomBytes(32).toString('base64url')
+}
+
+/**
+ * يجلب الدور + المجموعات + الاستثناءات ويحسب permissions[]
+ */
+export async function loadUserPermissionContext(
+  fastify: FastifyInstance,
+  userId: string,
+): Promise<{
+  role: UserRole
+  permissions: string[]
+  organizationId: string
+  email: string
+  fullName: string
+  isActive: boolean
+}> {
+  const user = await fastify.prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      email: true,
+      fullName: true,
+      role: true,
+      organizationId: true,
+      isActive: true,
+      groupMemberships: {
+        select: {
+          group: {
+            select: { permissions: true },
+          },
+        },
+      },
+      permissionOverrides: {
+        select: {
+          permission: true,
+          isDeny: true,
+        },
+      },
+    },
+  })
+
+  if (!user) {
+    throw new Error('USER_NOT_FOUND')
+  }
+
+  const permissions = computeUserPermissions({
+    role: user.role,
+    groups: user.groupMemberships.map((m: { group: { permissions: any } }) => ({
+      permissions: m.group.permissions,
+    })),
+    overrides: user.permissionOverrides,
+  })
+
+  return {
+    role: user.role,
+    permissions,
+    organizationId: user.organizationId,
+    email: user.email,
+    fullName: user.fullName,
+    isActive: user.isActive,
+  }
+}
+
+/**
+ * يوقّع JWT بالصلاحيات (يستخدم signAccessToken من الـ plugin إن وُجد)
+ */
+export function issueAccessToken(
   fastify: FastifyInstance,
   payload: {
     id: string
     email: string
     role: string
     organizationId: string
+    permissions: string[]
     passkeyId?: string
+    tokenVersion?: number
+  },
+): string {
+  if (typeof fastify.signAccessToken === 'function') {
+    return fastify.signAccessToken({
+      id: payload.id,
+      email: payload.email,
+      role: payload.role,
+      organizationId: payload.organizationId,
+      permissions: payload.permissions,
+      passkeyId: payload.passkeyId,
+      tokenVersion: payload.tokenVersion,
+    })
   }
-) {
-  const body: {
-    id: string
-    email: string
-    role: string
-    organizationId: string
-    passkeyId?: string
-  } = {
+
+  // fallback لو الـ plugin لسه ما اتحملش في اختبارات
+  return fastify.jwt.sign({
     id: payload.id,
     email: payload.email,
     role: payload.role,
     organizationId: payload.organizationId,
-  }
-  if (payload.passkeyId) {
-    body.passkeyId = payload.passkeyId
-  }
-  return fastify.jwt.sign(body)
-}
-
-/** حوّل Uint8Array لـ Buffer عشان Prisma Bytes */
-function toBuffer(data: Uint8Array): Buffer {
-  return Buffer.from(data)
-}
-
-/** توليد توكن آمن للدعوة */
-function generateInviteToken(): string {
-  return randomBytes(32).toString('base64url')
+    permissions: payload.permissions,
+    ...(payload.passkeyId ? { passkeyId: payload.passkeyId } : {}),
+    ...(typeof payload.tokenVersion === 'number'
+      ? { tokenVersion: payload.tokenVersion }
+      : {}),
+  })
 }
 
 // ==================================================================
 // REGISTER START
-// ينشئ challenge + يخزّن بيانات الحساب مؤقتًا لحد الـ finish
 // ==================================================================
 
 export async function registerStart(
   fastify: FastifyInstance,
-  data: RegisterStartInput
+  data: RegisterStartInput,
 ) {
-  const { organizationName, fullName, email, sizeProfile = 'medium', password } =
-    data
+  const {
+    organizationName,
+    fullName,
+    email,
+    sizeProfile = 'medium',
+    password,
+  } = data
 
   const existingUser = await fastify.prisma.user.findUnique({
     where: { email },
@@ -189,20 +278,17 @@ export async function registerStart(
 
   const passwordHash = password ? await hashPassword(password) : null
 
-  // options لإنشاء Passkey جديد (مفيش excludeCredentials لأن الحساب جديد)
   const options = await generateRegistrationOptions({
     rpName: getRpName(),
     rpID: getRpId(),
     userName: email,
     userDisplayName: fullName,
-    // نفضّل platform authenticator = بصمة / وجه على نفس الجهاز
     authenticatorSelection: {
       authenticatorAttachment: 'platform',
       userVerification: 'required',
       residentKey: 'preferred',
       requireResidentKey: false,
     },
-    // ES256 + RS256
     supportedAlgorithmIDs: [-7, -257],
   })
 
@@ -219,19 +305,17 @@ export async function registerStart(
 
   return {
     options,
-    // الفرونت محتاج يعرف الـ rpId أحيانًا
     rpId: getRpId(),
   }
 }
 
 // ==================================================================
-// REGISTER FINISH
-// يتحقق من الـ attestation → ينشئ Org + User + Passkey + Policy → JWT
+// REGISTER FINISH — Org + User OWNER + Passkey + Policy + JWT بصلاحيات
 // ==================================================================
 
 export async function registerFinish(
   fastify: FastifyInstance,
-  data: RegisterFinishInput
+  data: RegisterFinishInput,
 ) {
   const { email, deviceName, credential } = data
 
@@ -268,7 +352,6 @@ export async function registerFinish(
   const aaguid =
     (verification.registrationInfo as any).aaguid?.toString?.() ?? null
 
-  // تأكد الإيميل لسه فاضي (سباق نادر)
   const existingUser = await fastify.prisma.user.findUnique({
     where: { email: pending.email },
   })
@@ -276,7 +359,6 @@ export async function registerFinish(
     throw new Error('EMAIL_ALREADY_EXISTS')
   }
 
-  // credentialId فريد عالميًا
   const existingCred = await fastify.prisma.passkeyCredential.findUnique({
     where: { credentialId },
   })
@@ -343,19 +425,25 @@ export async function registerFinish(
     })
 
     await tx.policy.create({
-      data: {
-        organizationId: organization.id,
-      },
+      data: { organizationId: organization.id },
     })
 
     return { user, organization, passkey }
   })
 
-  const token = signToken(fastify, {
+  // OWNER → كل الصلاحيات من الكتالوج
+  const permissions = computeUserPermissions({
+    role: result.user.role as UserRole,
+    groups: [],
+    overrides: [],
+  })
+
+  const token = issueAccessToken(fastify, {
     id: result.user.id,
     email: result.user.email,
     role: result.user.role,
     organizationId: result.user.organizationId,
+    permissions,
     passkeyId: result.passkey.id,
   })
 
@@ -367,6 +455,7 @@ export async function registerFinish(
       fullName: result.user.fullName,
       role: result.user.role,
       organizationId: result.user.organizationId,
+      permissions,
     },
     organization: {
       id: result.organization.id,
@@ -384,12 +473,11 @@ export async function registerFinish(
 
 // ==================================================================
 // LOGIN START
-// يرجع authentication options بناءً على Passkeys المستخدم
 // ==================================================================
 
 export async function loginStart(
   fastify: FastifyInstance,
-  data: LoginStartInput
+  data: LoginStartInput,
 ) {
   const { email } = data
 
@@ -409,8 +497,12 @@ export async function loginStart(
     },
   })
 
-  // نفس الرسالة سواء الإيميل مش موجود أو مفيش passkeys (منع enumeration)
-  if (!user || !user.isActive || !user.organization.isActive || user.passkeys.length === 0) {
+  if (
+    !user ||
+    !user.isActive ||
+    !user.organization.isActive ||
+    user.passkeys.length === 0
+  ) {
     throw new Error('INVALID_CREDENTIALS')
   }
 
@@ -435,13 +527,12 @@ export async function loginStart(
 }
 
 // ==================================================================
-// LOGIN FINISH
-// يتحقق من الـ assertion ضد Public Key → JWT
+// LOGIN FINISH — JWT بالصلاحيات المحسوبة من DB
 // ==================================================================
 
 export async function loginFinish(
   fastify: FastifyInstance,
-  data: LoginFinishInput
+  data: LoginFinishInput,
 ) {
   const { email, credential } = data
 
@@ -473,18 +564,14 @@ export async function loginFinish(
     },
   })
 
-  if (!passkey || !passkey.user) {
+  if (!passkey?.user) {
     throw new Error('INVALID_CREDENTIALS')
   }
 
   const user = passkey.user
 
-  if (!user.isActive) {
-    throw new Error('ACCOUNT_DISABLED')
-  }
-  if (!user.organization.isActive) {
-    throw new Error('ORGANIZATION_DISABLED')
-  }
+  if (!user.isActive) throw new Error('ACCOUNT_DISABLED')
+  if (!user.organization.isActive) throw new Error('ORGANIZATION_DISABLED')
 
   let verification: VerifiedAuthenticationResponse
   try {
@@ -525,11 +612,14 @@ export async function loginFinish(
     }),
   ])
 
-  const token = signToken(fastify, {
+  const ctx = await loadUserPermissionContext(fastify, user.id)
+
+  const token = issueAccessToken(fastify, {
     id: user.id,
     email: user.email,
     role: user.role,
     organizationId: user.organizationId,
+    permissions: ctx.permissions,
     passkeyId: passkey.id,
   })
 
@@ -541,6 +631,7 @@ export async function loginFinish(
       fullName: user.fullName,
       role: user.role,
       organizationId: user.organizationId,
+      permissions: ctx.permissions,
     },
     organization: {
       id: user.organization.id,
@@ -556,13 +647,294 @@ export async function loginFinish(
 }
 
 // ==================================================================
-// CREATE PASSKEY INVITE
-// إنشاء دعوة إضافة جهاز جديد (QR) — مدتها 5 دقائق
+// TEAM INVITE — قبول دعوة عضو جديد (Passkey أول مرة)
+// مختلف عن PasskeyInvite (إضافة جهاز لمستخدم موجود)
+// ==================================================================
+
+/**
+ * بداية تسجيل عضو مدعو: التحقق من TeamInvite + registration options
+ */
+export async function teamInviteRegisterStart(
+  fastify: FastifyInstance,
+  inviteToken: string,
+  fullName?: string,
+) {
+  const invite = await fastify.prisma.teamInvite.findUnique({
+    where: { token: inviteToken },
+    include: {
+      organization: {
+        select: { id: true, name: true, isActive: true },
+      },
+    },
+  })
+
+  if (!invite) throw new Error('INVITE_NOT_FOUND')
+  if (invite.status === 'REVOKED') throw new Error('INVITE_REVOKED')
+  if (invite.status === 'ACCEPTED') throw new Error('INVITE_ALREADY_USED')
+  if (invite.expiresAt < new Date() || invite.status === 'EXPIRED') {
+    throw new Error('INVITE_EXPIRED')
+  }
+  if (!invite.organization.isActive) throw new Error('ORGANIZATION_DISABLED')
+
+  const existing = await fastify.prisma.user.findUnique({
+    where: { email: invite.email },
+  })
+  if (existing) throw new Error('EMAIL_ALREADY_EXISTS')
+
+  const displayName = (fullName || invite.email.split('@')[0] || 'User').trim()
+
+  const options = await generateRegistrationOptions({
+    rpName: getRpName(),
+    rpID: getRpId(),
+    userName: invite.email,
+    userDisplayName: displayName,
+    authenticatorSelection: {
+      authenticatorAttachment: 'platform',
+      userVerification: 'required',
+      residentKey: 'preferred',
+      requireResidentKey: false,
+    },
+    supportedAlgorithmIDs: [-7, -257],
+  })
+
+  await saveChallenge(
+    fastify,
+    `${TEAM_INVITE_CHALLENGE_PREFIX}${inviteToken}`,
+    {
+      challenge: options.challenge,
+      teamInviteToken: inviteToken,
+      pending: {
+        organizationName: invite.organization.name,
+        fullName: displayName,
+        email: invite.email,
+        sizeProfile: 'medium',
+        passwordHash: null,
+      },
+    },
+    Math.max(CHALLENGE_TTL_SEC, 120),
+  )
+
+  return {
+    options,
+    rpId: getRpId(),
+    invite: {
+      email: invite.email,
+      role: invite.role,
+      organizationName: invite.organization.name,
+      expiresAt: invite.expiresAt,
+    },
+  }
+}
+
+/**
+ * إنهاء قبول الدعوة: User + Passkey + مجموعات أولية + JWT
+ */
+export async function teamInviteRegisterFinish(
+  fastify: FastifyInstance,
+  inviteToken: string,
+  data: {
+    fullName?: string
+    deviceName?: string
+    credential: FinishPasskeyInviteInput['credential']
+  },
+) {
+  const record = await takeChallenge(
+    fastify,
+    `${TEAM_INVITE_CHALLENGE_PREFIX}${inviteToken}`,
+  )
+  if (!record?.challenge || record.teamInviteToken !== inviteToken) {
+    throw new Error('CHALLENGE_EXPIRED')
+  }
+
+  const invite = await fastify.prisma.teamInvite.findUnique({
+    where: { token: inviteToken },
+    include: {
+      organization: { select: { id: true, name: true, slug: true, isActive: true, sizeProfile: true } },
+    },
+  })
+
+  if (!invite) throw new Error('INVITE_NOT_FOUND')
+  if (invite.status !== 'PENDING') throw new Error('INVITE_ALREADY_USED')
+  if (invite.expiresAt < new Date()) throw new Error('INVITE_EXPIRED')
+  if (!invite.organization.isActive) throw new Error('ORGANIZATION_DISABLED')
+
+  let verification: VerifiedRegistrationResponse
+  try {
+    verification = await verifyRegistrationResponse({
+      response: data.credential as any,
+      expectedChallenge: record.challenge,
+      expectedOrigin: getOrigin(),
+      expectedRPID: getRpId(),
+      requireUserVerification: true,
+    })
+  } catch {
+    throw new Error('WEBAUTHN_VERIFICATION_FAILED')
+  }
+
+  if (!verification.verified || !verification.registrationInfo) {
+    throw new Error('WEBAUTHN_VERIFICATION_FAILED')
+  }
+
+  const { credential: regCred, credentialDeviceType } =
+    verification.registrationInfo
+
+  const existingUser = await fastify.prisma.user.findUnique({
+    where: { email: invite.email },
+  })
+  if (existingUser) throw new Error('EMAIL_ALREADY_EXISTS')
+
+  const existingCred = await fastify.prisma.passkeyCredential.findUnique({
+    where: { credentialId: regCred.id },
+  })
+  if (existingCred) throw new Error('PASSKEY_ALREADY_REGISTERED')
+
+  const fullName =
+    (data.fullName || record.pending?.fullName || invite.email.split('@')[0] || 'User').trim()
+
+  const initialGroupIds = Array.isArray(invite.initialGroupIds)
+    ? invite.initialGroupIds.filter(Boolean)
+    : []
+
+  const result = await fastify.prisma.$transaction(async (tx) => {
+    const user = await tx.user.create({
+      data: {
+        email: invite.email,
+        fullName,
+        role: invite.role,
+        organizationId: invite.organizationId,
+        invitedById: invite.invitedById,
+        isActive: true,
+        lastLoginAt: new Date(),
+      },
+      select: {
+        id: true,
+        email: true,
+        fullName: true,
+        role: true,
+        organizationId: true,
+      },
+    })
+
+    const passkey = await tx.passkeyCredential.create({
+      data: {
+        credentialId: regCred.id,
+        publicKey: new Uint8Array(regCred.publicKey),
+        counter: regCred.counter,
+        transports: (data.credential.response.transports ?? []) as string[],
+        deviceName:
+          data.deviceName ?? credentialDeviceType ?? 'Passkey',
+        aaguid:
+          (verification.registrationInfo as any).aaguid?.toString?.() ?? null,
+        userId: user.id,
+        lastUsedAt: new Date(),
+      },
+      select: {
+        id: true,
+        deviceName: true,
+        transports: true,
+      },
+    })
+
+    // ربط المجموعات الأولية (لو موجودة وتابعة لنفس المنظمة)
+    if (initialGroupIds.length > 0) {
+      const groups = await tx.permissionGroup.findMany({
+        where: {
+          id: { in: initialGroupIds },
+          organizationId: invite.organizationId,
+        },
+        select: { id: true },
+      })
+      for (const g of groups) {
+        await tx.groupMembership.create({
+          data: { userId: user.id, groupId: g.id },
+        })
+      }
+    }
+
+    await tx.teamInvite.update({
+      where: { id: invite.id },
+      data: {
+        status: 'ACCEPTED',
+        usedAt: new Date(),
+        acceptedByUserId: user.id,
+      },
+    })
+
+    return { user, passkey }
+  })
+
+  const ctx = await loadUserPermissionContext(fastify, result.user.id)
+
+  const token = issueAccessToken(fastify, {
+    id: result.user.id,
+    email: result.user.email,
+    role: result.user.role,
+    organizationId: result.user.organizationId,
+    permissions: ctx.permissions,
+    passkeyId: result.passkey.id,
+  })
+
+  return {
+    token,
+    user: {
+      id: result.user.id,
+      email: result.user.email,
+      fullName: result.user.fullName,
+      role: result.user.role,
+      organizationId: result.user.organizationId,
+      permissions: ctx.permissions,
+    },
+    organization: {
+      id: invite.organization.id,
+      name: invite.organization.name,
+      slug: invite.organization.slug,
+      sizeProfile: invite.organization.sizeProfile,
+    },
+    passkey: {
+      id: result.passkey.id,
+      deviceName: result.passkey.deviceName,
+      transports: result.passkey.transports,
+    },
+  }
+}
+
+/**
+ * معاينة دعوة فريق (بدون challenge) — للصفحة قبل Passkey
+ */
+export async function getTeamInvitePreview(
+  fastify: FastifyInstance,
+  inviteToken: string,
+) {
+  const invite = await fastify.prisma.teamInvite.findUnique({
+    where: { token: inviteToken },
+    include: {
+      organization: { select: { name: true, isActive: true } },
+      invitedBy: { select: { fullName: true, email: true } },
+    },
+  })
+
+  if (!invite) throw new Error('INVITE_NOT_FOUND')
+  if (invite.status === 'REVOKED') throw new Error('INVITE_REVOKED')
+  if (invite.status === 'ACCEPTED') throw new Error('INVITE_ALREADY_USED')
+  if (invite.expiresAt < new Date()) throw new Error('INVITE_EXPIRED')
+
+  return {
+    email: invite.email,
+    role: invite.role,
+    organizationName: invite.organization.name,
+    invitedByName: invite.invitedBy.fullName,
+    expiresAt: invite.expiresAt,
+    status: invite.status,
+  }
+}
+
+// ==================================================================
+// CREATE PASSKEY INVITE (جهاز إضافي لمستخدم موجود)
 // ==================================================================
 
 export async function createPasskeyInvite(
   fastify: FastifyInstance,
-  userId: string
+  userId: string,
 ) {
   const user = await fastify.prisma.user.findUnique({
     where: { id: userId },
@@ -578,10 +950,8 @@ export async function createPasskeyInvite(
     throw new Error('USER_NOT_FOUND')
   }
 
-  // توليد توكن آمن
   const token = generateInviteToken()
 
-  // إنشاء registration options
   const options = await generateRegistrationOptions({
     rpName: getRpName(),
     rpID: getRpId(),
@@ -601,7 +971,6 @@ export async function createPasskeyInvite(
 
   const expiresAt = new Date(Date.now() + INVITE_TTL_MINUTES * 60 * 1000)
 
-  // حفظ الدعوة في الداتابيز
   await fastify.prisma.passkeyInvite.create({
     data: {
       token,
@@ -611,28 +980,25 @@ export async function createPasskeyInvite(
     },
   })
 
-  // بناء الرابط اللي هيتحط في الـ QR
-  const frontendUrl = process.env.FRONTEND_URL || getOrigin()
-  const inviteUrl = `${frontendUrl}/add-device/${token}`
+  const inviteUrl = `${getFrontendUrl()}/add-device/${token}`
 
   return {
     token,
     url: inviteUrl,
     expiresAt,
     expiresInSeconds: INVITE_TTL_MINUTES * 60,
-    options, // اختياري — لو حابب تعرض حاجة على الجهاز الأصلي
+    options,
     rpId: getRpId(),
   }
 }
 
 // ==================================================================
-// GET PASSKEY INVITE OPTIONS
-// الجهاز الجديد يطلب الـ registration options باستخدام التوكن
+// GET / FINISH PASSKEY INVITE
 // ==================================================================
 
 export async function getPasskeyInviteOptions(
   fastify: FastifyInstance,
-  token: string
+  token: string,
 ) {
   const invite = await fastify.prisma.passkeyInvite.findUnique({
     where: { token },
@@ -652,29 +1018,17 @@ export async function getPasskeyInviteOptions(
     },
   })
 
-  if (!invite) {
-    throw new Error('INVITE_NOT_FOUND')
-  }
+  if (!invite) throw new Error('INVITE_NOT_FOUND')
+  if (invite.usedAt) throw new Error('INVITE_ALREADY_USED')
+  if (invite.expiresAt < new Date()) throw new Error('INVITE_EXPIRED')
+  if (!invite.user.isActive) throw new Error('USER_NOT_FOUND')
 
-  if (invite.usedAt) {
-    throw new Error('INVITE_ALREADY_USED')
-  }
-
-  if (invite.expiresAt < new Date()) {
-    throw new Error('INVITE_EXPIRED')
-  }
-
-  if (!invite.user.isActive) {
-    throw new Error('USER_NOT_FOUND')
-  }
-
-  // نرجع الـ options من جديد (أو نستخدم الـ challenge المخزن)
   const options = await generateRegistrationOptions({
     rpName: getRpName(),
     rpID: getRpId(),
     userName: invite.user.email,
     userDisplayName: invite.user.fullName,
-    excludeCredentials: invite.user.passkeys.map((pk: any) => ({
+    excludeCredentials: invite.user.passkeys.map((pk) => ({
       id: pk.credentialId,
       transports: pk.transports as AuthenticatorTransport[],
     })),
@@ -686,7 +1040,6 @@ export async function getPasskeyInviteOptions(
     supportedAlgorithmIDs: [-7, -257],
   })
 
-  // نحدّث الـ challenge في الدعوة عشان نستخدمه في الـ finish
   await fastify.prisma.passkeyInvite.update({
     where: { id: invite.id },
     data: { challenge: options.challenge },
@@ -703,49 +1056,25 @@ export async function getPasskeyInviteOptions(
   }
 }
 
-// ==================================================================
-// FINISH PASSKEY INVITE
-// الجهاز الجديد يبعت الـ credential ويتم إضافة الـ Passkey
-// ==================================================================
-
 export async function finishPasskeyInvite(
   fastify: FastifyInstance,
   token: string,
-  data: FinishPasskeyInviteInput
+  data: FinishPasskeyInviteInput,
 ) {
   const { deviceName, credential } = data
 
   const invite = await fastify.prisma.passkeyInvite.findUnique({
     where: { token },
     include: {
-      user: {
-        select: {
-          id: true,
-          isActive: true,
-        },
-      },
+      user: { select: { id: true, isActive: true } },
     },
   })
 
-  if (!invite) {
-    throw new Error('INVITE_NOT_FOUND')
-  }
-
-  if (invite.usedAt) {
-    throw new Error('INVITE_ALREADY_USED')
-  }
-
-  if (invite.expiresAt < new Date()) {
-    throw new Error('INVITE_EXPIRED')
-  }
-
-  if (!invite.user.isActive) {
-    throw new Error('USER_NOT_FOUND')
-  }
-
-  if (!invite.challenge) {
-    throw new Error('CHALLENGE_EXPIRED')
-  }
+  if (!invite) throw new Error('INVITE_NOT_FOUND')
+  if (invite.usedAt) throw new Error('INVITE_ALREADY_USED')
+  if (invite.expiresAt < new Date()) throw new Error('INVITE_EXPIRED')
+  if (!invite.user.isActive) throw new Error('USER_NOT_FOUND')
+  if (!invite.challenge) throw new Error('CHALLENGE_EXPIRED')
 
   let verification: VerifiedRegistrationResponse
   try {
@@ -767,15 +1096,11 @@ export async function finishPasskeyInvite(
   const { credential: regCred, credentialDeviceType } =
     verification.registrationInfo
 
-  // تأكد إن الـ credential مش مسجل قبل كده
   const existingCred = await fastify.prisma.passkeyCredential.findUnique({
     where: { credentialId: regCred.id },
   })
-  if (existingCred) {
-    throw new Error('PASSKEY_ALREADY_REGISTERED')
-  }
+  if (existingCred) throw new Error('PASSKEY_ALREADY_REGISTERED')
 
-  // إضافة الـ Passkey + تعليم الدعوة كمستخدمة في نفس الـ transaction
   const passkey = await fastify.prisma.$transaction(async (tx) => {
     const created = await tx.passkeyCredential.create({
       data: {
@@ -812,21 +1137,19 @@ export async function finishPasskeyInvite(
 }
 
 // ==================================================================
-// REVOKE PASSKEY
+// REVOKE / LIST PASSKEYS
 // ==================================================================
 
 export async function revokePasskey(
   fastify: FastifyInstance,
   userId: string,
-  passkeyId: string
+  passkeyId: string,
 ) {
   const passkey = await fastify.prisma.passkeyCredential.findFirst({
     where: { id: passkeyId, userId },
   })
 
-  if (!passkey) {
-    throw new Error('PASSKEY_NOT_FOUND')
-  }
+  if (!passkey) throw new Error('PASSKEY_NOT_FOUND')
 
   const activeCount = await fastify.prisma.passkeyCredential.count({
     where: { userId, isRevoked: false },
@@ -844,10 +1167,6 @@ export async function revokePasskey(
   return { ok: true }
 }
 
-// ==================================================================
-// LIST PASSKEYS
-// ==================================================================
-
 export async function listPasskeys(fastify: FastifyInstance, userId: string) {
   return fastify.prisma.passkeyCredential.findMany({
     where: { userId, isRevoked: false },
@@ -863,7 +1182,7 @@ export async function listPasskeys(fastify: FastifyInstance, userId: string) {
 }
 
 // ==================================================================
-// GET ME
+// GET ME — مع permissions حالية من DB
 // ==================================================================
 
 export async function getMe(fastify: FastifyInstance, userId: string) {
@@ -897,24 +1216,68 @@ export async function getMe(fastify: FastifyInstance, userId: string) {
           createdAt: true,
         },
       },
+      groupMemberships: {
+        select: {
+          group: {
+            select: {
+              id: true,
+              name: true,
+              permissions: true,
+            },
+          },
+        },
+      },
     },
   })
 
-  if (!user) {
-    throw new Error('USER_NOT_FOUND')
-  }
+  if (!user) throw new Error('USER_NOT_FOUND')
 
-  return user
+  const ctx = await loadUserPermissionContext(fastify, userId)
+
+  return {
+    ...user,
+    permissions: ctx.permissions,
+    groups: (user.groupMemberships as unknown as Array<{
+      group: { id: string; name: string; permissions: unknown }
+    }>).map((m) => {
+      return ({
+        id: m.group.id,
+        name: m.group.name,
+        permissions: m.group.permissions,
+      })
+    }),
+  }
+}
+
+/**
+ * إعادة إصدار توكن بعد تغيير صلاحيات المستخدم (من team.service)
+ */
+export async function refreshTokenForUser(
+  fastify: FastifyInstance,
+  userId: string,
+  passkeyId?: string,
+) {
+  const ctx = await loadUserPermissionContext(fastify, userId)
+  if (!ctx.isActive) throw new Error('ACCOUNT_DISABLED')
+
+  return issueAccessToken(fastify, {
+    id: userId,
+    email: ctx.email,
+    role: ctx.role,
+    organizationId: ctx.organizationId,
+    permissions: ctx.permissions,
+    passkeyId,
+  })
 }
 
 // ==================================================================
-// UPDATE PROFILE
+// UPDATE PROFILE / SET PASSWORD
 // ==================================================================
 
 export async function updateProfile(
   fastify: FastifyInstance,
   userId: string,
-  data: UpdateProfileInput
+  data: UpdateProfileInput,
 ) {
   return fastify.prisma.user.update({
     where: { id: userId },
@@ -931,14 +1294,10 @@ export async function updateProfile(
   })
 }
 
-// ==================================================================
-// SET OPTIONAL PASSWORD
-// ==================================================================
-
 export async function setPassword(
   fastify: FastifyInstance,
   userId: string,
-  data: SetPasswordInput
+  data: SetPasswordInput,
 ) {
   const passwordHash = await hashPassword(data.newPassword)
   await fastify.prisma.user.update({

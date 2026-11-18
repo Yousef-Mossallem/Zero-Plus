@@ -1,42 +1,41 @@
-// ==================================================================
-// Zero Plus - Auth Validation Schemas (Zod)
-// ==================================================================
-// نظام المصادقة: WebAuthn / Passkeys
-//
-// الفكرة:
-//   - المستخدم يعمل حساب بـ (اسم الشركة + الاسم + الإيميل)
-//   - ثم يسجّل Passkey على جهازه (بصمة إصبع / وجه / Windows Hello)
-//   - السيرفر يخزّن Public Key فقط داخل PasskeyCredential
-//   - Private Key ما بيسيبش جهاز المستخدم أبدًا
-//
-// التدفق:
-//   Signup:
-//     1) POST /auth/register/start   → body: بيانات الشركة + المستخدم
-//        السيرفر يرجع registration options (challenge)
-//     2) المتصفح يستدعي navigator.credentials.create(...)
-//        المستخدم يضع بصمته / وجهه
-//     3) POST /auth/register/finish  → body: response من WebAuthn
-//        السيرفر يتحقق ويحفظ Public Key ويصدر JWT
-//
-//   Login:
-//     1) POST /auth/login/start      → body: email
-//        السيرفر يرجع authentication options (challenge)
-//     2) المتصفح يستدعي navigator.credentials.get(...)
-//     3) POST /auth/login/finish     → body: assertion من WebAuthn
-//        السيرفر يتحقق من التوقيع ويصدر JWT
-//
-//   إضافة جهاز جديد (الطريقة القديمة - على نفس الجهاز):
-//     POST /auth/passkeys/register/start + finish
-//
-//   إضافة جهاز جديد عبر QR (الطريقة الجديدة - جهاز مختلف):
-//     1) POST /auth/passkeys/invite          (مسجّل دخول) → يرجع token + URL
-//     2) الجهاز الجديد يفتح الرابط
-//     3) GET  /auth/passkeys/invite/:token   → يرجع registration options
-//     4) POST /auth/passkeys/invite/:token/finish → يضيف الـ Passkey
-//
-// معتمد على Prisma:
-//   User, Organization, PasskeyCredential, Policy, PasskeyInvite
-// ==================================================================
+/**
+ * ==================================================================
+ * Zero Plus - Auth Validation Schemas (Zod)
+ * ==================================================================
+ * نظام المصادقة: WebAuthn / Passkeys
+ *
+ * الفكرة:
+ *   - المستخدم يعمل حساب بـ (اسم الشركة + الاسم + الإيميل)
+ *   - ثم يسجّل Passkey على جهازه (بصمة إصبع / وجه / Windows Hello)
+ *   - السيرفر يخزّن Public Key فقط داخل PasskeyCredential
+ *   - Private Key ما بيسيبش جهاز المستخدم أبدًا
+ *
+ * التدفق:
+ *   Signup:
+ *     1) POST /auth/register/start
+ *     2) navigator.credentials.create(...)
+ *     3) POST /auth/register/finish → JWT + permissions
+ *
+ *   Login:
+ *     1) POST /auth/login/start
+ *     2) navigator.credentials.get(...)
+ *     3) POST /auth/login/finish → JWT + permissions
+ *
+ *   إضافة جهاز (QR) لمستخدم موجود:
+ *     POST /auth/passkeys/invite
+ *     GET  /auth/passkeys/invite/:token
+ *     POST /auth/passkeys/invite/:token/finish
+ *
+ *   قبول دعوة فريق (عضو جديد):
+ *     GET  /auth/team-invite/:token
+ *     POST /auth/team-invite/:token/start
+ *     POST /auth/team-invite/:token/finish → User + Passkey + JWT
+ *
+ * معتمد على Prisma:
+ *   User, Organization, PasskeyCredential, Policy,
+ *   PasskeyInvite, TeamInvite, PermissionGroup, GroupMembership
+ * ==================================================================
+ */
 
 import { z } from 'zod'
 
@@ -91,7 +90,6 @@ const deviceNameSchema = z
 
 /**
  * Base64URL string — الشكل اللي WebAuthn بيبعت بيه
- * challenge / credentialId / clientDataJSON / authenticatorData / signature ...
  */
 const base64UrlSchema = z
   .string()
@@ -113,12 +111,11 @@ const optionalPasswordSchema = z
   .optional()
 
 // ------------------------------------------------------------------
-// WebAuthn — أشكال الـ Client Responses (مبسّطة ومتوافقة مع @simplewebauthn)
+// WebAuthn — أشكال الـ Client Responses
 // ------------------------------------------------------------------
 
 /**
- * جزء الـ response بعد navigator.credentials.create()
- * (Registration — إنشاء Passkey جديد)
+ * بعد navigator.credentials.create() — Registration
  */
 const registrationResponseSchema = z
   .object({
@@ -133,7 +130,9 @@ const registrationResponseSchema = z
       clientDataJSON: base64UrlSchema,
       attestationObject: base64UrlSchema,
       transports: z
-        .array(z.enum(['usb', 'nfc', 'ble', 'internal', 'hybrid', 'smart-card']))
+        .array(
+          z.enum(['usb', 'nfc', 'ble', 'internal', 'hybrid', 'smart-card']),
+        )
         .optional(),
       publicKeyAlgorithm: z.number().optional(),
       publicKey: base64UrlSchema.optional(),
@@ -143,8 +142,7 @@ const registrationResponseSchema = z
   .strict()
 
 /**
- * جزء الـ response بعد navigator.credentials.get()
- * (Authentication — تسجيل الدخول بـ Passkey موجود)
+ * بعد navigator.credentials.get() — Authentication
  */
 const authenticationResponseSchema = z
   .object({
@@ -165,15 +163,8 @@ const authenticationResponseSchema = z
   .strict()
 
 // ==================================================================
-// 1) REGISTER START — بداية إنشاء الحساب
+// 1) REGISTER START
 //    POST /auth/register/start
-// ==================================================================
-// السيرفر:
-//   - يتحقق من الإيميل مش مستخدم
-//   - ينشئ challenge مؤقت (Redis أو memory)
-//   - يرجع PublicKeyCredentialCreationOptions للفرونت
-// الفرونت:
-//   - يستدعي navigator.credentials.create(options)
 // ==================================================================
 
 export const registerStartSchema = z
@@ -181,50 +172,27 @@ export const registerStartSchema = z
     organizationName: organizationNameSchema,
     fullName: fullNameSchema,
     email: emailSchema,
-
-    /** اختياري — لتوجيه موديل الـ AI */
     sizeProfile: sizeProfileSchema,
-
-    /** اختياري — مش للدخول */
     password: optionalPasswordSchema,
   })
   .strict()
 
 // ==================================================================
-// 2) REGISTER FINISH — تأكيد التسجيل بعد ما المستخدم حط بصمته
+// 2) REGISTER FINISH
 //    POST /auth/register/finish
-// ==================================================================
-// السيرفر:
-//   - يتحقق من الـ challenge
-//   - يتحقق من attestation عبر @simplewebauthn/server
-//   - ينشئ Organization + User(OWNER) + PasskeyCredential + Policy
-//   - يصدر JWT
 // ==================================================================
 
 export const registerFinishSchema = z
   .object({
-    /** نفس الإيميل اللي اتبعت في register/start عشان نربط الـ challenge */
     email: emailSchema,
-
-    /** اسم للعرض على الـ Passkey */
     deviceName: deviceNameSchema,
-
-    /**
-     * الـ credential اللي رجعه navigator.credentials.create()
-     * بعد تحويل ArrayBuffers لـ Base64URL في الفرونت
-     */
     credential: registrationResponseSchema,
   })
   .strict()
 
 // ==================================================================
-// 3) LOGIN START — بداية تسجيل الدخول
+// 3) LOGIN START
 //    POST /auth/login/start
-// ==================================================================
-// السيرفر:
-//   - يدور على User بالإيميل
-//   - يجيب Passkeys المسجّلة (غير الملغاة)
-//   - ينشئ challenge ويرجع PublicKeyCredentialRequestOptions
 // ==================================================================
 
 export const loginStartSchema = z
@@ -234,40 +202,30 @@ export const loginStartSchema = z
   .strict()
 
 // ==================================================================
-// 4) LOGIN FINISH — تأكيد الدخول بعد ما المستخدم حط بصمته
+// 4) LOGIN FINISH
 //    POST /auth/login/finish
-// ==================================================================
-// السيرفر:
-//   - يتحقق من الـ challenge
-//   - يتحقق من الـ assertion بالتوقيع ضد Public Key المخزّن
-//   - يحدّث counter + lastUsedAt + lastLoginAt
-//   - يصدر JWT
 // ==================================================================
 
 export const loginFinishSchema = z
   .object({
     email: emailSchema,
-
-    /** الـ assertion من navigator.credentials.get() */
     credential: authenticationResponseSchema,
   })
   .strict()
 
 // ==================================================================
-// 5) ADD PASSKEY START — إضافة جهاز/بصمة جديدة (مسجّل دخول) - الطريقة القديمة
+// 5) ADD PASSKEY START (قديم — إن وُجدت routes)
 //    POST /auth/passkeys/register/start
 // ==================================================================
 
 export const addPasskeyStartSchema = z
-  .object({
-    /** فاضي حاليًا — المستخدم من الـ JWT */
-  })
+  .object({})
   .strict()
   .optional()
   .default({})
 
 // ==================================================================
-// 6) ADD PASSKEY FINISH - الطريقة القديمة
+// 6) ADD PASSKEY FINISH (قديم)
 //    POST /auth/passkeys/register/finish
 // ==================================================================
 
@@ -279,13 +237,12 @@ export const addPasskeyFinishSchema = z
   .strict()
 
 // ==================================================================
-// 7) REVOKE PASSKEY — إلغاء مفتاح
+// 7) REVOKE PASSKEY
 //    DELETE /auth/passkeys
 // ==================================================================
 
 export const revokePasskeySchema = z
   .object({
-    /** id بتاع صف PasskeyCredential في الداتابيز (مش credentialId) */
     passkeyId: z.string().uuid('معرّف الـ Passkey غير صالح'),
   })
   .strict()
@@ -302,7 +259,7 @@ export const updateProfileSchema = z
   .strict()
 
 // ==================================================================
-// 9) SET OPTIONAL PASSWORD (مش للدخول الأساسي)
+// 9) SET OPTIONAL PASSWORD
 //    POST /auth/password
 // ==================================================================
 
@@ -319,30 +276,51 @@ export const setPasswordSchema = z
   .strict()
 
 // ==================================================================
-// 10) CREATE PASSKEY INVITE — إنشاء دعوة إضافة جهاز (QR)
+// 10) CREATE PASSKEY INVITE (جهاز إضافي)
 //     POST /auth/passkeys/invite
-// ==================================================================
-// المستخدم مسجّل دخول → السيرفر ينشئ توكن صالح 5 دقائق
-// ويرجع الـ token + الـ URL اللي هيتحط في الـ QR
 // ==================================================================
 
 export const createPasskeyInviteSchema = z
-  .object({
-    // فاضي حاليًا — المستخدم بييجي من الـ JWT
-  })
+  .object({})
   .strict()
   .optional()
   .default({})
 
 // ==================================================================
-// 11) FINISH PASSKEY INVITE — إنهاء إضافة الجهاز من الرابط
+// 11) FINISH PASSKEY INVITE
 //     POST /auth/passkeys/invite/:token/finish
-// ==================================================================
-// الجهاز الجديد بيبعت الـ credential بعد ما المستخدم حط بصمته
 // ==================================================================
 
 export const finishPasskeyInviteSchema = z
   .object({
+    deviceName: deviceNameSchema,
+    credential: registrationResponseSchema,
+  })
+  .strict()
+
+// ==================================================================
+// 12) ✅ جديد — TEAM INVITE ACCEPT
+//     عضو جديد يدخل المنظمة عبر لينك الإيميل
+// ==================================================================
+
+/**
+ * GET  /auth/team-invite/:token          → مفيش body
+ * POST /auth/team-invite/:token/start
+ */
+export const teamInviteRegisterStartSchema = z
+  .object({
+    /** الاسم اللي هيظهر على الحساب (اختياري — الافتراضي من الإيميل) */
+    fullName: fullNameSchema.optional(),
+  })
+  .strict()
+
+/**
+ * POST /auth/team-invite/:token/finish
+ * نفس credential بتاع التسجيل + اسم اختياري
+ */
+export const teamInviteRegisterFinishSchema = z
+  .object({
+    fullName: fullNameSchema.optional(),
     deviceName: deviceNameSchema,
     credential: registrationResponseSchema,
   })
@@ -363,6 +341,18 @@ export type SetPasswordInput = z.infer<typeof setPasswordSchema>
 export type CreatePasskeyInviteInput = z.infer<typeof createPasskeyInviteSchema>
 export type FinishPasskeyInviteInput = z.infer<typeof finishPasskeyInviteSchema>
 
+/** ✅ جديد */
+export type TeamInviteRegisterStartInput = z.infer<
+  typeof teamInviteRegisterStartSchema
+>
+export type TeamInviteRegisterFinishInput = z.infer<
+  typeof teamInviteRegisterFinishSchema
+>
+
 /** أشكال WebAuthn بعد التحويل من الفرونت */
-export type RegistrationCredentialJSON = z.infer<typeof registrationResponseSchema>
-export type AuthenticationCredentialJSON = z.infer<typeof authenticationResponseSchema>
+export type RegistrationCredentialJSON = z.infer<
+  typeof registrationResponseSchema
+>
+export type AuthenticationCredentialJSON = z.infer<
+  typeof authenticationResponseSchema
+>

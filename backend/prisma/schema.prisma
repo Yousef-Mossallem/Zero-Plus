@@ -1,24 +1,17 @@
 // ==================================================================
-// Zero Plus - Database Schema (مدمج: Simulation الموسّع + Indexing كامل)
-// Auth: WebAuthn / Passkeys (بصمة إصبع أو وجه)
-// السيرفر يخزّن Public Key فقط — Private Key ما بيسيبش جهاز المستخدم
-// Prisma 6.x / 7.x compatible
-// Collective Immunity: معلّق مؤقتًا
-// Origin Probe: حقول السعة + تاريخ القياسات (ServerProbeRun)
-// Reports: نوع التقرير + ربط بسيرفر + بيانات استهلاك Gemini
-// Simulation Lab: أنماط كاملة + options + ربط Events بالـ Run
-// Indexing: مزامنة الحظر للـ Gateway + فلاتر الداشبورد + الأحداث
-// Passkey Invite: دعوات إضافة جهاز جديد عبر QR (مدتها 5 دقائق)
+// Zero Plus - Database Schema
+// Auth: WebAuthn / Passkeys
+// Agent: Heartbeat + توكن تثبيت + حقول سعة
+// Team: مجموعات + صلاحيات JWT + دعوات أعضاء
+// Simulation Lab + Origin Probe + Reports + Indexing كامل
 // ==================================================================
 
 generator client {
   provider = "prisma-client-js"
-  // output   = "../generated/prisma"
 }
 
 datasource db {
   provider = "postgresql"
-  // url      = env("DATABASE_URL")
 }
 
 // ==================================================================
@@ -125,17 +118,15 @@ enum DetectionStage {
   CLEARANCE_REVOKED
 }
 
-// أنماط المحاكاة — متوافقة مع الفرونت / Worker
 enum SimulationPattern {
-  REALISTIC_MIX // طبيعي + قليل شذوذ (الافتراضي المنتج)
-  LEGIT_ONLY // زوار شرعيون فقط
-  LOGIN_FOCUS // تركيز مسارات حساسة
-  RATE_STRESS // ضغط rate limit
-  BOT_WAVE // بوتات / فشل تحديات
-  BAN_RECOVERY // هجوم ثم حظر ثم تعافي
-  FULL_PIPELINE // تمرير على كل الشخصيات
-  CUSTOM // أوزان من options.personaWeights
-  // قيم قديمة (اختياري الإبقاء للتوافق)
+  REALISTIC_MIX
+  LEGIT_ONLY
+  LOGIN_FOCUS
+  RATE_STRESS
+  BOT_WAVE
+  BAN_RECOVERY
+  FULL_PIPELINE
+  CUSTOM
   NORMAL
   SUSPICIOUS_BURST
   REPEATED_REQUESTS
@@ -144,11 +135,11 @@ enum SimulationPattern {
 }
 
 enum SimulationStatus {
-  PENDING // اتسجل ولسه الـ Worker ما بدأش
+  PENDING
   RUNNING
-  STOPPED // إيقاف يدوي
-  COMPLETED // خلصت المدة
-  FAILED // خطأ تشغيلي
+  STOPPED
+  COMPLETED
+  FAILED
 }
 
 enum SimulationIntensity {
@@ -158,18 +149,38 @@ enum SimulationIntensity {
 }
 
 // ==================================================================
+// ✅ جديد — ENUMS للـ Agent
+// ==================================================================
+
+enum AgentOs {
+  LINUX
+  WINDOWS
+  UNKNOWN
+}
+
+// ==================================================================
+// ✅ جديد — ENUMS للـ Team & Permissions
+// ==================================================================
+
+// حالة دعوة العضو
+enum TeamInviteStatus {
+  PENDING   // اتبعت، لسه ما اتقبلتش
+  ACCEPTED  // اتقبلت وفعّل الـ Passkey
+  EXPIRED   // انتهت مدتها
+  REVOKED   // المالك ألغاها
+}
+
+// ==================================================================
 // CORE TENANT
 // ==================================================================
 
 model Organization {
-  id       String  @id @default(uuid())
-  name     String
-  slug     String  @unique
-  plan     String  @default("free")
-  isActive Boolean @default(true)
-
-  // نقطة بداية موديل الـ AI
-  sizeProfile String @default("medium") // small | medium | large
+  id          String  @id @default(uuid())
+  name        String
+  slug        String  @unique
+  plan        String  @default("free")
+  isActive    Boolean @default(true)
+  sizeProfile String  @default("medium")
 
   users             User[]
   servers           Server[]
@@ -181,76 +192,71 @@ model Organization {
   reports           Report[]
   simulationRuns    SimulationRun[]
 
+  // ✅ جديد — Team
+  permissionGroups    PermissionGroup[]
+  teamInvites         TeamInvite[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([slug])
-  @@index([isActive]) // مهم جداً لـ listBansForGateway (organization.isActive)
+  @@index([isActive])
 }
 
 model User {
-  id String @id @default(uuid())
-
-  // للإظهار والتواصل — مش وسيلة الدخول
+  id          String    @id @default(uuid())
   email       String    @unique
   fullName    String
   role        UserRole  @default(OWNER)
   isActive    Boolean   @default(true)
   lastLoginAt DateTime?
-
-  // احتياطي اختياري فقط (مش للدخول الأساسي)
   passwordHash String?
-
   uiPreferences Json?
+acceptedTeamInvites TeamInvite[]
+  // ✅ جديد — من دعاه (null = مؤسس الحساب)
+  invitedById String?
+  invitedBy   User?   @relation("UserInvites", fields: [invitedById], references: [id], onDelete: SetNull)
+  invitedUsers User[] @relation("UserInvites")
 
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
-  // المفاتيح العامة المسجّلة (Passkeys)
-  passkeys PasskeyCredential[]
-
-  // دعوات إضافة جهاز جديد (QR)
+  passkeys       PasskeyCredential[]
   passkeyInvites PasskeyInvite[]
 
-  // Runs بدأها المستخدم (اختياري)
   simulationRunsStarted SimulationRun[] @relation("SimulationStartedBy")
+
+  // ✅ جديد — عضويات المجموعات
+  groupMemberships    GroupMembership[]
+
+  // ✅ جديد — استثناءات صلاحيات فردية
+  permissionOverrides UserPermissionOverride[]
+
+  // ✅ جديد — الدعوات اللي بعتها (كـ Inviter)
+  sentInvites TeamInvite[] @relation("InviteSentBy")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([organizationId])
   @@index([email])
+  @@index([invitedById])
 }
 
 // ==================================================================
 // AUTH — WebAuthn / Passkeys
-// السيرفر يخزّن: credentialId + publicKey + counter
-// Private Key يبقى داخل Secure Enclave / TPM على جهاز المستخدم
 // ==================================================================
 
 model PasskeyCredential {
-  id String @id @default(uuid())
-
-  // معرّف الـ credential من WebAuthn (unique عالميًا)
-  credentialId String @unique
-
-  // المفتاح العام فقط (Bytes) — عديم الفائدة بدون الـ private key
-  publicKey Bytes
-
-  // لحماية من replay (WebAuthn signature counter)
-  counter Int @default(0)
-
-  // usb / nfc / ble / internal (platform authenticator = بصمة/وجه)
-  transports String[]
-
-  // اسم للعرض: "iPhone Face ID" / "Windows Hello" / "Android Fingerprint"
-  deviceName String?
-
-  // AAGUID للـ authenticator (اختياري)
-  aaguid String?
-
-  lastUsedAt DateTime?
-  isRevoked  Boolean   @default(false)
+  id           String    @id @default(uuid())
+  credentialId String    @unique
+  publicKey    Bytes
+  counter      Int       @default(0)
+  transports   String[]
+  deviceName   String?
+  aaguid       String?
+  lastUsedAt   DateTime?
+  isRevoked    Boolean   @default(false)
 
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -262,25 +268,12 @@ model PasskeyCredential {
   @@index([credentialId])
 }
 
-// ==================================================================
-// PASSKEY INVITE — دعوة إضافة جهاز جديد عبر QR
-// التوكن صالح لمدة 5 دقائق ويُستخدم مرة واحدة فقط
-// ==================================================================
-
 model PasskeyInvite {
-  id String @id @default(uuid())
-
-  // التوكن اللي بيتحط في الـ QR / الرابط (unique)
-  token String @unique
-
-  // الـ challenge بتاع WebAuthn (اختياري — ممكن يتخزن في Redis كمان)
+  id        String    @id @default(uuid())
+  token     String    @unique
   challenge String?
-
-  // وقت انتهاء الصلاحية (عادةً الآن + 5 دقائق)
   expiresAt DateTime
-
-  // وقت الاستخدام (null = لسه متستخدمش)
-  usedAt DateTime?
+  usedAt    DateTime?
 
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -295,6 +288,124 @@ model PasskeyInvite {
 }
 
 // ==================================================================
+// ✅ جديد — TEAM & PERMISSIONS
+//
+// الفكرة: كل الصلاحيات بتتحسب وقت إصدار JWT بس.
+// الـ jwt.plugin.ts هو الوحيد اللي بيتفحص.
+// الموديولات الحالية مش محتاج تتعدّل.
+//
+// صلاحية = string بالشكل ده:
+//   "resource:action"
+// أمثلة:
+//   "dashboard:view"
+//   "servers:view" | "servers:create" | "servers:edit" | "servers:delete"
+//   "events:view"
+//   "policies:view" | "policies:edit"
+//   "reports:view"  | "reports:create"
+//   "reputation:view" | "reputation:ban"
+//   "simulation:view" | "simulation:run"
+//   "team:view" | "team:manage"
+//   "settings:view" | "settings:edit"
+// ==================================================================
+
+// مجموعة صلاحيات (مثل "Support Team" أو "Read Only")
+model PermissionGroup {
+  id          String  @id @default(uuid())
+  name        String                        // اسم المجموعة
+  description String?
+  isSystem    Boolean @default(false)       // مجموعات النظام ما تتحذفش
+
+  // قايمة الصلاحيات الممنوحة لهذه المجموعة
+  // مخزّنة كـ String[] — مثل ["servers:view", "events:view"]
+  permissions String[]
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  members GroupMembership[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+  @@index([isSystem])
+}
+
+// عضوية مستخدم في مجموعة
+model GroupMembership {
+  id String @id @default(uuid())
+
+  userId  String
+  user    User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  groupId String
+  group   PermissionGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, groupId])
+  @@index([userId])
+  @@index([groupId])
+}
+
+// استثناءات فردية على مستوى مستخدم واحد
+// grant = صلاحية زيادة على المجموعة
+// deny  = صلاحية مسحوبة حتى لو المجموعة عندها
+model UserPermissionOverride {
+  id         String @id @default(uuid())
+  permission String // مثل "reports:create"
+  isDeny     Boolean @default(false) // false = منح | true = سحب
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, permission])
+  @@index([userId])
+}
+
+// دعوة عضو جديد للمنظمة (بالإيميل + لينك)
+// مختلفة عن PasskeyInvite (دي لإضافة جهاز لمستخدم موجود)
+model TeamInvite {
+  id        String           @id @default(uuid())
+  email     String                                 // الإيميل المدعو
+  token     String           @unique               // في الرابط
+  status    TeamInviteStatus @default(PENDING)
+  expiresAt DateTime                               // عادةً 48–72 ساعة
+  usedAt    DateTime?
+
+  // الدور الأساسي للعضو الجديد (يتحوّل لصلاحيات بعدين)
+  role      UserRole @default(VIEWER)
+
+  // مجموعات مخصصة للعضو الجديد (اختياري)
+  // بيتخزن كـ groupIds يتطبقوا بعد القبول
+  initialGroupIds String[]
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  invitedById String
+  invitedBy   User   @relation("InviteSentBy", fields: [invitedById], references: [id], onDelete: Cascade)
+
+  // المستخدم اللي اتعمل من الدعوة دي (بعد القبول)
+  acceptedByUserId String? @unique
+ // أزل الـ @relation المخصص من هنا أيضاً ليطابق الطرف الأول:
+  acceptedBy       User?   @relation(fields: [acceptedByUserId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([email])
+  @@index([token])
+  @@index([organizationId])
+  @@index([status])
+  @@index([organizationId, status])
+  @@index([expiresAt])
+}
+
+// ==================================================================
 // PROTECTED SERVERS
 // ==================================================================
 
@@ -306,14 +417,14 @@ model Server {
   status     ServerStatus @default(PENDING)
   mode       ServerMode   @default(PROTECT)
 
-  // ----- سعة من Origin Probe -----
-  maxRequestsPerSecond  Int? // median / sustained RPS من آخر قياس ناجح
-  safeRequestsPerSecond Int? // رقم التسعير الآمن (مثلاً 80% من max)
-  p95ResponseTimeMs     Int? // latency وقت الهدوء
-  loadLatencyP99Ms      Int? // p99 تحت الحمل
+  // Origin Probe
+  maxRequestsPerSecond  Int?
+  safeRequestsPerSecond Int?
+  p95ResponseTimeMs     Int?
+  loadLatencyP99Ms      Int?
   probeErrorRate        Float?
-  probeConfidence       String? // high | medium | low
-  probeRecommendation   String? // excellent | good | fair | poor | down
+  probeConfidence       String?
+  probeRecommendation   String?
   lastProbeAt           DateTime?
 
   cpuCores           Int?
@@ -329,6 +440,33 @@ model Server {
   originReachable   Boolean   @default(false)
   sslEnabled        Boolean   @default(true)
 
+  // ✅ جديد — Agent fields
+  // التوكن اللي بيتعمل مرة واحدة وبيتبعت في أمر التثبيت
+  agentToken        String?   @unique
+  // hash للتوكن (أكثر أماناً من تخزين النص الخام)
+  agentTokenHash    String?   @unique
+  // إصدار الـ Agent المركّب على سيرفر العميل
+  agentVersion      String?
+  // نظام التشغيل والمعمارية
+  agentOs           AgentOs?
+  agentArch         String?   // amd64 | arm64
+  // آخر نبضة وصلت
+  lastAgentAt       DateTime?
+  // هل النفق شغال؟
+  tunnelUp          Boolean   @default(false)
+  // IP peer داخل النفق (من WireGuard)
+  tunnelPeerIp      String?
+  // آخر لقطة مقاييس
+  agentCpuPercent   Float?
+  agentRamPercent   Float?
+  agentDiskPercent  Float?
+  agentLoadAvg1m    Float?
+  // سعة تقديرية من الـ Agent
+  estimatedMaxRps   Int?
+  // هل الأصل شغال من منظور الـ Agent
+  agentOriginOk     Boolean?
+  agentOriginLatMs  Int?
+
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
@@ -338,29 +476,82 @@ model Server {
   probeRuns      ServerProbeRun[]
   reports        Report[]
 
+  // ✅ جديد — سجل نبضات الـ Agent
+  agentHeartbeats AgentHeartbeat[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([organizationId])
   @@index([status])
   @@index([lastProbeAt])
+  // ✅ جديد
+  @@index([lastAgentAt])
+  @@index([tunnelUp])
+  @@index([organizationId, tunnelUp])
+}
+
+// ==================================================================
+// ✅ جديد — AGENT HEARTBEAT HISTORY
+// كل نبضة بتتسجل هنا للتسعير وتحليل الأداء
+// Server بيحتفظ بآخر قيم كـ snapshot للسرعة
+// ==================================================================
+
+model AgentHeartbeat {
+  id String @id @default(uuid())
+
+  // هوية
+  agentVersion String?
+  agentOs      AgentOs?
+  agentArch    String?
+  hostname     String?
+
+  // نفق
+  tunnelUp          Boolean @default(false)
+  lastHandshakeAgeSec Int?   // ثواني منذ آخر WG handshake
+  tunnelTxBytes     BigInt? // تراكمي
+  tunnelRxBytes     BigInt? // تراكمي
+
+  // مقاييس
+  cpuPercent    Float?
+  ramPercent    Float?
+  diskPercent   Float?
+  loadAvg1m     Float?
+  netTxBytesPs  Float? // بايت/ث منذ آخر نبضة
+  netRxBytesPs  Float?
+
+  // صحة الأصل
+  originOk      Boolean?
+  originLatMs   Int?
+
+  // تقدير السعة (من الـ Agent نفسه — اختياري)
+  suggestedMaxRps Int?
+
+  serverId String
+  server   Server @relation(fields: [serverId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([serverId, createdAt])
+  @@index([serverId, tunnelUp])
+  // للتسعير: نطاق زمني لسيرفر معين
+  @@index([serverId, createdAt, cpuPercent])
 }
 
 // ==================================================================
 // ORIGIN PROBE HISTORY
-// كل تشغيل لـ /internal/probe يتسجل هنا (steps + runs في details)
 // ==================================================================
 
 model ServerProbeRun {
-  id             String   @id @default(uuid())
+  id             String  @id @default(uuid())
   maxRps         Int?
   safeRps        Int?
   p95Ms          Int?
   p99LoadMs      Int?
   errorRate      Float?
-  confidence     String? // high | medium | low
-  recommendation String? // excellent | good | fair | poor | down
-  details        Json? // { steps, runs, saturated, redirected, ... }
+  confidence     String?
+  recommendation String?
+  details        Json?
 
   createdAt DateTime @default(now())
 
@@ -371,20 +562,19 @@ model ServerProbeRun {
 }
 
 // ==================================================================
-// REPUTATION (لزوار الموقع المحمي — مش لدخول الداشبورد)
-// deviceFingerprint هنا = بصمة متصفح الزائر (Canvas/JA4) لكشف البوتات
+// REPUTATION
 // ==================================================================
 
 model ReputationEntry {
-  id                 String    @id @default(uuid())
-  ipAddress          String
-  deviceFingerprint  String? // بصمة متصفح الزائر (مش Passkey)
-  ja3Fingerprint     String?
-  ja4Fingerprint     String?
-  countryCode        String?
-  asn                Int?
-  asOrg              String?
-  ipType             IpType    @default(UNKNOWN)
+  id                String    @id @default(uuid())
+  ipAddress         String
+  deviceFingerprint String?
+  ja3Fingerprint    String?
+  ja4Fingerprint    String?
+  countryCode       String?
+  asn               Int?
+  asOrg             String?
+  ipType            IpType    @default(UNKNOWN)
 
   score              Int       @default(1)
   banStatus          BanStatus @default(NONE)
@@ -394,18 +584,18 @@ model ReputationEntry {
   isManualBan        Boolean   @default(false)
   isAllowlisted      Boolean   @default(false)
 
-  failedChecksCount  Int       @default(0)
-  jsFailCount        Int       @default(0)
-  advancedFailCount  Int       @default(0)
-  collectiveHitCount Int       @default(0)
-  successfulChecks   Int       @default(0)
-  totalRequests      Int       @default(0)
+  failedChecksCount  Int @default(0)
+  jsFailCount        Int @default(0)
+  advancedFailCount  Int @default(0)
+  collectiveHitCount Int @default(0)
+  successfulChecks   Int @default(0)
+  totalRequests      Int @default(0)
 
-  lastFailedAt       DateTime?
-  lastPath           String?
-  lastUserAgent      String?
-  avgRequestRate     Float?
-  isKnownBotnet      Boolean   @default(false)
+  lastFailedAt   DateTime?
+  lastPath       String?
+  lastUserAgent  String?
+  avgRequestRate Float?
+  isKnownBotnet  Boolean @default(false)
 
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -418,10 +608,8 @@ model ReputationEntry {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  // ===== Unique =====
   @@unique([organizationId, ipAddress])
 
-  // ===== Indexes الأساسية =====
   @@index([organizationId])
   @@index([banStatus])
   @@index([bannedUntil])
@@ -435,23 +623,13 @@ model ReputationEntry {
   @@index([isManualBan])
   @@index([updatedAt])
   @@index([lastSeenAt])
-
-  // ===== Indexes مركبة قوية (Gateway + Dashboard) =====
-
-  // أهم فهرس لاستعلام listBansForGateway مع updatedSince
   @@index([updatedAt, id])
-
-  // مزامنة الحظر لكل منظمة
   @@index([organizationId, updatedAt])
   @@index([organizationId, updatedAt, id])
-
-  // الاستعلام بدون updatedSince (الحظر النشط + allowlist)
   @@index([banStatus, bannedUntil])
   @@index([organizationId, banStatus, bannedUntil])
   @@index([isAllowlisted, updatedAt])
   @@index([organizationId, isAllowlisted])
-
-  // Dashboard filters
   @@index([organizationId, score])
   @@index([organizationId, banStatus])
   @@index([organizationId, lastSeenAt])
@@ -459,8 +637,6 @@ model ReputationEntry {
   @@index([organizationId, isManualBan])
   @@index([organizationId, ipType])
   @@index([organizationId, countryCode])
-
-  // Lookup بالـ device fingerprint داخل منظمة
   @@index([organizationId, deviceFingerprint])
 }
 
@@ -469,7 +645,7 @@ model ReputationEntry {
 // ==================================================================
 
 model SecurityEvent {
-  id               String          @id @default(uuid())
+  id               String         @id @default(uuid())
   ipAddress        String
   path             String
   method           String
@@ -486,20 +662,18 @@ model SecurityEvent {
   reasonDetails    Json?
   processingTimeMs Int?
 
-  surgeDetected    Boolean         @default(false)
-  pathSensitive    Boolean         @default(false)
-  recommendation   String?
+  surgeDetected Boolean @default(false)
+  pathSensitive Boolean @default(false)
+  recommendation String?
 
-  countryCode      String?
-  asn              Int?
-  ipType           IpType?
+  countryCode String?
+  asn         Int?
+  ipType      IpType?
 
-  isChallenged     Boolean         @default(false)
-  challengeType    ChallengeType?
-  challengePassed  Boolean?
+  isChallenged    Boolean       @default(false)
+  challengeType   ChallengeType?
+  challengePassed Boolean?
 
-  // ----- ربط اختياري بمحاكاة -----
-  // Gateway يمرّر runId في الهيدر/التفاصيل؛ الباك يملا الحقل عند إنشاء الحدث من المسار الداخلي إن أمكن
   simulationRunId String?
   simulationRun   SimulationRun? @relation(fields: [simulationRunId], references: [id], onDelete: SetNull)
 
@@ -516,7 +690,6 @@ model SecurityEvent {
 
   createdAt DateTime @default(now())
 
-  // ===== أساسية =====
   @@index([organizationId])
   @@index([serverId])
   @@index([ipAddress])
@@ -524,15 +697,11 @@ model SecurityEvent {
   @@index([riskScore])
   @@index([createdAt])
   @@index([reputationEntryId])
-
-  // ===== مركبة (Dashboard + قائمة الأحداث) =====
   @@index([organizationId, createdAt])
   @@index([serverId, createdAt])
   @@index([organizationId, decision, createdAt])
-  @@index([organizationId, serverId, createdAt]) // فلتر سيرفر + ترتيب بالوقت
-  @@index([organizationId, ipAddress, createdAt]) // dashboard/top?by=ip + بحث بالـ IP
-
-  // ===== Simulation =====
+  @@index([organizationId, serverId, createdAt])
+  @@index([organizationId, ipAddress, createdAt])
   @@index([simulationRunId])
   @@index([simulationRunId, createdAt])
 }
@@ -633,7 +802,7 @@ model Notification {
 }
 
 // ==================================================================
-// REPORTS (Gemini)
+// REPORTS
 // ==================================================================
 
 model Report {
@@ -647,13 +816,12 @@ model Report {
   summary      String?
   errorMessage String?
 
-  eventCount   Int     @default(0)
-  blockedCount Int     @default(0)
+  eventCount   Int    @default(0)
+  blockedCount Int    @default(0)
   tokensUsed   Int?
   modelUsed    String?
   metadata     Json?
 
-  // تقرير لسيرفر محدد (null = كل الشركة)
   serverId String?
   server   Server? @relation(fields: [serverId], references: [id], onDelete: SetNull)
 
@@ -676,9 +844,6 @@ model Report {
 
 // ==================================================================
 // SIMULATION LAB
-// Run واحد = توكن موقّع + Worker يبعت ترافيك للـ Gateway حسب Policy الشركة
-// options (Json): personaWeights, ipPoolLegit, ipPoolAttack, enableJaHeaders,
-//                 aiMode, aiFixedScore, paths, seed, ...
 // ==================================================================
 
 model SimulationRun {
@@ -688,31 +853,25 @@ model SimulationRun {
   status    SimulationStatus    @default(PENDING)
   intensity SimulationIntensity @default(MEDIUM)
 
-  // أهداف التشغيل
-  targetRps   Int // متوسط RPS مستهدف
-  maxRps      Int @default(40) // سقف أمان للـ Worker
-  durationSec Int @default(60) // مدة مخططة بالثواني
+  targetRps   Int
+  maxRps      Int @default(40)
+  durationSec Int @default(60)
 
-  // نتائج مجمّعة (يحدّثها الـ Worker من ردود Gateway)
   totalSent        Int  @default(0)
   totalAllowed     Int  @default(0)
   totalRateLimited Int  @default(0)
   totalChallenged  Int  @default(0)
   totalBlocked     Int  @default(0)
-  totalFailed      Int  @default(0) // أخطاء شبكة / 5xx من Gateway نفسه
-  avgLatencyMs     Int? // متوسط زمن استجابة Gateway كما قاسها الـ Worker
+  totalFailed      Int  @default(0)
+  avgLatencyMs     Int?
 
-  // إعدادات متقدمة من الفرونت (اختياري بالكامل)
   options Json?
 
-  // أمان توكن المحاكاة (Gateway يتحقق منه)
-  tokenJti       String?   @unique // معرّف التوكن — يُبطَّل عند Stop
+  tokenJti       String?   @unique
   tokenExpiresAt DateTime?
 
-  // تشخيص
   errorMessage String?
 
-  // علاقات
   serverId String
   server   Server @relation(fields: [serverId], references: [id], onDelete: Cascade)
 
@@ -722,7 +881,6 @@ model SimulationRun {
   startedByUserId String?
   startedBy       User?   @relation("SimulationStartedBy", fields: [startedByUserId], references: [id], onDelete: SetNull)
 
-  // أحداث اتربطت صراحة بهذا الـ Run (أفضل من الاعتماد على JSON فقط)
   securityEvents SecurityEvent[]
 
   startedAt DateTime  @default(now())
