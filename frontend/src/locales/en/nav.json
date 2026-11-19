@@ -16,7 +16,8 @@
     "reports": "Reports",
     "organization": "Organization",
     "notifications": "Notifications",
-    "profile": "Profile"
+    "profile": "Profile",
+    "team": "Team"
   },
   "user": {
     "fallback": "User",

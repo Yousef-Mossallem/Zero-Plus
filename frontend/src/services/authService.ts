@@ -44,6 +44,7 @@ export interface AuthUser {
   fullName: string
   role: string
   organizationId: string
+  permissions?: string[]
   lastLoginAt?: string | null
   createdAt?: string
   uiPreferences?: unknown
@@ -469,6 +470,87 @@ export async function finishPasskeyInvite(
 }
 
 // ==================================================================
+// API — Team Invite (دعوة عضو جديد للمنظمة)
+// ==================================================================
+
+/** رد GET /auth/team-invite/:token */
+export interface TeamInvitePreviewResult {
+  email: string
+  role: 'VIEWER' | 'ANALYST' | 'ADMIN'
+  organizationName: string
+  invitedByName: string
+  expiresAt: string
+  status: 'PENDING'
+}
+
+/** رد POST /auth/team-invite/:token/start */
+export interface TeamInviteStartResult {
+  options: PublicKeyCredentialCreationOptionsJSON
+  rpId: string
+  invite: {
+    email: string
+    role: string
+    organizationName: string
+    expiresAt: string
+  }
+}
+
+/** رد POST /auth/team-invite/:token/finish */
+export interface TeamInviteFinishResult {
+  token: string
+  user: AuthUser
+  organization: AuthOrganization
+  passkey: AuthPasskeySummary
+}
+
+/**
+ * GET /auth/team-invite/:token
+ * راوت عام بدون JWT — يعرض تفاصيل الدعوة
+ */
+export async function previewTeamInvite(
+  token: string,
+): Promise<TeamInvitePreviewResult> {
+  const response = await api.get<AuthApiResponse<TeamInvitePreviewResult>>(
+    `/auth/team-invite/${token}`,
+  )
+  return response.data.data
+}
+
+/**
+ * POST /auth/team-invite/:token/start
+ * يرجع WebAuthn registration options
+ */
+export async function startTeamInvite(
+  token: string,
+  fullName?: string,
+): Promise<TeamInviteStartResult> {
+  const response = await api.post<AuthApiResponse<TeamInviteStartResult>>(
+    `/auth/team-invite/${token}/start`,
+    fullName ? { fullName } : {},
+  )
+  return response.data.data
+}
+
+/**
+ * POST /auth/team-invite/:token/finish
+ * يرسل الـ credential ويرجع JWT كامل
+ */
+export async function finishTeamInvite(
+  token: string,
+  data: {
+    fullName?: string
+    deviceName?: string
+    credential: RegistrationResponseJSON
+  },
+): Promise<TeamInviteFinishResult> {
+  const response = await api.post<AuthApiResponse<TeamInviteFinishResult>>(
+    `/auth/team-invite/${token}/finish`,
+    data,
+  )
+  return response.data.data
+}
+
+// ==================================================================
 // Default export
 // ==================================================================
 
@@ -485,6 +567,9 @@ const authService = {
   createPasskeyInvite,
   getPasskeyInviteOptions,
   finishPasskeyInvite,
+  previewTeamInvite,
+  startTeamInvite,
+  finishTeamInvite,
 
   saveToken,
   getToken,

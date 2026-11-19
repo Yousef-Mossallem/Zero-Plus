@@ -21,10 +21,29 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Activity, AlertTriangle, Gauge, Globe, Loader2, Radar, Timer } from 'lucide-react'
+import {
+  Activity,
+  AlertTriangle,
+  Gauge,
+  Globe,
+  Key,
+  Loader2,
+  PowerOff,
+  Radar,
+  Shield,
+  Timer,
+} from 'lucide-react'
 import { useToast } from '../../components/ui/Toast'
 import { Badge, Button, Drawer, KeyValue, Skeleton } from '../../components/ui/kit'
-import { getApiErrorInfo, getServer, requestProbe, type Server } from '../../services/serversService'
+import {
+  getApiErrorInfo,
+  getServer,
+  requestProbe,
+  getAgentStatus,
+  disableAgent,
+  type AgentStatus,
+  type Server,
+} from '../../services/serversService'
 import { REC_META, formatRps, getConfidenceLabel } from '../../utils/serverMeta'
 import { formatDateTime, formatMs, timeAgo } from '../../utils/format'
 import { STATUS_META } from './shared'
@@ -46,6 +65,7 @@ export default function ServerDetailDrawer({
   canManage,
   onClose,
   onOpenDns,
+  onOpenTunnel,
   onServerUpdated,
 }: {
   /** The server from the list (kept fresh by the Socket) */
@@ -53,11 +73,14 @@ export default function ServerDetailDrawer({
   canManage: boolean
   onClose: () => void
   onOpenDns: (server: Server) => void
+  onOpenTunnel?: (server: Server) => void
   onServerUpdated: (server: Server) => void
 }) {
   const toast = useToast()
   const { t } = useTranslation('servers')
   const [full, setFull] = useState<Server | null>(null)
+  const [agentStatus, setAgentStatus] = useState<AgentStatus | null>(null)
+  const [disablingAgent, setDisablingAgent] = useState(false)
   const [loading, setLoading] = useState(false)
   const [probing, setProbing] = useState(false)
   const [starting, setStarting] = useState(false)
@@ -93,10 +116,36 @@ export default function ServerDetailDrawer({
     setStarting(false)
     setNeedsOwnership(false)
     setCooldown(0)
+    setAgentStatus(null)
     probeStartedWith.current = null
     clearProbeTimer()
     if (!id) setFull(null)
     return clearProbeTimer
+  }, [id])
+
+  // ---------------- Fetch Agent status (with polling while open) ----------------
+  useEffect(() => {
+    if (!id) return
+    let cancelled = false
+
+    const fetchStatus = () => {
+      getAgentStatus(id)
+        .then((data) => {
+          if (!cancelled) setAgentStatus(data)
+        })
+        .catch(() => {
+          // ignore if not configured or 404
+        })
+    }
+
+    fetchStatus()
+
+    // Polling every 15s to keep heartbeat / metrics fresh
+    const interval = setInterval(fetchStatus, 15_000)
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+    }
   }, [id])
 
   // ---------------- Fetch details (on open + whenever the server updates) ----------------
@@ -306,6 +355,107 @@ export default function ServerDetailDrawer({
             <KeyValue label={t('drawer.fields.lastMeasured')}>
               {s.lastProbeAt ? `${timeAgo(s.lastProbeAt)} · ${formatDateTime(s.lastProbeAt)}` : t('drawer.notMeasured')}
             </KeyValue>
+          </section>
+
+          {/* ---------- Guard / Agent / Tunnel Section ---------- */}
+          <section className="rounded-2xl border border-white/8 bg-linear-to-b from-white/3 to-transparent p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <h4 className={sectionTitle}>{t('drawer.sections.agent', 'حالة النفق والـ Agent')}</h4>
+              {agentStatus?.tunnelUp ? (
+                <span className="inline-flex items-center gap-1 rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2 py-0.5 text-xs text-emerald-300">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                  {t('drawer.tunnelConnected', 'متصل Online')}
+                </span>
+              ) : agentStatus?.hasToken ? (
+                <span className="inline-flex items-center gap-1 rounded-full border border-amber-400/30 bg-amber-500/10 px-2 py-0.5 text-xs text-amber-300">
+                  <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
+                  {t('drawer.tunnelWaiting', 'بانتظار النبضة')}
+                </span>
+              ) : (
+                <span className="text-xs text-slate-500">{t('drawer.agentDisabled', 'غير مفعّل')}</span>
+              )}
+            </div>
+
+            {agentStatus?.hasToken ? (
+              <div className="space-y-2 text-xs">
+                <KeyValue label={t('drawer.fields.lastHeartbeat', 'آخر نبضة')}>
+                  {agentStatus.lastAgentAt ? `${timeAgo(agentStatus.lastAgentAt)} (${formatDateTime(agentStatus.lastAgentAt)})` : '—'}
+                </KeyValue>
+                <KeyValue label={t('drawer.fields.agentVersion', 'إصدار الـ Agent')}>
+                  {agentStatus.agentVersion ?? '1.0.0'}
+                </KeyValue>
+                <KeyValue label={t('drawer.fields.agentOs', 'نظام التشغيل')}>
+                  {agentStatus.agentOs ? `${agentStatus.agentOs} (${agentStatus.agentArch ?? 'amd64'})` : '—'}
+                </KeyValue>
+                <KeyValue label={t('drawer.fields.agentCpu', 'استهلاك المعالج')}>
+                  {agentStatus.agentCpuPercent != null ? `${agentStatus.agentCpuPercent.toFixed(1)}%` : '—'}
+                </KeyValue>
+                <KeyValue label={t('drawer.fields.agentRam', 'استهلاك الذاكرة')}>
+                  {agentStatus.agentRamPercent != null ? `${agentStatus.agentRamPercent.toFixed(1)}%` : '—'}
+                </KeyValue>
+                <KeyValue label={t('drawer.fields.agentDisk', 'القرص')}>
+                  {agentStatus.agentDiskPercent != null ? `${agentStatus.agentDiskPercent.toFixed(1)}%` : '—'}
+                </KeyValue>
+                <KeyValue label={t('drawer.fields.originHealth', 'صحة الأصل (من Agent)')}>
+                  {agentStatus.agentOriginOk === true
+                    ? `سليم (${agentStatus.agentOriginLatMs ?? 0} ms)`
+                    : agentStatus.agentOriginOk === false
+                    ? 'الأصل لا يستجيب'
+                    : '—'}
+                </KeyValue>
+
+                {canManage && (
+                  <div className="mt-4 flex flex-wrap gap-2 pt-2 border-t border-white/6">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      icon={Key}
+                      onClick={() => onOpenTunnel?.(s)}
+                    >
+                      {t('drawer.viewCommand', 'أمر التثبيت')}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="danger"
+                      icon={PowerOff}
+                      loading={disablingAgent}
+                      onClick={async () => {
+                        if (!confirm(t('drawer.confirmDisable', 'هل تريد إيقاف الـ Agent وإلغاء التوكن؟'))) return
+                        setDisablingAgent(true)
+                        try {
+                          await disableAgent(s.id)
+                          toast.success(t('drawer.agentDisabledSuccess', 'تم إيقاف الـ Agent بنجاح'))
+                          setAgentStatus((prev) => (prev ? { ...prev, tunnelUp: false, hasToken: false } : null))
+                        } catch {
+                          toast.error(t('drawer.disableFailed', 'فشل إيقاف الـ Agent'))
+                        } finally {
+                          setDisablingAgent(false)
+                        }
+                      }}
+                    >
+                      {t('drawer.stopAgent', 'إيقاف الـ Agent')}
+                    </Button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="rounded-xl border border-dashed border-white/10 p-3 text-center">
+                <p className="text-xs text-slate-400">
+                  {t('drawer.enableGuardDesc', 'فعّل النفق الآن لتأمين الاتصال عبر عميل Zero Plus Guard بدلاً من كشف الـ IP مباشرة.')}
+                </p>
+                {canManage && (
+                  <Button
+                    size="sm"
+                    variant="primary"
+                    icon={Shield}
+                    className="mt-2"
+                    onClick={() => onOpenTunnel?.(s)}
+                  >
+                    {t('drawer.enableGuardNow', 'تفعيل Guard الآن')}
+                  </Button>
+                )}
+              </div>
+            )}
           </section>
 
           <section>

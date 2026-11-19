@@ -68,6 +68,11 @@ import { DnsModal } from './servers/DnsModal'
 import { DeleteModal } from './servers/DeleteModal'
 import { ServerCard } from './servers/ServerCard'
 import ServerDetailDrawer from './servers/ServerDetailDrawer'
+import { TunnelModal } from './servers/TunnelModal'
+import {
+  enableTunnel,
+  type EnableTunnelResult,
+} from '../services/serversService'
 
 // ------------------------------------------------------------------
 // Constants
@@ -167,6 +172,7 @@ export default function ServersPage() {
   // ---------------- Modals / Drawer ----------------
   const [formState, setFormState] = useState<{ open: boolean; server: Server | null }>({ open: false, server: null })
   const [dnsState, setDnsState] = useState<{ server: Server; dns: DnsInstructions | null } | null>(null)
+  const [tunnelState, setTunnelState] = useState<{ server: Server; initialData: EnableTunnelResult | null } | null>(null)
   const [deleting, setDeleting] = useState<Server | null>(null)
   const [detail, setDetail] = useState<Server | null>(null)
 
@@ -738,6 +744,14 @@ export default function ServersPage() {
                 onMaintenance={() => void handleMaintenance(server)}
                 onProbe={() => void handleProbe(server)}
                 onDetails={() => setDetail(server)}
+                onTunnel={async () => {
+                  try {
+                    const res = await enableTunnel(server.id)
+                    setTunnelState({ server, initialData: res })
+                  } catch {
+                    setTunnelState({ server, initialData: null })
+                  }
+                }}
               />
             ))}
           </div>
@@ -763,6 +777,16 @@ export default function ServersPage() {
         server={formState.server}
         onClose={() => setFormState((s) => ({ ...s, open: false }))}
         onSaved={handleSaved}
+        onTunnelCreated={(srv, tunnel) => {
+          setTunnelState({ server: srv, initialData: tunnel })
+        }}
+      />
+      <TunnelModal
+        open={tunnelState !== null}
+        server={tunnelState?.server ?? null}
+        initialData={tunnelState?.initialData ?? null}
+        onClose={() => setTunnelState(null)}
+        onEnabled={() => void load()}
       />
       <DnsModal
         server={dnsServer}
@@ -777,6 +801,14 @@ export default function ServersPage() {
         canManage={canManage}
         onClose={() => setDetail(null)}
         onOpenDns={openDnsFromDrawer}
+        onOpenTunnel={async (srv) => {
+          try {
+            const res = await enableTunnel(srv.id)
+            setTunnelState({ server: srv, initialData: res })
+          } catch {
+            setTunnelState({ server: srv, initialData: null })
+          }
+        }}
         onServerUpdated={replaceServer}
       />
 

@@ -71,6 +71,23 @@ export interface Server {
   probeRecommendation: ProbeRecommendation | null
   /** آخر مرة اكتمل فيها قياس (null = لم يُقس بعد) */
   lastProbeAt: string | null
+
+  // ---- Agent / Guard / Tunnel ----
+  agentToken?: string | null
+  agentTokenHash?: string | null
+  agentVersion?: string | null
+  agentOs?: AgentOs | null
+  agentArch?: string | null
+  lastAgentAt?: string | null
+  tunnelUp?: boolean
+  tunnelPeerIp?: string | null
+  agentCpuPercent?: number | null
+  agentRamPercent?: number | null
+  agentDiskPercent?: number | null
+  agentLoadAvg1m?: number | null
+  estimatedMaxRps?: number | null
+  agentOriginOk?: boolean | null
+  agentOriginLatMs?: number | null
 }
 
 export interface DnsRecordInstruction {
@@ -402,4 +419,150 @@ export async function deleteServer(
     data: { id: string; domain: string; deletedEvents: number }
   }>(`/servers/${id}`, { params: { confirmDomain } })
   return { message: data.message, data: data.data }
+}
+
+// ==================================================================
+// Agent / Guard / Tunnel API (المسارات الجديدة تحت /servers)
+// ==================================================================
+
+export type InstallChannel = 'script' | 'docker' | 'binary'
+export type AgentOs = 'LINUX' | 'WINDOWS' | 'UNKNOWN'
+
+export interface EnableTunnelInput {
+  rotateToken?: boolean
+  installChannel?: InstallChannel
+  preferOs?: AgentOs
+  preferArch?: string
+}
+
+export interface InstallCommandInfo {
+  channel: InstallChannel
+  command: string
+  agentToken: string
+  tokenHint?: string
+  serverId: string
+  domain?: string
+  docsUrl?: string
+}
+
+export interface EnableTunnelResult {
+  serverId: string
+  domain?: string
+  rotated: boolean
+  install: InstallCommandInfo
+}
+
+export interface AgentStatus {
+  serverId: string
+  hasToken: boolean
+  tunnelUp: boolean
+  lastAgentAt: string | null
+  agentVersion: string | null
+  agentOs: AgentOs | null
+  agentArch: string | null
+  agentCpuPercent: number | null
+  agentRamPercent: number | null
+  agentDiskPercent: number | null
+  agentLoadAvg1m: number | null
+  estimatedMaxRps: number | null
+  agentOriginOk: boolean | null
+  agentOriginLatMs: number | null
+  tunnelPeerIp: string | null
+  isFresh: boolean
+}
+
+export interface HeartbeatItem {
+  id?: string
+  serverId?: string
+  recordedAt: string
+  tunnelUp: boolean
+  cpuPercent: number | null
+  ramPercent: number | null
+  diskPercent: number | null
+  loadAvg1m: number | null
+  originOk: boolean | null
+  originLatMs: number | null
+  rpsObserved: number | null
+}
+
+export interface HeartbeatsListResult {
+  serverId: string
+  items: HeartbeatItem[]
+}
+
+export interface DisableAgentResult {
+  ok: boolean
+  serverId: string
+  tokenRevoked: boolean
+}
+
+/**
+ * تفعيل النفق وتوليد أمر التثبيت
+ * POST /servers/:serverId/enable-tunnel
+ */
+export async function enableTunnel(
+  serverId: string,
+  input: EnableTunnelInput = {},
+): Promise<EnableTunnelResult> {
+  const { data } = await api.post<{ success: boolean; data: EnableTunnelResult }>(
+    `/servers/${serverId}/enable-tunnel`,
+    input,
+  )
+  return data.data
+}
+
+/**
+ * إعادة توليد التوكن
+ * POST /servers/:serverId/rotate-agent-token
+ */
+export async function rotateAgentToken(
+  serverId: string,
+  input: { confirm?: true; installChannel?: InstallChannel } = {},
+): Promise<EnableTunnelResult> {
+  const { data } = await api.post<{ success: boolean; data: EnableTunnelResult }>(
+    `/servers/${serverId}/rotate-agent-token`,
+    input,
+  )
+  return data.data
+}
+
+/**
+ * إيقاف الـ Agent
+ * POST /servers/:serverId/disable-agent
+ */
+export async function disableAgent(
+  serverId: string,
+  revokeToken = true,
+): Promise<DisableAgentResult> {
+  const { data } = await api.post<{ success: boolean; data: DisableAgentResult }>(
+    `/servers/${serverId}/disable-agent`,
+    { revokeToken },
+  )
+  return data.data
+}
+
+/**
+ * حالة الـ Agent من snapshot
+ * GET /servers/:serverId/agent-status
+ */
+export async function getAgentStatus(serverId: string): Promise<AgentStatus> {
+  const { data } = await api.get<{ success: boolean; data: AgentStatus }>(
+    `/servers/${serverId}/agent-status`,
+  )
+  return data.data
+}
+
+/**
+ * سجل النبضات الأخيرة
+ * GET /servers/:serverId/heartbeats
+ */
+export async function listHeartbeats(
+  serverId: string,
+  params: { limit?: number; from?: string; to?: string; tunnelUpOnly?: boolean } = {},
+): Promise<HeartbeatsListResult> {
+  const { data } = await api.get<{ success: boolean; data: HeartbeatsListResult }>(
+    `/servers/${serverId}/heartbeats`,
+    { params: cleanParams(params) },
+  )
+  return data.data
 }

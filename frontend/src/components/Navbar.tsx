@@ -25,6 +25,7 @@ import {
   Menu,
   X,
   UserRound,
+  Users,
 } from 'lucide-react'
 
 // import Logo from './Logo'
@@ -85,6 +86,7 @@ export default function Navbar() {
   const user = useAuthStore(selectCurrentUser)
   const organization = useAuthStore(selectCurrentOrganization)
   const logout = useAuthStore((s) => s.logout)
+  const canViewTeam = useAuthStore((s) => s.user?.permissions?.includes('team:view') ?? false)
 
   const userName = user?.fullName ?? t('user.fallback')
   const profileInitials = (user?.fullName ?? 'User')
@@ -184,6 +186,42 @@ export default function Navbar() {
                     </li>
                   )
                 })}
+                {/* رابط الفريق — يظهر فقط في مجموعة workspace ولو عنده صلاحية */}
+                {group.titleKey === 'workspace' && canViewTeam && (
+                  <li>
+                    <NavLink
+                      to="/team"
+                      onClick={onNavigate}
+                      title={collapsed ? t('items.team', 'الفريق') : undefined}
+                      className={({ isActive }) =>
+                        `
+                        group relative flex items-center gap-3 rounded-xl px-3 py-2.5
+                        text-sm font-medium transition-all duration-200
+                        ${
+                          isActive
+                            ? 'bg-cyan-500/10 text-cyan-300 shadow-[inset_0_0_0_1px_rgba(34,211,238,0.2)]'
+                            : 'text-slate-400 hover:bg-white/4 hover:text-slate-200'
+                        }
+                        ${collapsed ? 'justify-center' : ''}
+                      `
+                      }
+                    >
+                      {({ isActive }) => (
+                        <>
+                          {isActive && (
+                            <span className="absolute start-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-cyan-400" />
+                          )}
+                          <Users
+                            className={`h-4.5 w-4.5 shrink-0 ${
+                              isActive ? 'text-cyan-400' : 'text-slate-500 group-hover:text-slate-300'
+                            }`}
+                          />
+                          {!collapsed && <span className="truncate">{t('items.team', 'الفريق')}</span>}
+                        </>
+                      )}
+                    </NavLink>
+                  </li>
+                )}
               </ul>
             </div>
           ))}

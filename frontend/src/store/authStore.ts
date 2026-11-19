@@ -36,6 +36,8 @@ import {
   getMe,
   clearAuthSession,
   getAuthErrorMessage,
+  startTeamInvite,
+  finishTeamInvite,
   type AuthUser,
   type AuthOrganization,
   type AuthResponseData,
@@ -116,6 +118,21 @@ export interface AuthState {
   logout: () => void
 
   clearError: () => void
+
+  /**
+   * قبول دعوة فريق:
+   * start → WebAuthn create → finish → حفظ JWT → authenticated
+   */
+  acceptTeamInvite: (
+    token: string,
+    opts?: { fullName?: string; deviceName?: string },
+  ) => Promise<{ success: boolean; error?: string }>
+
+  /** تحديث التوكن محلياً (مثلاً من X-Access-Token header) */
+  updateToken: (newToken: string) => void
+
+  /** هل لدى المستخدم صلاحية معينة */
+  hasPermission: (permission: string) => boolean
 }
 
 // ==================================================================
@@ -428,6 +445,99 @@ export const useAuthStore = create<AuthState>()(
       clearError: () => {
         set({ error: null })
       },
+
+      // ================================================================
+      // Accept Team Invite
+      // ================================================================
+
+      acceptTeamInvite: async (inviteToken, opts = {}) => {
+        set({ status: 'loading', error: null })
+        try {
+          // 1) start → WebAuthn options
+          const startResult = await startTeamInvite(inviteToken, opts.fullName)
+
+          // 2) navigator.credentials.create
+          const { startRegistration: webauthnCreate } = await import(
+            '@simplewebauthn/browser'
+          )
+          const credential = await webauthnCreate({ optionsJSON: startResult.options })
+
+          // 3) finish → JWT
+          const finishResult = await finishTeamInvite(inviteToken, {
+            fullName: opts.fullName,
+            deviceName: opts.deviceName,
+            credential,
+          })
+
+          // 4) حفظ الجلسة
+          clearAuthSession()
+          const { saveToken } = await import('../services/authService')
+          saveToken(finishResult.token)
+
+          set({
+            token: finishResult.token,
+            user: finishResult.user,
+            organization: finishResult.organization,
+            status: 'authenticated',
+            initialized: true,
+            error: null,
+          })
+
+          return { success: true }
+        } catch (error: unknown) {
+          const isWebAuthn =
+            error instanceof Error &&
+            (error.name === 'NotAllowedError' ||
+              error.name === 'InvalidStateError' ||
+              error.name === 'NotSupportedError' ||
+              error.name === 'SecurityError' ||
+              error.name === 'AbortError')
+
+          const message = isWebAuthn
+            ? getWebAuthnErrorMessage(error, 'فشل تسجيل بصمة الدعوة')
+            : getAuthErrorMessage(error, 'فشل قبول الدعوة. حاول مرة أخرى.')
+
+          set({
+            token: null,
+            user: null,
+            organization: null,
+            status: 'unauthenticated',
+            error: message,
+          })
+
+          return { success: false, error: message }
+        }
+      },
+
+      // ================================================================
+      // Update Token (تجديد صامت من X-Access-Token header)
+      // ================================================================
+
+      updateToken: (newToken: string) => {
+        // نحدّث Zustand persist مباشرة عبر localStorage
+        try {
+          const raw = localStorage.getItem('zero-plus-auth')
+          if (raw) {
+            const parsed = JSON.parse(raw) as { state?: Record<string, unknown> }
+            if (parsed.state) {
+              parsed.state.token = newToken
+              localStorage.setItem('zero-plus-auth', JSON.stringify(parsed))
+            }
+          }
+        } catch {
+          // ignore
+        }
+        set({ token: newToken })
+      },
+
+      // ================================================================
+      // Has Permission
+      // ================================================================
+
+      hasPermission: (permission: string) => {
+        const user = get().user
+        return user?.permissions?.includes(permission) ?? false
+      },
     }),
 
     // ==================================================================
@@ -481,5 +591,13 @@ export const selectOrganizationId = (state: AuthState): string | null =>
 
 export const selectIsInitialized = (state: AuthState): boolean =>
   state.initialized
+
+export const selectUserPermissions = (state: AuthState): string[] =>
+  state.user?.permissions ?? []
+
+export const selectHasPermission =
+  (permission: string) =>
+  (state: AuthState): boolean =>
+    state.user?.permissions?.includes(permission) ?? false
 
 export default useAuthStore

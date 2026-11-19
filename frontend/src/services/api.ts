@@ -121,10 +121,18 @@ function isPublicAuthRequest(url?: string): boolean {
     // لو لسه فيه مسارات قديمة في مكان ما
     '/auth/signup',
     '/auth/login',
+    // دعوة فريق — راوت عام
+    '/auth/team-invite/',
+    // دعوة جهاز — راوت عام
+    '/auth/passkeys/invite/',
   ]
 
   return publicPaths.some(
-    (p) => path === p || path.startsWith(`${p}?`) || path.endsWith(p),
+    (p) =>
+      path === p ||
+      path.startsWith(`${p}?`) ||
+      path.endsWith(p) ||
+      path.includes(p),
   )
 }
 

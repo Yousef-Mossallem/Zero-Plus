@@ -47,15 +47,18 @@ export function validateServerForm(form: ServerForm): Record<string, string> {
   else if (/[\s/?#@\\:]/.test(domain)) errors.domain = 'validation.domain.noPathOrPort'
   else if (!domain.includes('.')) errors.domain = 'validation.domain.needsExtension'
 
-  const ip = form.originIp.trim()
-  const octets = ip.split('.')
-  const ipOk = octets.length === 4 && octets.every((o) => /^\d{1,3}$/.test(o) && Number(o) <= 255)
-  if (!ip) errors.originIp = 'validation.originIp.required'
-  else if (!ipOk) errors.originIp = 'validation.originIp.invalid'
+  // If GUARD is chosen, origin IP/Port is handled by tunnel agent (placeholder IP used for createServer)
+  if (form.connectionType !== 'GUARD') {
+    const ip = form.originIp.trim()
+    const octets = ip.split('.')
+    const ipOk = octets.length === 4 && octets.every((o) => /^\d{1,3}$/.test(o) && Number(o) <= 255)
+    if (!ip) errors.originIp = 'validation.originIp.required'
+    else if (!ipOk) errors.originIp = 'validation.originIp.invalid'
 
-  const port = Number(form.originPort)
-  if (!Number.isInteger(port) || port < 1 || port > 65535) {
-    errors.originPort = 'validation.originPort.range'
+    const port = Number(form.originPort)
+    if (!Number.isInteger(port) || port < 1 || port > 65535) {
+      errors.originPort = 'validation.originPort.range'
+    }
   }
 
   return errors
@@ -65,8 +68,11 @@ export function validateServerForm(form: ServerForm): Record<string, string> {
 // Types for the form
 // ==================================================================
 
+export type ConnectionType = 'ORIGIN' | 'GUARD'
+
 export interface ServerForm {
   domain: string
+  connectionType: ConnectionType
   originIp: string
   originPort: string
   sslEnabled: boolean
@@ -75,6 +81,7 @@ export interface ServerForm {
 
 export const EMPTY_FORM: ServerForm = {
   domain: '',
+  connectionType: 'ORIGIN',
   originIp: '',
   originPort: '443',
   sslEnabled: true,

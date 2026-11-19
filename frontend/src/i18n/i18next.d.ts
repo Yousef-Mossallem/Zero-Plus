@@ -21,6 +21,7 @@ import type reports from '../locales/en/reports.json'
 import type simulation from '../locales/en/simulation.json'
 import type profile from '../locales/en/profile.json'
 import type organization from '../locales/en/organization.json'
+import type team from '../locales/en/team.json'
 
 declare module 'i18next' {
   interface CustomTypeOptions {
@@ -43,6 +44,7 @@ declare module 'i18next' {
       simulation: typeof simulation
       profile: typeof profile
       organization: typeof organization
+      team: typeof team
     }
   }
 }

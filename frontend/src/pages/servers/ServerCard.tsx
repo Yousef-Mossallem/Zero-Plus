@@ -13,7 +13,9 @@ import {
   Lock,
   LockOpen,
   Pencil,
+  Radio,
   Server as ServerIcon,
+  Shield,
   Trash2,
   Wrench,
 } from 'lucide-react'
@@ -112,6 +114,7 @@ export function ServerCard({
   onMaintenance,
   onProbe,
   onDetails,
+  onTunnel,
 }: {
   server: Server
   index: number
@@ -126,6 +129,8 @@ export function ServerCard({
   onMaintenance: () => void
   /** Re-measure capacity (POST /servers/:id/probe → 202) */
   onProbe?: () => void
+  /** تفعيل النفق أو عرض أمر التثبيت */
+  onTunnel?: () => void
 }) {
   const { t } = useTranslation('servers')
   const meta = STATUS_META[server.status]
@@ -200,6 +205,28 @@ export function ServerCard({
             {t(`mode.${server.mode}`)}
           </Badge>
 
+          {/* نفق الـ Agent / Guard Badge */}
+          {server.tunnelUp ? (
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-300">
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+              </span>
+              <Shield className="h-3 w-3" />
+              <span>{t('card.tunnelUp', 'النفق متصل (Guard)')}</span>
+            </span>
+          ) : server.agentToken ? (
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-400/30 bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-300">
+              <Radio className="h-3 w-3" />
+              <span>{t('card.tunnelPending', 'نفق غير متصل')}</span>
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 text-xs text-slate-500">
+              <Shield className="h-3 w-3" />
+              <span>{t('card.originOnly', 'Origin مباشر')}</span>
+            </span>
+          )}
+
           <span
             className={cn(
               'inline-flex items-center gap-1 text-xs',
@@ -210,6 +237,49 @@ export function ServerCard({
             {server.sslEnabled ? t('card.httpsOrigin') : t('card.httpOrigin')}
           </span>
         </div>
+
+        {/* ---------- Agent Live Metrics (if tunnel up) ---------- */}
+        {server.tunnelUp && (
+          <div className="mt-3 rounded-xl border border-emerald-400/20 bg-emerald-500/5 p-3 space-y-2">
+            <div className="flex items-center justify-between text-xs">
+              <span className="flex items-center gap-1 text-emerald-300 font-medium">
+                <Shield className="h-3.5 w-3.5" />
+                <span>{t('card.agentLive', 'حالة الـ Agent')}</span>
+              </span>
+              <span className="text-[11px] text-slate-400">
+                {server.lastAgentAt ? `${t('card.lastHeartbeat', 'آخر نبضة:')} ${timeAgo(server.lastAgentAt)}` : '—'}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="rounded-lg bg-black/30 p-2">
+                <div className="flex justify-between text-[10px] text-slate-400">
+                  <span>CPU</span>
+                  <span className="text-white font-mono">{server.agentCpuPercent != null ? `${server.agentCpuPercent.toFixed(1)}%` : '—'}</span>
+                </div>
+                <div className="mt-1 h-1 w-full rounded-full bg-white/10 overflow-hidden">
+                  <div
+                    className="h-full bg-cyan-400 rounded-full"
+                    style={{ width: `${Math.min(100, Math.max(0, server.agentCpuPercent ?? 0))}%` }}
+                  />
+                </div>
+              </div>
+
+              <div className="rounded-lg bg-black/30 p-2">
+                <div className="flex justify-between text-[10px] text-slate-400">
+                  <span>RAM</span>
+                  <span className="text-white font-mono">{server.agentRamPercent != null ? `${server.agentRamPercent.toFixed(1)}%` : '—'}</span>
+                </div>
+                <div className="mt-1 h-1 w-full rounded-full bg-white/10 overflow-hidden">
+                  <div
+                    className="h-full bg-indigo-400 rounded-full"
+                    style={{ width: `${Math.min(100, Math.max(0, server.agentRamPercent ?? 0))}%` }}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* ---------- Capacity ---------- */}
         <div className="mt-4 rounded-xl border border-white/8 bg-linear-to-br from-cyan-500/5 via-white/2 to-transparent p-4">
@@ -351,6 +421,23 @@ export function ServerCard({
           <Button size="sm" variant={fullySetUp ? 'outline' : 'primary'} icon={Globe} onClick={onDns}>
             {fullySetUp ? t('card.dns') : t('card.finishSetup')}
           </Button>
+
+          {/* تفعيل / إدارة النفق */}
+          {canManage && onTunnel && (
+            <Button
+              size="sm"
+              variant={server.tunnelUp ? 'outline' : 'ghost'}
+              icon={Shield}
+              onClick={onTunnel}
+              className={cn(server.tunnelUp && 'border-emerald-500/30 text-emerald-300')}
+            >
+              {server.tunnelUp
+                ? t('card.tunnelActive', 'النفق مفعّل')
+                : server.agentToken
+                ? t('card.tunnelCommand', 'أمر النفق')
+                : t('card.enableTunnel', 'تفعيل Guard')}
+            </Button>
+          )}
 
           {canManage && (
             <>

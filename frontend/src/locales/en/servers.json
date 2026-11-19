@@ -294,5 +294,33 @@
       "range": "Port must be between 1 and 65535",
       "reserved": "This port is reserved for a non-web service and can’t be used as an origin"
     }
+  },
+  "tunnel": {
+    "modalTitle": "Enable Guard / Agent Tunnel",
+    "modalSubtitle": "Install the Zero Plus Guard agent on your server to connect the tunnel directly",
+    "warningTitle": "Warning: The token is displayed only once!",
+    "warningDesc": "Copy the full install command and run it on your server now. If you close this modal and lose the token, you will need to rotate and generate a new token.",
+    "channelLabel": "Install Format",
+    "commandLabel": "Install Command",
+    "copy": "Copy Command",
+    "copied": "Copied",
+    "copiedTitle": "Command copied to clipboard",
+    "copiedDesc": "Run the command with root/sudo privileges on your server.",
+    "alreadyIssued": "Token already issued",
+    "needRotate": "Token must be rotated to change command format.",
+    "rotateBtn": "Rotate Token",
+    "confirmRotate": "Are you sure? Current agent will be disconnected",
+    "yesRotate": "Yes, Rotate",
+    "rotatedTitle": "Token rotated successfully",
+    "rotatedDesc": "A new token and command were generated. Old agent stopped.",
+    "rotateFailed": "Failed to rotate token",
+    "done": "Done",
+    "noTokenCached": "Token was issued previously and cannot be retrieved for security.",
+    "generateNew": "Generate new token and command now",
+    "stepsTitle": "Steps:",
+    "step1": "Copy the command above and run it as root on your origin server.",
+    "step2": "The agent will establish an encrypted tunnel and send regular heartbeats.",
+    "step3": "The tunnel status on the server card will automatically switch to «Online».",
+    "docsLink": "Installation & Troubleshooting Docs"
   }
 }

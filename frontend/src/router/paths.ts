@@ -16,3 +16,9 @@ export const landingPath = (lng: string, page: LandingPage = ''): string =>
 
 /** مسار صفحة إضافة جهاز عبر QR (راوت عام) */
 export const addDevicePath = (token: string): string => `/add-device/${token}`
+
+/** مسار صفحة قبول دعوة الفريق (راوت عام) */
+export const acceptInvitePath = (token: string): string => `/accept-invite/${token}`
+
+/** مسار صفحة إدارة الفريق (محمية) */
+export const TEAM_PATH = '/team'

@@ -1,0 +1,82 @@
+{
+  "title": "Team Management",
+  "subtitle": "Members • Groups • Invites & Permissions",
+  "tabs": {
+    "members": "Members",
+    "groups": "Groups",
+    "invites": "Invites"
+  },
+  "roles": {
+    "owner": "Owner",
+    "admin": "Admin",
+    "analyst": "Analyst",
+    "viewer": "Viewer"
+  },
+  "status": {
+    "active": "Active",
+    "inactive": "Inactive",
+    "pending": "Pending",
+    "accepted": "Accepted",
+    "expired": "Expired",
+    "revoked": "Revoked"
+  },
+  "invite": {
+    "pageTitle": "Team Invitation",
+    "pageSubtitle": "Register your biometric passkey to join organization",
+    "invalidLink": "Invalid invitation link.",
+    "loadError": "Could not load invitation",
+    "contactAdmin": "Please contact your admin for a new invite link.",
+    "successTitle": "Invitation Accepted!",
+    "successDesc": "Welcome aboard! Redirecting to dashboard...",
+    "keyNote": "Your private key never leaves your device.",
+    "organization": "Organization",
+    "invitedBy": "Invited by",
+    "role": "Role",
+    "fullNameLabel": "Full Name (Optional)",
+    "fullNameHint": "Leave empty to use email username.",
+    "fullNamePlaceholder": "John Doe",
+    "deviceNameLabel": "Device Name",
+    "deviceNameHint": "Label to identify this device (max 120 chars).",
+    "privacyNote": "Your biometrics never leave this device. Only the public key is sent.",
+    "accepting": "Waiting for passkey...",
+    "acceptButton": "Accept Invite & Register Passkey",
+    "trustNote": "Protected by Zero Plus passwordless authentication"
+  },
+  "members": {
+    "search": "Search by name or email...",
+    "user": "User",
+    "role": "Role",
+    "status": "Status",
+    "lastLogin": "Last Login",
+    "groups": "Groups",
+    "actions": "Actions",
+    "changeRole": "Change Role",
+    "deactivate": "Deactivate",
+    "activate": "Activate",
+    "you": "You",
+    "noMembers": "No members found"
+  },
+  "groups": {
+    "search": "Search groups...",
+    "create": "Create Group",
+    "name": "Name",
+    "description": "Description",
+    "permissions": "Permissions",
+    "systemGroup": "System Group - Name cannot be changed",
+    "noGroups": "No groups found"
+  },
+  "invites": {
+    "create": "Invite Member",
+    "email": "Email Address",
+    "role": "Role",
+    "expiresIn": "Expires In (Hours)",
+    "send": "Send Invitation",
+    "resend": "Resend",
+    "revoke": "Revoke",
+    "sentSuccess": "Invite sent successfully",
+    "noInvites": "No invites found"
+  },
+  "errors": {
+    "noPermission": "You do not have permission to view this page"
+  }
+}

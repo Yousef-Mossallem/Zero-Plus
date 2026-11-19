@@ -26,6 +26,7 @@ import SitePoliciesPage from '../pages/landing/SitePoliciesPage'
 import SignupPage from '../pages/SignupPage'
 import LoginPage from '../pages/LoginPage'
 import AddDeviceInvitePage from '../pages/AddDeviceInvitePage'
+import AcceptInvitePage from '../pages/AcceptInvitePage'
 
 // ------------------------------------------------------------------
 // Core / Dashboard Pages
@@ -41,6 +42,7 @@ import ReportsPage from '../pages/ReportsPage'
 import NotificationsPage from '../pages/NotificationsPage'
 import SimulationPage from '../pages/SimulationPage'
 import ProfilePage from '../pages/ProfilePage'
+import TeamPage from '../pages/TeamPage'
 
 // ------------------------------------------------------------------
 // Secondary (تفعّل لما الملفات تبقى جاهزة)
@@ -122,6 +124,8 @@ export default function AppRouter() {
       <Route path="/login" element={<LoginPage />} />
       {/* صفحة إضافة جهاز عبر QR — راوت عام بدون تسجيل دخول */}
       <Route path="/add-device/:token" element={<AddDeviceInvitePage />} />
+      {/* دعوة عضو جديد — راوت عام بدون JWT */}
+      <Route path="/accept-invite/:token" element={<AcceptInvitePage />} />
 
       {/* ============================================================
           Protected — محتاجة تسجيل دخول (من غير لغة في الرابط)
@@ -137,6 +141,7 @@ export default function AppRouter() {
       <Route path="/notifications" element={guard(<NotificationsPage />)} />
       <Route path="/simulation" element={guard(<SimulationPage />)} />
       <Route path="/profile" element={guard(<ProfilePage />)} />
+      <Route path="/team" element={guard(<TeamPage />)} />
 
       {/* لما الصفحات دي تجهز:
           <Route path="/live-traffic" element={guard(<LiveTrafficPage />)} />

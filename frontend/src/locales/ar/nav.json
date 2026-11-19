@@ -16,7 +16,8 @@
     "reports": "التقارير",
     "organization": "المؤسسة",
     "notifications": "الإشعارات",
-    "profile": "الملف الشخصي"
+    "profile": "الملف الشخصي",
+    "team": "الفريق"
   },
   "user": {
     "fallback": "مستخدم",
