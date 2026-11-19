@@ -49,6 +49,7 @@ import { useDebounce } from '../hooks/useDebounce'
 import { getSocket } from '../services/socket'
 import {
   getApiErrorInfo,
+  isGuardServer,
   listServers,
   mergeServerStatusEvent,
   requestProbe,
@@ -372,6 +373,23 @@ export default function ServersPage() {
   const detailServer = liveServer(detail)
 
   // ---------------- Actions ----------------
+  /** Guard: يعرض أمر تثبيت الـ Agent فقط (ولا يعرض أبدًا تعليمات DNS الخاصة بالـ Origin) */
+  const openGuardSetup = async (server: Server) => {
+    try {
+      const res = await enableTunnel(server.id)
+      setTunnelState({ server, initialData: res })
+    } catch {
+      // التوكن صدر قبل كده → المودال بيعرض زر إعادة التوليد
+      setTunnelState({ server, initialData: null })
+    }
+  }
+
+  /** نقطة دخول واحدة لإعداد السيرفر: Guard → النفق، Origin → DNS */
+  const openSetup = (server: Server) => {
+    if (isGuardServer(server)) void openGuardSetup(server)
+    else setDnsState({ server, dns: null })
+  }
+
   const handleMaintenance = async (server: Server) => {
     const enable = server.status !== 'MAINTENANCE'
     setBusyId(server.id)
@@ -393,7 +411,7 @@ export default function ServersPage() {
 
     if (!server.dnsVerified) {
       toast.info(t('toast.verifyFirst'), t('toast.verifyFirstDesc'))
-      setDnsState({ server, dns: null })
+      openSetup(server)
       return
     }
 
@@ -405,7 +423,7 @@ export default function ServersPage() {
       const { status: httpStatus, code, message, retryAfterSec } = getApiErrorInfo(err)
       if (httpStatus === 409 || code === 'OWNERSHIP_REQUIRED') {
         toast.info(t('toast.verifyFirst'), message)
-        setDnsState({ server, dns: null })
+        openSetup(server)
       } else if (httpStatus === 429 || code === 'PROBE_TOO_FREQUENT') {
         toast.info(
           retryAfterSec ? t('toast.waitSeconds', { s: retryAfterSec }) : t('toast.waitGeneric'),
@@ -426,7 +444,8 @@ export default function ServersPage() {
     setServers((prev) => (prev.some((s) => s.id === server.id) ? prev.map((s) => (s.id === server.id ? server : s)) : prev))
     stopProbing(server.id)
     void load(true)
-    if (dns) setDnsState({ server, dns })
+    // Origin فقط: تعليمات DNS تظهر تلقائيًا. Guard بيعرض مودال النفق من الـ Form.
+    if (dns && !isGuardServer(server)) setDnsState({ server, dns })
   }
 
   /** verify result updates the card without a full reload */
@@ -462,7 +481,7 @@ export default function ServersPage() {
 
   const openDnsFromDrawer = (server: Server) => {
     setDetail(null)
-    setDnsState({ server, dns: null })
+    openSetup(server)
   }
 
   // ---------------- Fleet health (from the backend summary) ----------------
@@ -738,20 +757,13 @@ export default function ServersPage() {
                 canManage={canManage}
                 busy={busyId === server.id}
                 probing={probingIds.has(server.id)}
-                onDns={() => setDnsState({ server, dns: null })}
+                onDns={() => openSetup(server)}
                 onEdit={() => setFormState({ open: true, server })}
                 onDelete={() => setDeleting(server)}
                 onMaintenance={() => void handleMaintenance(server)}
                 onProbe={() => void handleProbe(server)}
                 onDetails={() => setDetail(server)}
-                onTunnel={async () => {
-                  try {
-                    const res = await enableTunnel(server.id)
-                    setTunnelState({ server, initialData: res })
-                  } catch {
-                    setTunnelState({ server, initialData: null })
-                  }
-                }}
+                onTunnel={() => void openGuardSetup(server)}
               />
             ))}
           </div>
@@ -801,14 +813,7 @@ export default function ServersPage() {
         canManage={canManage}
         onClose={() => setDetail(null)}
         onOpenDns={openDnsFromDrawer}
-        onOpenTunnel={async (srv) => {
-          try {
-            const res = await enableTunnel(srv.id)
-            setTunnelState({ server: srv, initialData: res })
-          } catch {
-            setTunnelState({ server: srv, initialData: null })
-          }
-        }}
+        onOpenTunnel={(srv) => void openGuardSetup(srv)}
         onServerUpdated={replaceServer}
       />
 

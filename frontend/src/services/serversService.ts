@@ -107,6 +107,16 @@ export interface DnsInstructions {
   warnings: string[]
 }
 
+/** يضمن إن حقول القوائم موجودة دايمًا (الواجهة بتعمل عليها .length/.map) */
+export function normalizeDns(raw: DnsInstructions): DnsInstructions {
+  return {
+    ...raw,
+    routing: Array.isArray(raw?.routing) ? raw.routing : [],
+    steps: Array.isArray(raw?.steps) ? raw.steps : [],
+    warnings: Array.isArray(raw?.warnings) ? raw.warnings : [],
+  }
+}
+
 export interface DnsCheckResult {
   verified: boolean
   expected: string[]
@@ -280,6 +290,13 @@ export const EMPTY_PROBE_FIELDS = {
 } as const satisfies Partial<Server>
 
 /** هل السيرفر اتقاس قبل كده؟ (لو false اعرض "لم يُقس بعد" أو "جاري القياس…") */
+/** سيرفر مربوط عبر Guard (Agent/نفق) — الـ Backend مش بيخزّن نوع الربط، فبنستنتجه من حالة الـ Agent */
+export function isGuardServer(
+  server: Pick<Server, 'agentToken' | 'agentTokenHash' | 'tunnelUp' | 'lastAgentAt'>,
+): boolean {
+  return Boolean(server.agentToken || server.agentTokenHash || server.tunnelUp || server.lastAgentAt)
+}
+
 export function hasProbeData(server: Pick<Server, 'lastProbeAt' | 'safeRequestsPerSecond'>): boolean {
   return server.lastProbeAt !== null || server.safeRequestsPerSecond !== null
 }
@@ -338,7 +355,7 @@ export async function createServer(
     data: Server
     dns: DnsInstructions
   }>('/servers', input)
-  return { message: data.message, server: data.data, dns: data.dns }
+  return { message: data.message, server: data.data, dns: normalizeDns(data.dns) }
 }
 
 export async function getServerDns(id: string): Promise<{
@@ -348,7 +365,7 @@ export async function getServerDns(id: string): Promise<{
   const { data } = await api.get<{ data: DnsStatus; dns: DnsInstructions }>(
     `/servers/${id}/dns`,
   )
-  return { status: data.data, dns: data.dns }
+  return { status: data.data, dns: normalizeDns(data.dns) }
 }
 
 export async function updateServer(
@@ -367,7 +384,7 @@ export async function updateServer(
     server: data.data,
     changes: data.changes ?? [],
     resets: data.resets ?? [],
-    ...(data.dns && { dns: data.dns as DnsInstructions }),
+    ...(data.dns && { dns: normalizeDns(data.dns as DnsInstructions) }),
   }
 }
 

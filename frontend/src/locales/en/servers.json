@@ -120,7 +120,15 @@
     "edit": "Edit",
     "editAria": "Edit server",
     "delete": "Delete",
-    "deleteAria": "Delete server"
+    "deleteAria": "Delete server",
+    "tunnelUp": "Tunnel connected (Guard)",
+    "tunnelPending": "Tunnel not connected",
+    "originOnly": "Direct origin",
+    "agentLive": "Agent status",
+    "lastHeartbeat": "Last heartbeat:",
+    "tunnelActive": "Tunnel active",
+    "tunnelCommand": "Tunnel command",
+    "enableTunnel": "Enable Guard"
   },
   "drawer": {
     "fallbackTitle": "Server",
@@ -135,7 +143,8 @@
     "noUsable": "No usable result from the last measurement",
     "sections": {
       "measurement": "Measurement",
-      "health": "Health"
+      "health": "Health",
+      "agent": "Tunnel & agent status"
     },
     "fields": {
       "maxRate": "Max sustained rate",
@@ -148,7 +157,14 @@
       "currentLoad": "Current load",
       "originReachable": "Origin reachable",
       "httpsOrigin": "HTTPS origin",
-      "lastCheck": "Last health check"
+      "lastCheck": "Last health check",
+      "lastHeartbeat": "Last heartbeat",
+      "agentVersion": "Agent version",
+      "agentOs": "Operating system",
+      "agentCpu": "CPU usage",
+      "agentRam": "Memory usage",
+      "agentDisk": "Disk",
+      "originHealth": "Origin health (from Agent)"
     },
     "yes": "Yes",
     "no": "No",
@@ -161,7 +177,19 @@
     "retryIn": "Try again in {{s}}s",
     "unverifiedHint": "Verify domain ownership to enable measurement.",
     "maintenanceHint": "Measurement is paused while the server is in maintenance.",
-    "ownerOnly": "Only Owners and Admins can re-measure capacity."
+    "ownerOnly": "Only Owners and Admins can re-measure capacity.",
+    "tunnelConnected": "Connected (Online)",
+    "tunnelWaiting": "Waiting for heartbeat",
+    "agentDisabled": "Not enabled",
+    "viewCommand": "Install command",
+    "confirmDisable": "Stop the agent and revoke its token?",
+    "agentDisabledSuccess": "Agent stopped successfully",
+    "disableFailed": "Failed to stop the agent",
+    "stopAgent": "Stop agent",
+    "enableGuardDesc": "Enable the tunnel now to secure the connection through the Zero Plus Guard client instead of exposing the IP directly.",
+    "enableGuardNow": "Enable Guard now",
+    "originHealthy": "Healthy ({{ms}} ms)",
+    "originDown": "Origin not responding"
   },
   "dns": {
     "title": "DNS setup",
@@ -273,6 +301,14 @@
       "addedDesc": "Follow the DNS steps to activate protection.",
       "updateFailed": "Could not update server",
       "addFailed": "Could not add server"
+    },
+    "connectionType": {
+      "label": "Connection & protection type",
+      "origin": "Standard Origin",
+      "originDesc": "Point DNS straight to the origin, no Agent.",
+      "guard": "Guard (Agent / tunnel)",
+      "guardDesc": "Encrypted secure tunnel with an Agent installed on your server.",
+      "guardNotice": "In Guard mode you do not need to enter the origin IP. A secure tunnel will be created and an install command generated to run on your server."
     }
   },
   "validation": {
@@ -321,6 +357,14 @@
     "step1": "Copy the command above and run it as root on your origin server.",
     "step2": "The agent will establish an encrypted tunnel and send regular heartbeats.",
     "step3": "The tunnel status on the server card will automatically switch to «Online».",
-    "docsLink": "Installation & Troubleshooting Docs"
+    "docsLink": "Installation & Troubleshooting Docs",
+    "copyFailed": "Could not copy the command. Select it and copy it manually.",
+    "statusWaiting": "Waiting for the Agent to connect…",
+    "statusConnected": "Agent connected — tunnel is up",
+    "statusVersion": "Agent version",
+    "statusLastSeen": "Last heartbeat"
+  },
+  "actions": {
+    "cancel": "Cancel"
   }
 }

@@ -28,6 +28,7 @@
 // ==================================================================
 
 import api from './api'
+import i18n from '../i18n'
 import { cleanParams } from './types'
 
 // ==================================================================
@@ -186,6 +187,38 @@ export interface PermissionsCatalog {
 }
 
 // ==================================================================
+// Normalizers — العقد بين الـ Backend والواجهة: أي حقل قائمة ناقص يتحول لمصفوفة فاضية
+// ==================================================================
+
+const arr = <T,>(v: unknown): T[] => (Array.isArray(v) ? (v as T[]) : [])
+
+export function normalizeMember(raw: Partial<TeamMember> & { permissionOverrides?: Override[] }): TeamMember {
+  return {
+    ...(raw as TeamMember),
+    groups: arr<GroupSummary>(raw.groups),
+    overrides: arr<Override>(raw.overrides ?? raw.permissionOverrides),
+    permissions: arr<string>(raw.permissions),
+  }
+}
+
+export function normalizeGroup(raw: Partial<TeamGroup>): TeamGroup {
+  return {
+    ...(raw as TeamGroup),
+    permissions: arr<string>(raw.permissions),
+    membersCount: typeof raw.membersCount === 'number' ? raw.membersCount : 0,
+  }
+}
+
+export function normalizeInvite(raw: Partial<TeamInvite>): TeamInvite {
+  return { ...(raw as TeamInvite), initialGroupIds: arr<string>(raw.initialGroupIds) }
+}
+
+function normalizePage<R, T>(data: Partial<PaginatedResponse<R>> | undefined, map: (r: R) => T): PaginatedResponse<T> {
+  const items = arr<R>(data?.items).map(map)
+  return { items, page: data?.page ?? 1, limit: data?.limit ?? items.length, total: data?.total ?? items.length }
+}
+
+// ==================================================================
 // Members API
 // ==================================================================
 
@@ -196,14 +229,14 @@ export async function listMembers(
     '/team/members',
     { params: cleanParams(params) },
   )
-  return response.data.data
+  return normalizePage(response.data.data, normalizeMember)
 }
 
 export async function getMember(userId: string): Promise<TeamMember> {
   const response = await api.get<ApiResponse<TeamMember>>(
     `/team/members/${userId}`,
   )
-  return response.data.data
+  return normalizePage(response.data.data, normalizeMember)
 }
 
 export async function updateMemberRole(
@@ -214,7 +247,7 @@ export async function updateMemberRole(
     `/team/members/${userId}`,
     { role },
   )
-  return response.data.data
+  return normalizeMember(response.data.data)
 }
 
 export async function setMemberGroups(
@@ -225,7 +258,7 @@ export async function setMemberGroups(
     `/team/members/${userId}/groups`,
     { groupIds },
   )
-  return response.data.data
+  return normalizeMember(response.data.data)
 }
 
 export async function deactivateMember(userId: string): Promise<void> {
@@ -245,7 +278,7 @@ export async function setMemberOverrides(
     `/team/members/${userId}/overrides`,
     { overrides },
   )
-  return response.data.data
+  return normalizeMember(response.data.data)
 }
 
 /** إضافة/تعديل استثناء واحد */
@@ -257,7 +290,7 @@ export async function patchMemberOverride(
     `/team/members/${userId}/overrides`,
     override,
   )
-  return response.data.data
+  return normalizeMember(response.data.data)
 }
 
 /** حذف استثناء واحد */
@@ -269,7 +302,7 @@ export async function deleteMemberOverride(
     `/team/members/${userId}/overrides`,
     { data: { permission } },
   )
-  return response.data.data
+  return normalizeMember(response.data.data)
 }
 
 /** تجديد توكن عضو بعد تغيير صلاحياته */
@@ -277,7 +310,7 @@ export async function refreshMemberToken(userId: string): Promise<{ token: strin
   const response = await api.post<ApiResponse<{ token: string }>>(
     `/team/members/${userId}/refresh-token`,
   )
-  return response.data.data
+  return normalizeMember(response.data.data)
 }
 
 // ==================================================================
@@ -291,7 +324,7 @@ export async function listGroups(
     '/team/groups',
     { params: cleanParams(params) },
   )
-  return response.data.data
+  return normalizePage(response.data.data, normalizeGroup)
 }
 
 export async function getGroup(groupId: string): Promise<TeamGroupDetail> {
@@ -303,7 +336,7 @@ export async function getGroup(groupId: string): Promise<TeamGroupDetail> {
 
 export async function createGroup(body: CreateGroupBody): Promise<TeamGroup> {
   const response = await api.post<ApiResponse<TeamGroup>>('/team/groups', body)
-  return response.data.data
+  return normalizeGroup(response.data.data)
 }
 
 export async function updateGroup(
@@ -314,7 +347,7 @@ export async function updateGroup(
     `/team/groups/${groupId}`,
     body,
   )
-  return response.data.data
+  return normalizeGroup(response.data.data)
 }
 
 export async function deleteGroup(groupId: string): Promise<void> {
@@ -346,7 +379,7 @@ export async function listInvites(
     '/team/invites',
     { params: cleanParams(params) },
   )
-  return response.data.data
+  return normalizePage(response.data.data, normalizeInvite)
 }
 
 export async function createInvite(
@@ -382,7 +415,11 @@ export async function getPermissionsCatalog(): Promise<PermissionsCatalog> {
   const response = await api.get<ApiResponse<PermissionsCatalog>>(
     '/team/permissions-catalog',
   )
-  return response.data.data
+  const d = response.data.data
+  return {
+    permissions: arr<PermissionEntry>(d?.permissions),
+    systemGroupTemplates: arr<SystemGroupTemplate>(d?.systemGroupTemplates),
+  }
 }
 
 export async function ensureSystemGroups(): Promise<{ created: number }> {
@@ -396,7 +433,7 @@ export async function ensureSystemGroups(): Promise<{ created: number }> {
 // Error helper — يفضّل الرسالة العربية لو موجودة
 // ==================================================================
 
-export function getTeamErrorMessage(error: unknown, fallback = 'حدث خطأ'): string {
+export function getTeamErrorMessage(error: unknown, fallback: string): string {
   if (typeof error === 'object' && error !== null) {
     const e = error as {
       response?: {
@@ -405,12 +442,13 @@ export function getTeamErrorMessage(error: unknown, fallback = 'حدث خطأ'):
           message?: string
         }
       }
-      message?: string
     }
-    const msgAr = e.response?.data?.error?.messageAr
-    if (msgAr) return msgAr
-    const msg = e.response?.data?.error?.message ?? e.response?.data?.message ?? e.message
-    if (msg) return msg
+    const lang = (i18n.resolvedLanguage ?? i18n.language ?? 'en').split('-')[0]
+    const err = e.response?.data?.error
+    if (lang === 'ar' && err?.messageAr) return err.messageAr
+    const msg = err?.message ?? e.response?.data?.message
+    if (msg && lang !== 'ar') return msg
+    if (msg && !err?.messageAr) return fallback
   }
   return fallback
 }

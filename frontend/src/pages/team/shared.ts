@@ -1,16 +1,18 @@
 // frontend/src/pages/team/shared.ts
-// أنواع وأدوات مشتركة بين صفحات الفريق
+// أدوات مشتركة بين تبويبات الفريق — كل النصوص من نظام i18n (namespace: team)
 
+import i18n from '../../i18n'
 import type { TeamRole } from '../../services/teamService'
 
+const lang = () => (i18n.resolvedLanguage ?? i18n.language ?? 'en').split('-')[0]
+const locale = () => (lang() === 'ar' ? 'ar-EG' : lang() === 'de' ? 'de-DE' : lang() === 'zh' ? 'zh-CN' : 'en-US')
+
 export function formatRole(role: TeamRole | string): string {
-  const map: Record<string, string> = {
-    OWNER: 'مالك',
-    ADMIN: 'مسؤول',
-    ANALYST: 'محلل',
-    VIEWER: 'مشاهد',
-  }
-  return map[role] ?? role
+  return i18n.t(`roles.${String(role).toLowerCase()}` as 'roles.admin', { ns: 'team', defaultValue: String(role) })
+}
+
+export function formatInviteStatus(status: string): string {
+  return i18n.t(`status.${String(status).toLowerCase()}` as 'status.pending', { ns: 'team', defaultValue: String(status) })
 }
 
 export function roleColor(role: TeamRole | string): string {
@@ -24,9 +26,7 @@ export function roleColor(role: TeamRole | string): string {
 }
 
 export function statusColor(isActive: boolean): string {
-  return isActive
-    ? 'text-emerald-300 bg-emerald-500/10'
-    : 'text-slate-400 bg-slate-500/10'
+  return isActive ? 'text-emerald-300 bg-emerald-500/10' : 'text-slate-400 bg-slate-500/10'
 }
 
 export function inviteStatusColor(status: string): string {
@@ -39,22 +39,25 @@ export function inviteStatusColor(status: string): string {
   return map[status] ?? 'text-slate-400 bg-slate-500/10 border-slate-400/20'
 }
 
+function safeDate(iso: string | null | undefined): Date | null {
+  if (!iso) return null
+  const d = new Date(iso)
+  return Number.isNaN(d.getTime()) ? null : d
+}
+
 export function formatDate(iso: string | null | undefined): string {
-  if (!iso) return '—'
-  return new Date(iso).toLocaleDateString('ar-EG', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  })
+  const d = safeDate(iso)
+  return d ? d.toLocaleDateString(locale(), { year: 'numeric', month: 'short', day: 'numeric' }) : '—'
 }
 
 export function formatDateTime(iso: string | null | undefined): string {
-  if (!iso) return '—'
-  return new Date(iso).toLocaleString('ar-EG', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
+  const d = safeDate(iso)
+  return d
+    ? d.toLocaleString(locale(), { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+    : '—'
+}
+
+/** اسم الصلاحية حسب لغة الواجهة (الكتالوج بيرجع ar/en) */
+export function permLabel(p: { ar?: string; en?: string; id: string }): string {
+  return (lang() === 'ar' ? p.ar : p.en) || p.en || p.ar || p.id
 }

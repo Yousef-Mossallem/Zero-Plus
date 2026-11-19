@@ -50,7 +50,7 @@ export default function TeamPage() {
           <div className="text-center">
             <Shield className="mx-auto mb-3 h-10 w-10 text-slate-600" />
             <p className="text-sm text-slate-500">
-              {t('errors.noPermission', 'ليس لديك صلاحية لعرض هذه الصفحة')}
+              {t('errors.noPermission')}
             </p>
           </div>
         </main>
@@ -67,21 +67,23 @@ export default function TeamPage() {
           {/* Page header */}
           <div className="mb-6">
             <h1 className="text-xl font-bold text-white">
-              {t('title', 'إدارة الفريق')}
+              {t('title')}
             </h1>
             <p className="mt-1 text-sm text-slate-500">
-              {t('subtitle', 'الأعضاء • المجموعات • الدعوات والصلاحيات')}
+              {t('subtitle')}
             </p>
           </div>
 
           {/* Tabs */}
-          <div className="mb-6 flex gap-1 rounded-xl border border-white/8 bg-white/2 p-1 w-fit">
+          <div className="mb-6 flex w-full max-w-full gap-1 overflow-x-auto rounded-xl border border-white/8 bg-white/2 p-1 sm:w-fit">
             {TABS.map(({ id, labelKey, icon: Icon }) => (
               <button
                 key={id}
                 type="button"
                 onClick={() => setActiveTab(id)}
-                className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-all ${
+                role="tab"
+                aria-selected={activeTab === id}
+                className={`flex shrink-0 items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-all ${
                   activeTab === id
                     ? 'bg-cyan-500/20 text-cyan-300 shadow-sm'
                     : 'text-slate-400 hover:text-white'
