@@ -4,23 +4,38 @@
  * Zero Plus - Agent Service
  *
  * المسؤوليات:
- *   1) تفعيل النفق على سيرفر (enable-tunnel)
+ *   1) تفعيل النفق على سيرفر Guard (enable-tunnel)
  *      - توليد AGENT_TOKEN آمن
- *      - حفظ hash في DB (+ التوكن الخام اختياريًا للعرض مرة واحدة)
- *      - بناء أمر التثبيت من متغيرات البيئة (GitHub Release / سيرفرك)
+ *      - حفظ hash في DB (+ التوكن الخام اختياريًا للتطوير)
+ *      - بناء أمر التثبيت من متغيرات البيئة
+ *      - ما بيلمسش أي حقل DNS / أورجن (originIp / dnsVerified / probe ...)
  *
  *   2) استقبال Heartbeat من الـ Agent
  *      - التحقق من التوكن
- *      - تحديث snapshot على Server
- *      - تسجيل صف في AgentHeartbeat
+ *      - تحديث حقول الـ Agent فقط (tunnelUp / lastAgentAt / مقاييس / agentOriginOk ...)
+ *      - GUARD  : بيحدّث status من طبقة الـ Guard (computeGuardStatus: نفق + نبضة حديثة)
+ *      - ORIGIN : ما بيكتبش status ولا حقول السعة أبدًا (مسار الأورجن بتاع الـ Probe
+ *                 هو مصدر الحقيقة، والنفق ما يكتبش عليه ONLINE بالغلط)
+ *      - تسجيل صف في AgentHeartbeat (مع تنظيف دوري للقديم)
  *
  *   3) حالة الـ Agent + آخر النبضات (للداشبورد)
- *   4) تدوير / إبطال التوكن
+ *   4) تدوير / إبطال التوكن (disableAgent ما بيمسحش سيرفر ولا بيشغّل probe)
+ *   5) Sweeper اختياري: يعلّم سيرفرات Guard اللي الـ Agent بتاعها سكت (من غير نبضة)
+ *      OFFLINE ويبث للداشبورد (sweepStaleAgents / startAgentSweeper)
+ *
+ * وضع الربط (setupMode) — مصدره servers.schema.ts:
+ *   - enable-tunnel / rotate : GUARD فقط (ORIGIN → 409 FEATURE_NOT_AVAILABLE_FOR_SETUP_MODE)
+ *   - heartbeat              : مقبول من الاتنين (Agent قديم على سيرفر Origin ما يتكسرش)،
+ *                              لكن status/السعة بتتكتب لـ GUARD بس
+ *   - disable / status / history : متاحين للاتنين (تنضيف توكن قديم مثلًا)
  *
  * الأمان:
- *   - التوكن يُولَّد عشوائيًا (base64url) ويُعرض مرة واحدة عند التفعيل/التدوير
+ *   - التوكن يُولَّد عشوائيًا (base64url) ويُعرض مرة واحدة عند التفعيل/التدوير
  *   - في DB: agentTokenHash (sha256) للتحقق السريع
  *   - agentToken الخام يُحفظ فقط لو AGENT_STORE_RAW_TOKEN=true (للتطوير)
+ *
+ * أخطاء الـ service: Error رسالته = الكود (زي ما الراوت متعود)، وفيها
+ * statusCode و code كمان (لو الراوت ما يعرفش الكود، Fastify هيستخدم الـ statusCode).
  *
  * أمر التثبيت:
  *   كل الروابط والقوالب من env — غيّر الإصدار/المستودع بدون تعديل كود
@@ -29,7 +44,18 @@
 
 import type { FastifyInstance } from 'fastify'
 import { createHash, randomBytes } from 'crypto'
-import type { AgentOs, ServerStatus } from '@prisma/client'
+import type {
+  AgentOs,
+  Prisma,
+  Server,
+  ServerStatus,
+} from '@prisma/client'
+
+import { SocketEvents } from '../../plugins/socket.plugin.js'
+import { NotificationsService } from '../notifications/notifications.service.js'
+import { computeGuardStatus } from '../servers/servers.service.js'
+import type { ServerRealtimePayload } from '../servers/servers.service.js'
+import { supportsFeature } from '../servers/servers.schema.js'
 import type {
   EnableTunnelInput,
   AgentHeartbeatInput,
@@ -43,13 +69,40 @@ import type {
 // Config من البيئة
 // ------------------------------------------------------------------
 
-/** طول التوكن بالبايت قبل الترميز (32 = 43 حرف base64url تقريبًا) */
-const TOKEN_BYTES = Number(process.env.AGENT_TOKEN_BYTES ?? 32)
+function envNumber(name: string, fallback: number): number {
+  const raw = process.env[name]
+  if (raw === undefined || raw.trim() === '') return fallback
+  const n = Number(raw)
+  return Number.isFinite(n) ? n : fallback
+}
 
-/** نافذة «الـ Agent حي» بالثواني (بعدها isFresh = false) */
-const AGENT_FRESH_WINDOW_SEC = Number(
-  process.env.AGENT_FRESH_WINDOW_SEC ?? 120,
+/** طول التوكن بالبايت قبل الترميز (32 = 43 حرف base64url تقريبًا) */
+const TOKEN_BYTES = Math.max(16, Math.floor(envNumber('AGENT_TOKEN_BYTES', 32)))
+
+/**
+ * نافذة «الـ Agent حي» بالثواني (بعدها isFresh = false).
+ * وبتستخدمها الـ sweeper كحد لاعتبار الـ Guard OFFLINE.
+ * (الافتراضي 120 — نفس افتراضي GUARD_HEARTBEAT_STALE_SEC في servers.service)
+ */
+const AGENT_FRESH_WINDOW_SEC = envNumber('AGENT_FRESH_WINDOW_SEC', 120)
+
+/** تلميح الفاصل بين النبضات للـ Agent */
+const HEARTBEAT_INTERVAL_SEC = Math.max(
+  5,
+  Math.floor(envNumber('AGENT_HEARTBEAT_INTERVAL_SEC', 30)),
 )
+
+/** مدة الاحتفاظ بتاريخ النبضات بالأيام (0 = لا تنظيف) */
+const HEARTBEAT_RETENTION_DAYS = Math.max(
+  0,
+  envNumber('AGENT_HEARTBEAT_RETENTION_DAYS', 14),
+)
+/** أقل فاصل بين تنظيفين لنفس السيرفر */
+const HEARTBEAT_PRUNE_INTERVAL_MS = 60 * 60 * 1000
+
+/** فاصل الـ sweeper بالثواني (0 = متوقف) */
+const SWEEP_INTERVAL_SEC = Math.max(0, envNumber('AGENT_SWEEP_INTERVAL_SEC', 30))
+const SWEEP_BATCH = 200
 
 /**
  * هل نخزّن التوكن الخام في DB؟
@@ -62,6 +115,15 @@ const STORE_RAW_TOKEN =
 
 // ---- قوالب أمر التثبيت (كل شيء قابل للتغيير من env) ----
 
+const DEFAULT_RELEASE_BASE =
+  'https://github.com/zero-plus-hq/zero-plus-agent/releases/latest/download'
+
+function trimSlash(value: string | undefined): string | undefined {
+  const v = value?.trim()
+  if (!v) return undefined
+  return v.replace(/\/$/, '')
+}
+
 /**
  * رابط سكربت التثبيت (one-liner)
  * مثال GitHub Release:
@@ -70,12 +132,13 @@ const STORE_RAW_TOKEN =
  *   https://downloads.zero-plus.site/agent/install.sh
  */
 function getInstallScriptUrl(): string {
-  return (
-    process.env.AGENT_INSTALL_SCRIPT_URL?.trim() ||
-    process.env.AGENT_DOWNLOAD_BASE_URL?.trim()?.replace(/\/$/, '') +
-      '/install.sh' ||
-    'https://github.com/zero-plus-hq/zero-plus-agent/releases/latest/download/install.sh'
-  )
+  const explicit = process.env.AGENT_INSTALL_SCRIPT_URL?.trim()
+  if (explicit) return explicit
+
+  const base = trimSlash(process.env.AGENT_DOWNLOAD_BASE_URL)
+  if (base) return `${base}/install.sh`
+
+  return `${DEFAULT_RELEASE_BASE}/install.sh`
 }
 
 /**
@@ -91,15 +154,13 @@ function getDockerImage(): string {
 
 /**
  * رابط تحميل الباينري (بدون اسم الملف — نكمّل os/arch)
- * مثال:
- *   https://github.com/ORG/zero-plus-agent/releases/latest/download
  * الملفات المتوقعة: zero-plus-agent-linux-amd64.tar.gz ...
  */
 function getBinaryBaseUrl(): string {
   return (
-    process.env.AGENT_BINARY_BASE_URL?.trim()?.replace(/\/$/, '') ||
-    process.env.AGENT_DOWNLOAD_BASE_URL?.trim()?.replace(/\/$/, '') ||
-    'https://github.com/zero-plus-hq/zero-plus-agent/releases/latest/download'
+    trimSlash(process.env.AGENT_BINARY_BASE_URL) ||
+    trimSlash(process.env.AGENT_DOWNLOAD_BASE_URL) ||
+    DEFAULT_RELEASE_BASE
   )
 }
 
@@ -114,9 +175,9 @@ function getBinaryName(): string {
  */
 function getAgentApiBaseUrl(): string {
   return (
-    process.env.AGENT_API_BASE_URL?.trim()?.replace(/\/$/, '') ||
-    process.env.GATEWAY_PUBLIC_URL?.trim()?.replace(/\/$/, '') ||
-    process.env.APP_URL?.trim()?.replace(/\/$/, '') ||
+    trimSlash(process.env.AGENT_API_BASE_URL) ||
+    trimSlash(process.env.GATEWAY_PUBLIC_URL) ||
+    trimSlash(process.env.APP_URL) ||
     'http://127.0.0.1:3000'
   )
 }
@@ -157,6 +218,33 @@ function getCustomInstallTemplate(
 }
 
 // ------------------------------------------------------------------
+// Errors
+// ------------------------------------------------------------------
+
+/**
+ * message = الكود (الراوت بيعمل ERROR_MAP على الرسالة).
+ * statusCode: لو الراوت ما يعرفش الكود، Fastify هيستخدمه بدل 500.
+ */
+export class AgentServiceError extends Error {
+  public readonly code: string
+  public readonly statusCode: number
+
+  constructor(code: string, statusCode: number) {
+    super(code)
+    this.name = 'AgentServiceError'
+    this.code = code
+    this.statusCode = statusCode
+  }
+}
+
+/** enable-tunnel / rotate: GUARD فقط (AGENT_TUNNEL في servers.schema) */
+function assertAgentTunnelAllowed(server: Pick<Server, 'setupMode'>): void {
+  if (!supportsFeature(server.setupMode, 'AGENT_TUNNEL')) {
+    throw new AgentServiceError('FEATURE_NOT_AVAILABLE_FOR_SETUP_MODE', 409)
+  }
+}
+
+// ------------------------------------------------------------------
 // Helpers — توكن
 // ------------------------------------------------------------------
 
@@ -166,6 +254,161 @@ function generateAgentToken(): string {
 
 function hashToken(token: string): string {
   return createHash('sha256').update(token, 'utf8').digest('hex')
+}
+
+// ------------------------------------------------------------------
+// Helpers — أرقام آمنة
+// ------------------------------------------------------------------
+
+function clampPercent(value: number | null | undefined): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return undefined
+  return Math.min(100, Math.max(0, value))
+}
+
+function positiveInt(value: number | null | undefined): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
+    return undefined
+  }
+  return Math.round(value)
+}
+
+// ------------------------------------------------------------------
+// Helpers — Socket + إشعارات (نفس عقد servers.service)
+// ------------------------------------------------------------------
+
+type Broadcaster = (
+  organizationId: string,
+  event: string,
+  payload: unknown,
+) => void
+
+function toRealtimePayload(
+  s: Server,
+  action: ServerRealtimePayload['action'],
+  previousStatus?: ServerStatus,
+): ServerRealtimePayload {
+  return {
+    id: s.id,
+    organizationId: s.organizationId,
+    domain: s.domain,
+    setupMode: s.setupMode,
+    status: s.status,
+    mode: s.mode,
+    dnsVerified: s.dnsVerified,
+    gatewayReachable: s.gatewayReachable,
+    originReachable: s.originReachable,
+    tunnelUp: s.tunnelUp,
+    lastAgentAt: s.lastAgentAt ? s.lastAgentAt.toISOString() : null,
+    avgResponseTimeMs: s.avgResponseTimeMs,
+    currentLoadPercent: s.currentLoadPercent,
+    maxRequestsPerSecond: s.maxRequestsPerSecond,
+    safeRequestsPerSecond: s.safeRequestsPerSecond,
+    p95ResponseTimeMs: s.p95ResponseTimeMs,
+    probeRecommendation: s.probeRecommendation,
+    probeConfidence: s.probeConfidence,
+    lastProbeAt: s.lastProbeAt ? s.lastProbeAt.toISOString() : null,
+    ...(previousStatus !== undefined ? { previousStatus } : {}),
+    action,
+    updatedAt: s.updatedAt.toISOString(),
+  }
+}
+
+function emitServerStatus(
+  fastify: FastifyInstance,
+  server: Server,
+  action: ServerRealtimePayload['action'],
+  previousStatus?: ServerStatus,
+): void {
+  try {
+    const broadcast = (fastify as unknown as { broadcastToOrg?: Broadcaster })
+      .broadcastToOrg
+
+    if (typeof broadcast === 'function') {
+      broadcast.call(
+        fastify,
+        server.organizationId,
+        SocketEvents.SERVER_STATUS,
+        toRealtimePayload(server, action, previousStatus),
+      )
+    }
+  } catch (err) {
+    fastify.log.warn(
+      { err, serverId: server.id },
+      'Failed to broadcast server:status (agents)',
+    )
+  }
+}
+
+/** الإشعار ما يفشلش العملية الأساسية */
+async function safeNotify(
+  fastify: FastifyInstance,
+  input: Parameters<NotificationsService['create']>[0],
+): Promise<void> {
+  try {
+    await new NotificationsService(fastify).create(input)
+  } catch (err) {
+    fastify.log.warn({ err }, 'Failed to create notification (agents)')
+  }
+}
+
+/**
+ * إشعارات تغيّر حالة سيرفر Guard (الأورجن بيتعامل معاه reportHealth في servers.service).
+ *   - OFFLINE بعد ما كان شغال        → تنبيه
+ *   - رجوع من OFFLINE               → SERVER_RECOVERY
+ *   - أول اتصال (PENDING → شغال)    → إشعار تفعيل
+ */
+async function notifyGuardTransition(
+  fastify: FastifyInstance,
+  server: Pick<Server, 'id' | 'organizationId' | 'domain'>,
+  previous: ServerStatus,
+  next: ServerStatus,
+): Promise<void> {
+  if (previous === next) return
+
+  const base = { organizationId: server.organizationId }
+  const meta = {
+    serverId: server.id,
+    domain: server.domain,
+    setupMode: 'GUARD' as const,
+  }
+
+  if (
+    next === 'OFFLINE' &&
+    (previous === 'ONLINE' || previous === 'DEGRADED')
+  ) {
+    await safeNotify(fastify, {
+      ...base,
+      type: 'SYSTEM',
+      title: 'السيرفر لا يستجيب',
+      message: `السيرفر ${server.domain} لا يستجيب، تأكد من أن الـ Agent شغال والنفق متصل.`,
+      severity: 4,
+      metadata: { ...meta, status: next },
+    })
+    return
+  }
+
+  if (previous === 'OFFLINE' && (next === 'ONLINE' || next === 'DEGRADED')) {
+    await safeNotify(fastify, {
+      ...base,
+      type: 'SERVER_RECOVERY',
+      title: 'السيرفر رجع يعمل',
+      message: `السيرفر ${server.domain} رجع يستجيب من جديد.`,
+      severity: 1,
+      metadata: { ...meta, status: next },
+    })
+    return
+  }
+
+  if (previous === 'PENDING' && (next === 'ONLINE' || next === 'DEGRADED')) {
+    await safeNotify(fastify, {
+      ...base,
+      type: 'SYSTEM',
+      title: 'تم تفعيل الـ Guard',
+      message: `الـ Agent اتصل بنجاح والنفق شغال للسيرفر ${server.domain}.`,
+      severity: 1,
+      metadata: { ...meta, status: next },
+    })
+  }
 }
 
 // ------------------------------------------------------------------
@@ -187,7 +430,7 @@ async function getActorServer(
     },
   })
   if (!user || !user.isActive) {
-    throw new Error('USER_NOT_FOUND')
+    throw new AgentServiceError('USER_NOT_FOUND', 401)
   }
 
   const server = await fastify.prisma.server.findFirst({
@@ -200,7 +443,9 @@ async function getActorServer(
       domain: true,
       originIp: true,
       organizationId: true,
+      setupMode: true,
       status: true,
+      avgResponseTimeMs: true,
       agentToken: true,
       agentTokenHash: true,
       agentVersion: true,
@@ -220,7 +465,7 @@ async function getActorServer(
   })
 
   if (!server) {
-    throw new Error('SERVER_NOT_FOUND')
+    throw new AgentServiceError('SERVER_NOT_FOUND', 404)
   }
 
   return { user, server }
@@ -236,7 +481,8 @@ function applyTemplate(
 ): string {
   let out = template
   for (const [k, v] of Object.entries(vars)) {
-    out = out.replace(new RegExp(`\\{\\{${k}\\}\\}`, 'g'), v)
+    // replacer function: عشان رموز $ في القيمة ما تتفسرش كـ pattern
+    out = out.replace(new RegExp(`\\{\\{${k}\\}\\}`, 'g'), () => v)
   }
   return out
 }
@@ -275,16 +521,17 @@ function buildInstallCommand(params: {
     command = applyTemplate(custom, vars)
   } else if (params.channel === 'docker') {
     // أمر Docker افتراضي — متغيرات من env
-    command = [
-      `docker run -d --name zero-plus-agent --restart unless-stopped`,
-      `--cap-add=NET_ADMIN --device /dev/net/tun`,
-      `-e AGENT_TOKEN="{{TOKEN}}"`,
-      `-e AGENT_API_URL="{{API_URL}}"`,
-      `-e AGENT_SERVER_ID="{{SERVER_ID}}"`,
-      `"{{DOCKER_IMAGE}}"`,
-    ]
-      .join(' ')
-      .replace(/\{\{(\w+)\}\}/g, (_, k) => vars[k] ?? '')
+    command = applyTemplate(
+      [
+        `docker run -d --name zero-plus-agent --restart unless-stopped`,
+        `--cap-add=NET_ADMIN --device /dev/net/tun`,
+        `-e AGENT_TOKEN="{{TOKEN}}"`,
+        `-e AGENT_API_URL="{{API_URL}}"`,
+        `-e AGENT_SERVER_ID="{{SERVER_ID}}"`,
+        `"{{DOCKER_IMAGE}}"`,
+      ].join(' '),
+      vars,
+    )
   } else if (params.channel === 'binary') {
     const os =
       (params.preferOs || 'LINUX').toLowerCase() === 'windows'
@@ -295,14 +542,15 @@ function buildInstallCommand(params: {
       archRaw === 'aarch64' || archRaw === 'arm64' ? 'arm64' : 'amd64'
     const archive = `${binaryName}-${os}-${arch}.tar.gz`
 
-    command = [
-      `curl -fsSL "${binaryBase}/${archive}" -o /tmp/${archive}`,
-      `tar -xzf /tmp/${archive} -C /usr/local/bin`,
-      `chmod +x /usr/local/bin/${binaryName}`,
-      `AGENT_TOKEN="{{TOKEN}}" AGENT_API_URL="{{API_URL}}" AGENT_SERVER_ID="{{SERVER_ID}}" ${binaryName} install`,
-    ]
-      .join(' && ')
-      .replace(/\{\{(\w+)\}\}/g, (_, k) => vars[k] ?? '')
+    command = applyTemplate(
+      [
+        `curl -fsSL "${binaryBase}/${archive}" -o /tmp/${archive}`,
+        `tar -xzf /tmp/${archive} -C /usr/local/bin`,
+        `chmod +x /usr/local/bin/${binaryName}`,
+        `AGENT_TOKEN="{{TOKEN}}" AGENT_API_URL="{{API_URL}}" AGENT_SERVER_ID="{{SERVER_ID}}" ${binaryName} install`,
+      ].join(' && '),
+      vars,
+    )
   } else {
     // script — one-liner شائع
     command = applyTemplate(
@@ -328,7 +576,11 @@ function buildInstallCommand(params: {
 // ==================================================================
 
 /**
- * يولّد (أو يعيد استخدام) توكن الـ Agent ويرجّع أمر التثبيت
+ * يولّد (أو يعيد استخدام) توكن الـ Agent ويرجّع أمر التثبيت.
+ *
+ * - GUARD فقط (ORIGIN → 409 FEATURE_NOT_AVAILABLE_FOR_SETUP_MODE)
+ * - بيكتب حقول الـ Agent فقط (agentToken / agentTokenHash / tunnelUp / lastAgentAt)
+ *   وstatus لسيرفر Guard عند التدوير. ما بيلمسش DNS ولا الأورجن ولا الـ Probe.
  */
 export async function enableTunnel(
   fastify: FastifyInstance,
@@ -341,6 +593,8 @@ export async function enableTunnel(
 ) {
   const { server } = await getActorServer(fastify, actorUserId, serverId)
 
+  assertAgentTunnelAllowed(server)
+
   const shouldRotate = input.rotateToken === true
   const hasExisting =
     !!server.agentTokenHash || !!(STORE_RAW_TOKEN && server.agentToken)
@@ -351,30 +605,37 @@ export async function enableTunnel(
     plainToken = generateAgentToken()
     const tokenHash = hashToken(plainToken)
 
-    await fastify.prisma.server.update({
+    const data: Prisma.ServerUpdateInput = {
+      agentTokenHash: tokenHash,
+      agentToken: STORE_RAW_TOKEN ? plainToken : null,
+    }
+
+    if (shouldRotate) {
+      // توكن جديد = Agent جديد: النفق لسه مش Up وماحدش اتصل
+      data.tunnelUp = false
+      data.lastAgentAt = null
+      // الحالة ترجع PENDING (عمره ما بعت نبضة) إلا لو في صيانة
+      if (server.status !== 'MAINTENANCE') data.status = 'PENDING'
+    }
+
+    const updated = await fastify.prisma.server.update({
       where: { id: server.id },
-      data: {
-        agentTokenHash: tokenHash,
-        agentToken: STORE_RAW_TOKEN ? plainToken : null,
-        // عند التفعيل الأول/التدوير نعتبر النفق لسه مش Up
-        ...(shouldRotate
-          ? {
-              tunnelUp: false,
-              lastAgentAt: null,
-            }
-          : {}),
-      },
+      data,
     })
+
+    if (updated.status !== server.status || server.tunnelUp) {
+      emitServerStatus(fastify, updated, 'updated', server.status)
+    }
   } else if (STORE_RAW_TOKEN && server.agentToken) {
     // تطوير: نعيد نفس التوكن الخام لو مخزّن
     plainToken = server.agentToken
   } else {
     // الإنتاج بدون raw: لازم rotate عشان تشوف التوكن تاني
-    throw new Error('AGENT_TOKEN_ALREADY_ISSUED')
+    throw new AgentServiceError('AGENT_TOKEN_ALREADY_ISSUED', 409)
   }
 
   if (!plainToken) {
-    throw new Error('AGENT_TOKEN_ALREADY_ISSUED')
+    throw new AgentServiceError('AGENT_TOKEN_ALREADY_ISSUED', 409)
   }
 
   const install = buildInstallCommand({
@@ -418,12 +679,14 @@ export function extractAgentToken(
 }
 
 /**
- * يتحقق من التوكن ويُرجع السيرفر
+ * يتحقق من التوكن ويُرجع السيرفر (بحقول الفصل بين Guard/Origin)
  */
 async function resolveServerByAgentToken(
   fastify: FastifyInstance,
   plainToken: string,
 ) {
+  if (!plainToken) throw new AgentServiceError('INVALID_AGENT_TOKEN', 401)
+
   const tokenHash = hashToken(plainToken)
 
   const server = await fastify.prisma.server.findFirst({
@@ -437,22 +700,57 @@ async function resolveServerByAgentToken(
       id: true,
       domain: true,
       organizationId: true,
+      setupMode: true,
       status: true,
+      tunnelUp: true,
+      avgResponseTimeMs: true,
       agentTokenHash: true,
     },
   })
 
   if (!server) {
-    throw new Error('INVALID_AGENT_TOKEN')
+    throw new AgentServiceError('INVALID_AGENT_TOKEN', 401)
   }
 
   return server
 }
 
+/** آخر وقت تنظيف لكل سيرفر (في الذاكرة) */
+const lastHeartbeatPrune = new Map<string, number>()
+
+/** تنظيف النبضات القديمة (مرة في الساعة لكل سيرفر، في الخلفية) */
+function maybePruneHeartbeats(fastify: FastifyInstance, serverId: string): void {
+  if (HEARTBEAT_RETENTION_DAYS <= 0) return
+
+  const now = Date.now()
+  const last = lastHeartbeatPrune.get(serverId) ?? 0
+  if (now - last < HEARTBEAT_PRUNE_INTERVAL_MS) return
+
+  lastHeartbeatPrune.set(serverId, now)
+  if (lastHeartbeatPrune.size > 5000) {
+    const first = lastHeartbeatPrune.keys().next()
+    if (!first.done) lastHeartbeatPrune.delete(first.value)
+  }
+
+  const cutoff = new Date(now - HEARTBEAT_RETENTION_DAYS * 86_400_000)
+
+  fastify.prisma.agentHeartbeat
+    .deleteMany({ where: { serverId, createdAt: { lt: cutoff } } })
+    .catch((err: unknown) =>
+      fastify.log.warn({ err, serverId }, 'Heartbeat prune failed'),
+    )
+}
+
 /**
  * معالجة نبضة واحدة:
- * - تحديث snapshot على Server
- * - إدراج AgentHeartbeat
+ *
+ * الفصل بين المسارين:
+ *   - دايمًا: حقول الـ Agent فقط (tunnelUp / lastAgentAt / مقاييس / agentOriginOk ...)
+ *   - GUARD : status من computeGuardStatus (نفق + نبضة حديثة)، وsafeRequestsPerSecond
+ *             من تقدير الـ Agent. لو الـ Agent بلّغ إن الأصل المحلي واقع → DEGRADED.
+ *   - ORIGIN: ما بيكتبش status ولا أي حقل سعة/Probe. النفق ما يرفعش ONLINE على سيرفر
+ *             Origin ولا يخطف نتائج قياسه.
+ *   - الصيانة (MAINTENANCE) ما بتتغيرش من نبضة أبدًا.
  */
 export async function processHeartbeat(
   fastify: FastifyInstance,
@@ -462,38 +760,51 @@ export async function processHeartbeat(
   const server = await resolveServerByAgentToken(fastify, plainToken)
 
   const now = new Date()
+  const isGuard = server.setupMode === 'GUARD'
+  const tunnelUp = body.tunnelUp ?? false
 
   const agentOs = (body.agentOs ?? undefined) as AgentOs | undefined
+
+  // ---- status (GUARD فقط، وبشرط نفق/نبضة) ----
+  let nextStatus: ServerStatus | undefined
+  if (isGuard && server.status !== 'MAINTENANCE') {
+    nextStatus = computeGuardStatus({
+      tunnelUp,
+      lastAgentAt: now,
+      avgResponseTimeMs: server.avgResponseTimeMs ?? body.originLatMs ?? null,
+    })
+    // النفق سليم لكن الـ Agent بيقول إن التطبيق المحلي واقع
+    if (nextStatus === 'ONLINE' && body.originOk === false) {
+      nextStatus = 'DEGRADED'
+    }
+  }
+
+  // ---- سعة Guard من تقدير الـ Agent (ORIGIN: لأ، سعته من الـ Probe) ----
+  const suggestedRps = positiveInt(body.suggestedMaxRps)
 
   const [updated, heartbeat] = await fastify.prisma.$transaction([
     fastify.prisma.server.update({
       where: { id: server.id },
       data: {
+        // —— حقول الـ Agent (للاتنين) ——
         lastAgentAt: now,
-        tunnelUp: body.tunnelUp ?? false,
+        tunnelUp,
         tunnelPeerIp: body.tunnelPeerIp ?? undefined,
         agentVersion: body.agentVersion ?? undefined,
         agentOs: agentOs ?? undefined,
         agentArch: body.agentArch ?? undefined,
-        agentCpuPercent: body.cpuPercent ?? undefined,
-        agentRamPercent: body.ramPercent ?? undefined,
-        agentDiskPercent: body.diskPercent ?? undefined,
+        agentCpuPercent: clampPercent(body.cpuPercent),
+        agentRamPercent: clampPercent(body.ramPercent),
+        agentDiskPercent: clampPercent(body.diskPercent),
         agentLoadAvg1m: body.loadAvg1m ?? undefined,
         estimatedMaxRps: body.suggestedMaxRps ?? undefined,
         agentOriginOk: body.originOk ?? undefined,
         agentOriginLatMs: body.originLatMs ?? undefined,
-        // لو النفق شغال والأصل تمام — ممكن نرفع الحالة لـ ONLINE بحذر
-        ...(body.tunnelUp && body.originOk === true
-          ? { status: 'ONLINE' as ServerStatus }
-          : {}),
-      },
-      select: {
-        id: true,
-        domain: true,
-        tunnelUp: true,
-        lastAgentAt: true,
-        agentVersion: true,
-        status: true,
+
+        // —— GUARD فقط ——
+        ...(isGuard && nextStatus !== undefined && { status: nextStatus }),
+        ...(isGuard &&
+          suggestedRps !== undefined && { safeRequestsPerSecond: suggestedRps }),
       },
     }),
 
@@ -504,13 +815,13 @@ export async function processHeartbeat(
         agentOs: agentOs ?? undefined,
         agentArch: body.agentArch ?? undefined,
         hostname: body.hostname ?? undefined,
-        tunnelUp: body.tunnelUp ?? false,
+        tunnelUp,
         lastHandshakeAgeSec: body.lastHandshakeAgeSec ?? undefined,
         tunnelTxBytes: body.tunnelTxBytes ?? undefined,
         tunnelRxBytes: body.tunnelRxBytes ?? undefined,
-        cpuPercent: body.cpuPercent ?? undefined,
-        ramPercent: body.ramPercent ?? undefined,
-        diskPercent: body.diskPercent ?? undefined,
+        cpuPercent: clampPercent(body.cpuPercent),
+        ramPercent: clampPercent(body.ramPercent),
+        diskPercent: clampPercent(body.diskPercent),
         loadAvg1m: body.loadAvg1m ?? undefined,
         netTxBytesPs: body.netTxBytesPs ?? undefined,
         netRxBytesPs: body.netRxBytesPs ?? undefined,
@@ -528,15 +839,37 @@ export async function processHeartbeat(
     }),
   ])
 
+  // ---- بث لحظي: عند تغيّر الحالة أو حالة النفق فقط (مش مع كل نبضة) ----
+  const statusChanged = updated.status !== server.status
+  const tunnelChanged = updated.tunnelUp !== server.tunnelUp
+
+  if (statusChanged || tunnelChanged) {
+    emitServerStatus(
+      fastify,
+      updated,
+      statusChanged ? 'status_changed' : 'updated',
+      server.status,
+    )
+  }
+
+  // ---- إشعارات (GUARD فقط) ----
+  if (isGuard && statusChanged) {
+    await notifyGuardTransition(fastify, updated, server.status, updated.status)
+  }
+
+  maybePruneHeartbeats(fastify, server.id)
+
   return {
     ok: true,
     serverId: updated.id,
     domain: updated.domain,
+    setupMode: updated.setupMode,
+    status: updated.status,
     tunnelUp: updated.tunnelUp,
     lastAgentAt: updated.lastAgentAt,
     heartbeatId: heartbeat.id,
     // تلميح للـ Agent (اختياري لاحقًا: intervalSec من السياسة)
-    nextHeartbeatSec: Number(process.env.AGENT_HEARTBEAT_INTERVAL_SEC ?? 30),
+    nextHeartbeatSec: HEARTBEAT_INTERVAL_SEC,
   }
 }
 
@@ -606,7 +939,7 @@ export async function listHeartbeats(
   const items = await fastify.prisma.agentHeartbeat.findMany({
     where,
     orderBy: { createdAt: 'desc' },
-    take: query.limit,
+    take: Math.min(query.limit, 500),
     select: {
       id: true,
       createdAt: true,
@@ -640,7 +973,7 @@ export async function listHeartbeats(
 // ==================================================================
 
 /**
- * يولّد توكن جديد ويلغي القديم + يرجّع أمر تثبيت جديد
+ * يولّد توكن جديد ويلغي القديم + يرجّع أمر تثبيت جديد (GUARD فقط)
  */
 export async function rotateAgentToken(
   fastify: FastifyInstance,
@@ -655,7 +988,16 @@ export async function rotateAgentToken(
 }
 
 /**
- * يوقف اعتماد الـ Agent على السيرفر (يمسح التوكن ويعلّم النفق لأسفل)
+ * يقفل النفق (والتوكن لو revokeToken ≠ false).
+ *
+ * - ما بيمسحش السيرفر (Origin ولا Guard) ولا بيشغّل probe لوحده.
+ * - متاح للاتنين: ينضّف توكن Agent قديم على سيرفر Origin من غير ما يلمس
+ *   status أو حقول الأورجن.
+ * - GUARD: الحالة بتتحسب من طبقة الـ Guard (بعد قفل النفق → OFFLINE، أو
+ *   PENDING لو عمره ما اتصل). الصيانة ما بتتغيرش.
+ *
+ * ملاحظة: لو revokeToken=false والتوكن لسه شغال، الـ Agent لو لسه بيبعت
+ * نبضات هيرجّع tunnelUp من جديد. الإبطال هو الإيقاف الفعلي.
  */
 export async function disableAgent(
   fastify: FastifyInstance,
@@ -665,24 +1007,144 @@ export async function disableAgent(
 ) {
   const { server } = await getActorServer(fastify, actorUserId, serverId)
 
-  await fastify.prisma.server.update({
-    where: { id: server.id },
-    data: {
+  // الافتراضي: إبطال (نفس منطق الرد القديم، وبقى متسق مع اللي بيتكتب فعلًا)
+  const revoke = input.revokeToken !== false
+
+  const data: Prisma.ServerUpdateInput = {
+    tunnelUp: false,
+    ...(revoke
+      ? {
+          agentToken: null,
+          agentTokenHash: null,
+        }
+      : {}),
+  }
+
+  if (server.setupMode === 'GUARD' && server.status !== 'MAINTENANCE') {
+    data.status = computeGuardStatus({
       tunnelUp: false,
-      ...(input.revokeToken
-        ? {
-            agentToken: null,
-            agentTokenHash: null,
-          }
-        : {}),
-    },
+      lastAgentAt: server.lastAgentAt,
+      avgResponseTimeMs: server.avgResponseTimeMs,
+    })
+  }
+
+  const updated = await fastify.prisma.server.update({
+    where: { id: server.id },
+    data,
   })
+
+  if (updated.status !== server.status || server.tunnelUp) {
+    emitServerStatus(
+      fastify,
+      updated,
+      updated.status !== server.status ? 'status_changed' : 'updated',
+      server.status,
+    )
+  }
 
   return {
     ok: true,
     serverId: server.id,
-    tokenRevoked: input.revokeToken !== false,
+    tokenRevoked: revoke,
+    status: updated.status,
   }
+}
+
+// ==================================================================
+// 5) Sweeper: Agent سكت (من غير نبضة) → OFFLINE
+// ==================================================================
+
+export interface StaleAgentSweepResult {
+  checked: number
+  markedOffline: number
+}
+
+/**
+ * يلاقي سيرفرات GUARD اللي tunnelUp=true لكن آخر نبضة أقدم من AGENT_FRESH_WINDOW_SEC
+ * (يعني الـ Agent مات/اتفصل من غير ما يبلّغ) ويعلّمها tunnelUp=false + OFFLINE،
+ * ويبث للداشبورد ويبعت إشعار. الصيانة بتتحفظ.
+ *
+ * التحديث مشروط (lastAgentAt لسه قديم) فنبضة وصلت بين القراءة والكتابة ما تتكتبش فوقها.
+ */
+export async function sweepStaleAgents(
+  fastify: FastifyInstance,
+  opts: { limit?: number } = {},
+): Promise<StaleAgentSweepResult> {
+  const cutoff = new Date(Date.now() - AGENT_FRESH_WINDOW_SEC * 1000)
+
+  const stale = await fastify.prisma.server.findMany({
+    where: {
+      setupMode: 'GUARD',
+      tunnelUp: true,
+      lastAgentAt: { lt: cutoff },
+    },
+    select: { id: true, status: true },
+    take: opts.limit ?? SWEEP_BATCH,
+  })
+
+  let markedOffline = 0
+
+  for (const row of stale) {
+    try {
+      const res = await fastify.prisma.server.updateMany({
+        where: {
+          id: row.id,
+          setupMode: 'GUARD',
+          tunnelUp: true,
+          lastAgentAt: { lt: cutoff },
+        },
+        data: {
+          tunnelUp: false,
+          ...(row.status !== 'MAINTENANCE' ? { status: 'OFFLINE' as const } : {}),
+        },
+      })
+
+      if (res.count === 0) continue // نبضة وصلت في الأثناء
+
+      const updated = await fastify.prisma.server.findUnique({
+        where: { id: row.id },
+      })
+      if (!updated) continue
+
+      markedOffline++
+      emitServerStatus(fastify, updated, 'status_changed', row.status)
+      await notifyGuardTransition(fastify, updated, row.status, updated.status)
+    } catch (err) {
+      fastify.log.warn({ err, serverId: row.id }, 'Stale agent sweep failed')
+    }
+  }
+
+  return { checked: stale.length, markedOffline }
+}
+
+/**
+ * يشغّل الـ sweeper دوريًا (AGENT_SWEEP_INTERVAL_SEC، الافتراضي 30، 0 = متوقف).
+ * يرجّع دالة إيقاف (استدعيها عند إغلاق السيرفر).
+ *
+ * مثال في server.ts / app.ts بعد ما الـ app يجهز:
+ *   const stopAgentSweeper = startAgentSweeper(app)
+ *   app.addHook('onClose', async () => stopAgentSweeper())
+ */
+export function startAgentSweeper(fastify: FastifyInstance): () => void {
+  if (SWEEP_INTERVAL_SEC <= 0) return () => undefined
+
+  let running = false
+
+  const timer = setInterval(() => {
+    if (running) return
+    running = true
+    sweepStaleAgents(fastify)
+      .catch((err: unknown) =>
+        fastify.log.error({ err }, 'Agent sweeper crashed'),
+      )
+      .finally(() => {
+        running = false
+      })
+  }, SWEEP_INTERVAL_SEC * 1000)
+
+  timer.unref()
+
+  return () => clearInterval(timer)
 }
 
 // ------------------------------------------------------------------
@@ -697,4 +1159,6 @@ export default {
   listHeartbeats,
   rotateAgentToken,
   disableAgent,
+  sweepStaleAgents,
+  startAgentSweeper,
 }

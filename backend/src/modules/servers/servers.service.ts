@@ -4,25 +4,53 @@
 // ------------------------------------------------------------------
 // مسؤول عن:
 //   - إنشاء/عرض/تعديل/حذف السيرفرات المحمية (معزولة بالـ organizationId)
-//   - ربط السيرفر بخدمة الـ DNS: تعليمات + فحص الملكية (TXT) + فحص التوجيه (CNAME/A)
+//   - مسارين منفصلين تمامًا حسب setupMode (بيتحدد عند الإنشاء فقط):
+//       ORIGIN → دومين + originIp + DNS (TXT/CNAME/A) + verify + Origin Probe
+//       GUARD  → دومين فقط + Agent/نفق (من غير originIp ولا DNS ولا Probe)
 //   - وضع الصيانة وحساب حالة السيرفر (status) من الصحة الفعلية
+//       ORIGIN: gateway/origin reachability + latency
+//       GUARD : tunnelUp + نبضة Agent حديثة + latency   (طبقتين منفصلتين)
 //   - خدمة الـ Gateway: مزامنة + resolve + استقبال تقارير الصحة/الـ Probe
-//   - تشغيل Origin Probe (light/full) + تاريخ القياسات
+//   - تشغيل Origin Probe (light/full) + تاريخ القياسات (ORIGIN فقط)
 //   - بث Socket.IO للداشبورد عند تغيّر الحالة أو نتائج الـ Probe
+//
+// قواعد وضع الربط (مصدرها servers.schema.ts):
+//   - إنشاء Guard لا يستدعي probeGateway نهائيًا، ولا يفرض originIp
+//   - requestProbe / verifyServer / getDnsInstructions مرفوضين لـ Guard (409)
+//   - updateServer لا يشغّل re-probe ولا يصفّر حقول أصل على Guard
+//   - تقارير الصحة لـ Guard بتتنضف من حقول الأصل/الـ Probe قبل التخزين
+//
+// ⚠ قرار منتج (التوجيه): toGatewayPayload بيبعت setupMode + حالة النفق
+//   للـ Gateway. سيرفر Guard بيطلع originIp = null. لو الـ Gateway لسه
+//   بيوجّه بـ originIp فقط، يا إما يفهم setupMode ويتوجه للنفق، أو Guard
+//   يتسجّل في الداشبورد والـ Agent بس (التوجيه الكامل مرحلة لاحقة).
+//   ونفس الكلام على مسار policies/resolve (بيرجّع server جواه originIp).
 // ==================================================================
 
 import { randomUUID } from "node:crypto";
 import { Resolver } from "node:dns/promises";
-import { Prisma, type Server, type ServerStatus } from "@prisma/client";
+import {
+  Prisma,
+  type Server,
+  type ServerSetupMode,
+  type ServerStatus,
+} from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 
 import { SocketEvents } from "../../plugins/socket.plugin.js";
 import {
+  SETUP_MODE_ERRORS,
   buildDnsInstructions,
+  buildSetupInstructions,
   dnsTxtRecordName,
   dnsTxtRecordValue,
+  getServerCapabilities,
+  hasHealthValues,
   normalizeHostHeader,
   readDnsConfig,
+  resolveServerUpdate,
+  sanitizeHealthReportForSetupMode,
+  supportsFeature,
 } from "./servers.schema.js";
 import { NotificationsService } from "../notifications/notifications.service.js";
 import type {
@@ -35,7 +63,11 @@ import type {
   GatewayServerPayload,
   GatewayServersListResult,
   GatewayServersQuery,
+  GuardInstructions,
   ListServersQuery,
+  ResolvedServerUpdate,
+  ServerFeature,
+  SetupModeErrorCode,
   UpdateServerInput,
   VerifyServerInput,
 } from "./servers.schema.js";
@@ -55,10 +87,16 @@ const VERIFY_COOLDOWN_MS = envInt("DNS_VERIFY_COOLDOWN_SEC", 10) * 1000;
 const DNS_TIMEOUT_MS = envInt("DNS_TIMEOUT_MS", 3000);
 const DEFAULT_CAPACITY_WARN_PERCENT = 80;
 
-/** full probe فقط بعد إثبات الملكية (إلا لو PROBE_REQUIRE_OWNERSHIP=false) */
+/** full probe فقط بعد إثبات الملكية (إلا لو PROBE_REQUIRE_OWNERSHIP=false) — ORIGIN فقط */
 const PROBE_REQUIRE_OWNERSHIP = process.env.PROBE_REQUIRE_OWNERSHIP !== "false";
 /** تبريد بين قياسات يدوية (ثواني → ms) */
 const PROBE_COOLDOWN_MS = envInt("PROBE_COOLDOWN_SEC", 600) * 1000;
+
+/**
+ * GUARD: أقصى مدة من آخر نبضة Agent قبل ما السيرفر يتحسب OFFLINE
+ * (حتى لو tunnelUp لسه true في القاعدة).
+ */
+const GUARD_HEARTBEAT_STALE_MS = envInt("GUARD_HEARTBEAT_STALE_SEC", 120) * 1000;
 
 /** عنوان الـ Gateway الداخلي: localhost في التطوير، gateway داخل Docker */
 function gatewayInternalUrl(): string {
@@ -95,13 +133,29 @@ export class ServerServiceError extends Error {
 
 export interface ServerChange {
   field: "domain" | "originIp" | "originPort" | "sslEnabled" | "mode";
-  from: string | number | boolean;
+  from: string | number | boolean | null;
   to: string | number | boolean;
 }
 
+/** (للتوافق) سيرفر + تعليمات DNS — لمسار ORIGIN فقط */
 export interface ServerWithDns {
   server: Server;
   dns: DnsInstructions;
+}
+
+/**
+ * رد الإنشاء / الـ setup حسب وضع الربط.
+ *   ORIGIN → dns موجود، guard = null
+ *   GUARD  → dns = null،  guard فيه خطوات تفعيل النفق
+ * (dns بيفضل مفتاح في الرد للتوافق، بس قيمته null لـ Guard)
+ */
+export interface ServerWithSetup {
+  server: Server;
+  setupMode: ServerSetupMode;
+  dns: DnsInstructions | null;
+  guard: GuardInstructions | null;
+  capabilities: ReturnType<typeof getServerCapabilities>;
+  message: string;
 }
 
 export interface UpdateServerResult {
@@ -122,6 +176,8 @@ export interface ListServersResult {
     hasPreviousPage: boolean;
   };
   summary: Record<ServerStatus, number>;
+  /** عدد السيرفرات لكل وضع ربط (للفلتر في الواجهة) */
+  setupSummary: Record<ServerSetupMode, number>;
 }
 
 export interface DeleteServerResult {
@@ -141,11 +197,15 @@ export interface ServerRealtimePayload {
   id: string;
   organizationId: string;
   domain: string;
+  setupMode: ServerSetupMode;
   status: ServerStatus;
   mode: Server["mode"];
   dnsVerified: boolean;
   gatewayReachable: boolean;
   originReachable: boolean;
+  /** GUARD: حالة النفق وآخر نبضة (ORIGIN: false / null) */
+  tunnelUp: boolean;
+  lastAgentAt: string | null;
   avgResponseTimeMs: number | null;
   currentLoadPercent: number | null;
   maxRequestsPerSecond: number | null;
@@ -191,9 +251,64 @@ function domainExistsError(sameOrganization: boolean) {
 const serverNotFound = () =>
   new ServerServiceError("السيرفر غير موجود", 404, "SERVER_NOT_FOUND");
 
-function computeStatus(
-  s: Pick<Server, "gatewayReachable" | "originReachable" | "avgResponseTimeMs">,
-): ServerStatus {
+/**
+ * خطأ "الميزة مش متاحة لوضع الربط ده".
+ * الـ Probe له كود مميز عشان زر القياس في الداشبورد يتعامل معاه.
+ */
+function featureNotAvailable(
+  feature: ServerFeature,
+  setupMode: ServerSetupMode,
+): ServerServiceError {
+  if (feature === "ORIGIN_PROBE") {
+    return new ServerServiceError(
+      "قياس السعة التقليدي (Origin Probe) غير متاح لسيرفرات Guard، سعة سيرفر Guard بتيجي من الـ Agent",
+      409,
+      "PROBE_NOT_AVAILABLE_FOR_GUARD",
+      { setupMode, feature },
+    );
+  }
+
+  const info = SETUP_MODE_ERRORS.FEATURE_NOT_AVAILABLE_FOR_SETUP_MODE;
+  return new ServerServiceError(info.messageAr, info.status, info.code, {
+    setupMode,
+    feature,
+  });
+}
+
+/** يحوّل أخطاء قواعد وضع الربط (Error(code)) لـ ServerServiceError */
+function translateSetupModeError(error: unknown): unknown {
+  if (
+    error instanceof Error &&
+    Object.prototype.hasOwnProperty.call(SETUP_MODE_ERRORS, error.message)
+  ) {
+    const info = SETUP_MODE_ERRORS[error.message as SetupModeErrorCode];
+    return new ServerServiceError(info.messageAr, info.status, info.code);
+  }
+  return error;
+}
+
+// ------------------------------------------------------------------
+// حساب الحالة — طبقتين منفصلتين (ما بيتخلطوش)
+// ------------------------------------------------------------------
+
+type OriginStatusSource = Pick<
+  Server,
+  "gatewayReachable" | "originReachable" | "avgResponseTimeMs"
+>;
+
+type GuardStatusSource = Pick<
+  Server,
+  "tunnelUp" | "lastAgentAt" | "avgResponseTimeMs"
+>;
+
+export type StatusSource = OriginStatusSource &
+  GuardStatusSource &
+  Pick<Server, "setupMode">;
+
+/**
+ * ORIGIN: توجيه الـ Gateway + وصول الأصل + زمن الاستجابة.
+ */
+export function computeOriginStatus(s: OriginStatusSource): ServerStatus {
   if (!s.gatewayReachable) return "PENDING";
   if (!s.originReachable) return "OFFLINE";
   if (
@@ -205,19 +320,64 @@ function computeStatus(
   return "ONLINE";
 }
 
+/**
+ * GUARD: النفق + نبضة Agent حديثة + زمن الاستجابة.
+ * ما بتعتمدش على originReachable ولا gatewayReachable (دول لمسار الأورجن).
+ *   - عمره ما بعت نبضة      → PENDING
+ *   - النفق واقع أو النبضة قديمة → OFFLINE
+ *   - بطيء                   → DEGRADED
+ *   - غير كده                → ONLINE
+ */
+export function computeGuardStatus(
+  s: GuardStatusSource,
+  now: number = Date.now(),
+): ServerStatus {
+  if (!s.lastAgentAt) return "PENDING";
+
+  const heartbeatFresh =
+    now - s.lastAgentAt.getTime() <= GUARD_HEARTBEAT_STALE_MS;
+
+  if (!s.tunnelUp || !heartbeatFresh) return "OFFLINE";
+
+  if (
+    s.avgResponseTimeMs !== null &&
+    s.avgResponseTimeMs >= DEGRADED_RESPONSE_MS
+  ) {
+    return "DEGRADED";
+  }
+  return "ONLINE";
+}
+
+/** المُوزّع: يختار الطبقة المناسبة حسب setupMode */
+export function computeServerStatus(s: StatusSource): ServerStatus {
+  return s.setupMode === "GUARD" ? computeGuardStatus(s) : computeOriginStatus(s);
+}
+
 function toGatewayPayload(s: Server): GatewayServerPayload {
   return {
     id: s.id,
     domain: s.domain,
     organizationId: s.organizationId,
+
+    // ORIGIN = توجيه مباشر للأصل | GUARD = توجيه عبر النفق
+    setupMode: s.setupMode,
+
+    // null لسيرفرات GUARD
     originIp: s.originIp,
     originPort: s.originPort,
     sslEnabled: s.sslEnabled,
+
     status: s.status,
     mode: s.mode,
     dnsVerified: s.dnsVerified,
     gatewayReachable: s.gatewayReachable,
     originReachable: s.originReachable,
+
+    // GUARD: حالة النفق + عنوان الـ peer اللي الـ Gateway يوجّه عليه
+    tunnelUp: s.tunnelUp,
+    tunnelPeerIp: s.tunnelPeerIp ?? null,
+    lastAgentAt: s.lastAgentAt ? s.lastAgentAt.toISOString() : null,
+
     maxRequestsPerSecond: s.maxRequestsPerSecond,
     safeRequestsPerSecond: s.safeRequestsPerSecond ?? null,
     updatedAt: s.updatedAt.toISOString(),
@@ -229,11 +389,14 @@ type RealtimeSource = Pick<
   | "id"
   | "organizationId"
   | "domain"
+  | "setupMode"
   | "status"
   | "mode"
   | "dnsVerified"
   | "gatewayReachable"
   | "originReachable"
+  | "tunnelUp"
+  | "lastAgentAt"
   | "avgResponseTimeMs"
   | "currentLoadPercent"
   | "maxRequestsPerSecond"
@@ -254,11 +417,14 @@ function toRealtimePayload(
     id: s.id,
     organizationId: s.organizationId,
     domain: s.domain,
+    setupMode: s.setupMode,
     status: s.status,
     mode: s.mode,
     dnsVerified: s.dnsVerified,
     gatewayReachable: s.gatewayReachable,
     originReachable: s.originReachable,
+    tunnelUp: s.tunnelUp,
+    lastAgentAt: s.lastAgentAt ? s.lastAgentAt.toISOString() : null,
     avgResponseTimeMs: s.avgResponseTimeMs,
     currentLoadPercent: s.currentLoadPercent,
     maxRequestsPerSecond: s.maxRequestsPerSecond,
@@ -369,17 +535,28 @@ export class ServersService {
   }
 
   // ================================================================
-  // Origin Probe helpers
+  // Origin Probe helpers (ORIGIN فقط)
   // ================================================================
 
   /**
    * ينادي الـ Gateway لبدء قياس غير متزامن (يتوقع 202)
    * light = health+latency | full = step test كامل
+   *
+   * حماية على أدنى مستوى: لو السيرفر Guard (أو مفيش originIp) ما نعملش
+   * أي قياس خالص، حتى لو حد نادى الدالة بالغلط من مكان تاني.
    */
   private async probeGateway(
     server: Server,
     mode: "light" | "full" = "full",
   ): Promise<void> {
+    if (!supportsFeature(server.setupMode, "ORIGIN_PROBE") || !server.originIp) {
+      this.fastify.log.debug(
+        { serverId: server.id, setupMode: server.setupMode },
+        "probeGateway تم تجاهله (السيرفر ملوش أصل للقياس)",
+      );
+      return;
+    }
+
     const secret = process.env.GATEWAY_SECRET;
 
     if (!secret) {
@@ -410,20 +587,19 @@ export class ServersService {
     }
   }
 
-  private probeModeFor(
-    server: Pick<Server, "dnsVerified">,
-  ): "light" | "full" {
+  private probeModeFor(server: Pick<Server, "dnsVerified">): "light" | "full" {
     return !PROBE_REQUIRE_OWNERSHIP || server.dnsVerified ? "full" : "light";
   }
 
   /**
    * طلب قياس يدوي من الداشبورد (بعد الملكية + cooldown)
+   * GUARD → مرفوض (409 PROBE_NOT_AVAILABLE_FOR_GUARD)
    */
-  async requestProbe(
-    organizationId: string,
-    serverId: string,
-  ): Promise<void> {
+  async requestProbe(organizationId: string, serverId: string): Promise<void> {
     const server = await this.findOwned(organizationId, serverId);
+
+    // أول حاجة: وضع الربط (عشان زر القياس ما يشتغلش بالغلط على Guard)
+    this.requireFeature(server, "ORIGIN_PROBE");
 
     if (PROBE_REQUIRE_OWNERSHIP && !server.dnsVerified) {
       throw new ServerServiceError(
@@ -461,6 +637,16 @@ export class ServersService {
     }
   }
 
+  /** يرمي 409 لو الميزة مش متاحة لوضع ربط السيرفر ده */
+  private requireFeature(
+    server: Pick<Server, "setupMode">,
+    feature: ServerFeature,
+  ): void {
+    if (!supportsFeature(server.setupMode, feature)) {
+      throw featureNotAvailable(feature, server.setupMode);
+    }
+  }
+
   private async findOwned(organizationId: string, serverId: string) {
     const server = await this.fastify.prisma.server.findFirst({
       where: { id: serverId, organizationId },
@@ -469,15 +655,45 @@ export class ServersService {
     return server;
   }
 
+  /** رد الإعداد حسب الوضع (dns لـ ORIGIN | guard لـ GUARD) */
+  private buildSetupPayload(server: Server, message: string): ServerWithSetup {
+    const setup = buildSetupInstructions(server, readDnsConfig());
+
+    return {
+      server,
+      setupMode: setup.setupMode,
+      dns: setup.dns,
+      guard: setup.guard,
+      capabilities: getServerCapabilities(server.setupMode),
+      message,
+    };
+  }
+
   // ================================================================
   // Dashboard: CRUD
   // ================================================================
 
+  /**
+   * إنشاء سيرفر.
+   *
+   * ORIGIN:
+   *   - originIp إلزامي (الـ schema بتضمنه) + assertOriginIsNotGateway
+   *   - إنشاء الصف بحقول الأصل + setupMode = ORIGIN
+   *   - probeGateway تلقائي (light قبل الملكية / full بعدها)
+   *   - الرد فيه تعليمات DNS
+   *
+   * GUARD:
+   *   - مفيش probeGateway نهائيًا، ولا فرض originIp (بيتخزن null)
+   *   - مفيش اعتماد على أي قياس أورجن
+   *   - setupMode = GUARD، والرد فيه خطوات تفعيل النفق (dns = null)
+   */
   async createServer(
     organizationId: string,
     input: CreateServerInput,
-  ): Promise<ServerWithDns> {
-    this.assertOriginIsNotGateway(input.originIp);
+  ): Promise<ServerWithSetup> {
+    if (input.setupMode === "ORIGIN") {
+      this.assertOriginIsNotGateway(input.originIp);
+    }
 
     const prisma = this.fastify.prisma;
 
@@ -503,6 +719,8 @@ export class ServersService {
         data: {
           organizationId,
           domain: input.domain,
+          setupMode: input.setupMode,
+          // GUARD: originIp = null دايمًا (الـ schema بتضمن ده)
           originIp: input.originIp,
           originPort: input.originPort,
           sslEnabled: input.sslEnabled,
@@ -510,16 +728,25 @@ export class ServersService {
         },
       });
 
-      this.probeGateway(server, this.probeModeFor(server)).catch((err) => {
-        this.fastify.log.warn(
-          { err, serverId: server.id },
-          "Gateway probe failed to start",
-        );
-      });
+      if (server.setupMode === "ORIGIN") {
+        // قياس الأصل تلقائي (مش بينتظر نتيجته)
+        this.probeGateway(server, this.probeModeFor(server)).catch((err) => {
+          this.fastify.log.warn(
+            { err, serverId: server.id },
+            "Gateway probe failed to start",
+          );
+        });
+      }
+      // GUARD: لا probeGateway هنا إطلاقًا — التفعيل بعدين عن طريق enable-tunnel
 
       this.emitServerStatus(toRealtimePayload(server, "created"));
 
-      return { server, dns: buildDnsInstructions(server, readDnsConfig()) };
+      return this.buildSetupPayload(
+        server,
+        server.setupMode === "GUARD"
+          ? "تم إضافة السيرفر. الخطوة التالية: فعّل الـ Guard (النفق) لتوليد توكن الـ Agent وأمر التثبيت."
+          : "تم إضافة السيرفر. اتبع تعليمات الـ DNS لتفعيل الحماية.",
+      );
     } catch (error) {
       if (isPrismaError(error, "P2002")) throw domainExistsError(false);
       throw error;
@@ -535,14 +762,16 @@ export class ServersService {
 
     if (query.status) where.status = query.status;
     if (query.mode) where.mode = query.mode;
+    if (query.setupMode) where.setupMode = query.setupMode;
     if (query.dnsVerified !== undefined) where.dnsVerified = query.dnsVerified;
+    if (query.tunnelUp !== undefined) where.tunnelUp = query.tunnelUp;
     if (query.search) {
       where.domain = { contains: query.search, mode: "insensitive" };
     }
 
     const skip = (query.page - 1) * query.limit;
 
-    const [servers, total, grouped] = await Promise.all([
+    const [servers, total, grouped, groupedSetup] = await Promise.all([
       prisma.server.findMany({
         where,
         skip,
@@ -554,6 +783,11 @@ export class ServersService {
       prisma.server.count({ where }),
       prisma.server.groupBy({
         by: ["status"],
+        where: { organizationId },
+        _count: { _all: true },
+      }),
+      prisma.server.groupBy({
+        by: ["setupMode"],
         where: { organizationId },
         _count: { _all: true },
       }),
@@ -570,6 +804,14 @@ export class ServersService {
       summary[row.status] = row._count._all;
     }
 
+    const setupSummary: Record<ServerSetupMode, number> = {
+      ORIGIN: 0,
+      GUARD: 0,
+    };
+    for (const row of groupedSetup) {
+      setupSummary[row.setupMode] = row._count._all;
+    }
+
     const totalPages = Math.ceil(total / query.limit);
 
     return {
@@ -583,6 +825,7 @@ export class ServersService {
         hasPreviousPage: query.page > 1,
       },
       summary,
+      setupSummary,
     };
   }
 
@@ -593,20 +836,61 @@ export class ServersService {
     return this.findOwned(organizationId, serverId);
   }
 
+  /**
+   * تعليمات DNS — ORIGIN فقط (GUARD → 409).
+   * لو عايز رد يناسب الوضعين استخدم getSetupInstructions.
+   */
   async getDnsInstructions(
     organizationId: string,
     serverId: string,
   ): Promise<ServerWithDns> {
     const server = await this.findOwned(organizationId, serverId);
+    this.requireFeature(server, "DNS_INSTRUCTIONS");
+
     return { server, dns: buildDnsInstructions(server, readDnsConfig()) };
   }
 
+  /**
+   * خطوات الإعداد حسب وضع السيرفر (GET /servers/:id/setup):
+   *   ORIGIN → dns | GUARD → guard (خطوات النفق)
+   */
+  async getSetupInstructions(
+    organizationId: string,
+    serverId: string,
+  ): Promise<ServerWithSetup> {
+    const server = await this.findOwned(organizationId, serverId);
+
+    return this.buildSetupPayload(
+      server,
+      server.setupMode === "GUARD"
+        ? "خطوات تفعيل الـ Guard (النفق)."
+        : "تعليمات الـ DNS.",
+    );
+  }
+
+  /**
+   * تعديل سيرفر.
+   *
+   * - setupMode ما يتغيرش (resolveServerUpdate بيرفض لو مختلف)
+   * - GUARD: حقول الأصل مرفوضة، وما فيش re-probe ولا تصفير أصل
+   * - ORIGIN: نفس السلوك القديم (re-probe عند تغيير الأصل/الـ SSL)
+   */
   async updateServer(
     organizationId: string,
     serverId: string,
     input: UpdateServerInput,
   ): Promise<UpdateServerResult> {
     const current = await this.findOwned(organizationId, serverId);
+
+    // قواعد وضع الربط (setupMode immutable / origin fields / empty)
+    let fields: ResolvedServerUpdate;
+    try {
+      fields = resolveServerUpdate(current, input);
+    } catch (error) {
+      throw translateSetupModeError(error);
+    }
+
+    const isOrigin = supportsFeature(current.setupMode, "ORIGIN_FIELDS");
 
     const changes: ServerChange[] = [];
     const track = <K extends ServerChange["field"]>(
@@ -617,11 +901,11 @@ export class ServersService {
       if (to !== undefined && to !== from) changes.push({ field, from, to });
     };
 
-    track("domain", current.domain, input.domain);
-    track("originIp", current.originIp, input.originIp);
-    track("originPort", current.originPort, input.originPort);
-    track("sslEnabled", current.sslEnabled, input.sslEnabled);
-    track("mode", current.mode, input.mode);
+    track("domain", current.domain, fields.domain);
+    track("originIp", current.originIp, fields.originIp);
+    track("originPort", current.originPort, fields.originPort);
+    track("sslEnabled", current.sslEnabled, fields.sslEnabled);
+    track("mode", current.mode, fields.mode);
 
     if (changes.length === 0) {
       return { server: current, changes, resets: [] };
@@ -629,15 +913,18 @@ export class ServersService {
 
     const changed = new Set(changes.map((c) => c.field));
     const domainChanged = changed.has("domain");
-    const originChanged = changed.has("originIp") || changed.has("originPort");
+    // حقول الأصل ما بتوصلش هنا لـ GUARD (اترفضت فوق)، والـ isOrigin حماية إضافية
+    const originChanged =
+      isOrigin && (changed.has("originIp") || changed.has("originPort"));
+    const sslChanged = isOrigin && changed.has("sslEnabled");
 
-    if (input.originIp !== undefined && changed.has("originIp")) {
-      this.assertOriginIsNotGateway(input.originIp);
+    if (isOrigin && fields.originIp !== undefined && changed.has("originIp")) {
+      this.assertOriginIsNotGateway(fields.originIp);
     }
 
-    if (domainChanged && input.domain) {
+    if (domainChanged && fields.domain) {
       const existing = await this.fastify.prisma.server.findUnique({
-        where: { domain: input.domain },
+        where: { domain: fields.domain },
         select: { id: true, organizationId: true },
       });
       if (existing && existing.id !== serverId) {
@@ -652,7 +939,8 @@ export class ServersService {
       (data as Record<string, unknown>)[change.field] = change.to;
     }
 
-    if (domainChanged) {
+    // تغيير الدومين: DNS بيتصفّر لـ ORIGIN بس (Guard مالوش DNS/توجيه)
+    if (domainChanged && isOrigin) {
       data.verificationToken = randomUUID();
       data.dnsVerified = false;
       data.dnsVerifiedAt = null;
@@ -660,6 +948,7 @@ export class ServersService {
       resets.push("dnsVerification");
     }
 
+    // تغيير الأصل: تصفير قياسات الأصل لـ ORIGIN بس
     if (originChanged) {
       data.originReachable = false;
       data.avgResponseTimeMs = null;
@@ -675,7 +964,12 @@ export class ServersService {
       resets.push("originReachability");
     }
 
-    if ((domainChanged || originChanged) && current.status !== "MAINTENANCE") {
+    // الحالة ترجع PENDING بس لو في إعادة ربط فعلية (ORIGIN)
+    if (
+      isOrigin &&
+      (domainChanged || originChanged) &&
+      current.status !== "MAINTENANCE"
+    ) {
       data.status = "PENDING";
     }
 
@@ -689,7 +983,8 @@ export class ServersService {
         toRealtimePayload(server, "updated", current.status),
       );
 
-      if (originChanged || changed.has("sslEnabled")) {
+      // re-probe: ORIGIN فقط (probeGateway نفسها بتتجاهل Guard كحماية إضافية)
+      if (isOrigin && (originChanged || sslChanged)) {
         this.probeGateway(server, this.probeModeFor(server)).catch((err) =>
           this.fastify.log.warn({ err, serverId }, "Re-probe failed to start"),
         );
@@ -699,9 +994,10 @@ export class ServersService {
         server,
         changes,
         resets,
-        ...(domainChanged && {
-          dns: buildDnsInstructions(server, readDnsConfig()),
-        }),
+        ...(domainChanged &&
+          isOrigin && {
+            dns: buildDnsInstructions(server, readDnsConfig()),
+          }),
       };
     } catch (error) {
       if (isPrismaError(error, "P2002")) throw domainExistsError(false);
@@ -750,6 +1046,7 @@ export class ServersService {
         serverId,
         domain: server.domain,
         deletedEvents,
+        setupMode: server.setupMode,
       },
     });
 
@@ -774,7 +1071,8 @@ export class ServersService {
 
     const updated = await this.fastify.prisma.server.update({
       where: { id: serverId },
-      data: { status: enabled ? "MAINTENANCE" : computeStatus(server) },
+      // الرجوع من الصيانة: الحالة بتتحسب من الطبقة الصح حسب وضع الربط
+      data: { status: enabled ? "MAINTENANCE" : computeServerStatus(server) },
     });
 
     this.emitServerStatus(
@@ -785,15 +1083,22 @@ export class ServersService {
   }
 
   // ================================================================
-  // Dashboard: فحص الـ DNS
+  // Dashboard: فحص الـ DNS (ORIGIN فقط)
   // ================================================================
 
+  /**
+   * GUARD → مرفوض (409). تفعيل الحماية لـ Guard مش مربوط بـ dnsVerified
+   * ولا بتوجيه CNAME/A، لأن النفق هو بديل التوجيه.
+   */
   async verifyServer(
     organizationId: string,
     serverId: string,
     input: VerifyServerInput,
   ): Promise<DnsVerificationResult> {
     const server = await this.findOwned(organizationId, serverId);
+
+    this.requireFeature(server, "DNS_VERIFY");
+
     const wantOwnership = input.step !== "routing";
     const wantRouting = input.step !== "ownership";
     const config = readDnsConfig();
@@ -862,7 +1167,8 @@ export class ServersService {
     let status = server.status;
     if (Object.keys(patch).length > 0) {
       if (server.status !== "MAINTENANCE") {
-        status = computeStatus({
+        // ORIGIN فقط هنا (الـ Guard مرفوض فوق) → طبقة الأورجن صريحة
+        status = computeOriginStatus({
           gatewayReachable,
           originReachable: server.originReachable,
           avgResponseTimeMs: server.avgResponseTimeMs,
@@ -983,6 +1289,10 @@ export class ServersService {
   // Gateway
   // ================================================================
 
+  /**
+   * مزامنة كل السيرفرات للـ Gateway (ORIGIN + GUARD).
+   * كل عنصر فيه setupMode + حالة النفق، وlastAgentAt، وoriginIp = null لـ Guard.
+   */
   async listForGateway(
     query: GatewayServersQuery,
   ): Promise<GatewayServersListResult> {
@@ -1042,15 +1352,34 @@ export class ServersService {
   }
 
   /**
-   * تقرير صحة / نتائج Probe من الـ Gateway
+   * تقرير صحة / نتائج Probe من الـ Gateway.
+   *
+   * - GUARD: التقرير بيتنضف من حقول الأصل/الـ Probe (sanitize) قبل التخزين،
+   *   وبيتحسب الحالة من طبقة الـ Guard (tunnelUp + نبضة) مش من originReachable.
+   *   لو التقرير بعد التنظيف فاضي → بيتتجاهل من غير خطأ.
+   * - ORIGIN: السلوك القديم بالكامل.
    */
   async reportHealth(
     serverId: string,
-    report: GatewayHealthReport,
+    rawReport: GatewayHealthReport,
   ): Promise<HealthReportResult> {
-    const result = await this.fastify.prisma.$transaction(async (tx) => {
+    const txResult = await this.fastify.prisma.$transaction(async (tx) => {
       const server = await tx.server.findUnique({ where: { id: serverId } });
       if (!server) throw serverNotFound();
+
+      // تنظيف حسب وضع الربط (Guard مالوش أصل ولا Probe)
+      const report = sanitizeHealthReportForSetupMode(
+        server.setupMode,
+        rawReport,
+      );
+
+      if (!hasHealthValues(report)) {
+        return {
+          skipped: true as const,
+          id: serverId,
+          status: server.status,
+        };
+      }
 
       const gatewayReachable =
         report.gatewayReachable ?? server.gatewayReachable;
@@ -1063,10 +1392,13 @@ export class ServersService {
       const nextStatus: ServerStatus =
         server.status === "MAINTENANCE"
           ? "MAINTENANCE"
-          : computeStatus({
+          : computeServerStatus({
+              setupMode: server.setupMode,
               gatewayReachable,
               originReachable,
               avgResponseTimeMs,
+              tunnelUp: server.tunnelUp,
+              lastAgentAt: server.lastAgentAt,
             });
 
       const updated = await tx.server.update({
@@ -1140,14 +1472,29 @@ export class ServersService {
       }
 
       return {
+        skipped: false as const,
         id: serverId,
         status: nextStatus,
         previousStatus: server.status,
         updated,
+        report,
+        setupMode: server.setupMode,
         statusChanged: nextStatus !== server.status,
         capacityWarning,
       };
     });
+
+    // تقرير فاضي بعد التنظيف (مثلًا Guard بيبعت حقول أصل بس): نتجاهله
+    if (txResult.skipped) {
+      return {
+        id: txResult.id,
+        status: txResult.status,
+        previousStatus: txResult.status,
+      };
+    }
+
+    const result = txResult;
+    const { report } = result;
 
     if (result.statusChanged || report.probeRecommendation !== undefined) {
       this.emitServerStatus(
@@ -1161,17 +1508,21 @@ export class ServersService {
 
     const domain = result.updated.domain;
     const organizationId = result.updated.organizationId;
+    const isGuard = result.setupMode === "GUARD";
 
     if (result.status === "OFFLINE" && result.previousStatus !== "OFFLINE") {
       await this.safeNotify({
         organizationId,
         type: "SYSTEM",
         title: "السيرفر لا يستجيب",
-        message: `السيرفر ${domain} لا يستجيب، تأكد من أن الـ Origin شغال.`,
+        message: isGuard
+          ? `السيرفر ${domain} لا يستجيب، تأكد من أن الـ Agent شغال والنفق متصل.`
+          : `السيرفر ${domain} لا يستجيب، تأكد من أن الـ Origin شغال.`,
         severity: 4,
         metadata: {
           serverId,
           domain,
+          setupMode: result.setupMode,
           lastError: report.lastError ?? null,
         },
       });
@@ -1187,7 +1538,12 @@ export class ServersService {
         title: "السيرفر رجع يعمل",
         message: `السيرفر ${domain} رجع يستجيب من جديد.`,
         severity: 1,
-        metadata: { serverId, domain, status: result.status },
+        metadata: {
+          serverId,
+          domain,
+          setupMode: result.setupMode,
+          status: result.status,
+        },
       });
     }
 
@@ -1203,6 +1559,7 @@ export class ServersService {
         metadata: {
           serverId,
           domain,
+          setupMode: result.setupMode,
           currentLoadPercent: result.capacityWarning.load,
           warnAt: result.capacityWarning.warnAt,
         },

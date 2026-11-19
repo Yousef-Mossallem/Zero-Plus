@@ -6,8 +6,12 @@
  * يربط كل دوال team.service بمسارات HTTP مع:
  *   - authenticate (JWT)
  *   - requirePermission('team:view' | 'team:manage')
- *   - Zod validation من team.schema
+ *   - Zod validation من team.schema (يدوياً داخل كل handler)
  *   - ترجمة أخطاء الخدمة إلى استجابات HTTP واضحة
+ *
+ * ملاحظة: لا نمرّر Zod schemas داخل خيار `schema:` الخاص بـ Fastify،
+ * لأنه يتوقع JSON Schema (Ajv) وسيفشل بناء السيرفر. التحقق يتم
+ * بـ .parse() داخل كل handler، وأخطاء Zod تُترجم إلى 400.
  * ==================================================================
  */
 
@@ -157,8 +161,20 @@ const ERROR_MAP: Record<
   },
 }
 
-/** يحوّل أي خطأ خدمة إلى رد HTTP موحّد */
+function isZodError(
+  error: unknown,
+): error is { name: string; issues: unknown[] } {
+  return (
+    !!error &&
+    typeof error === 'object' &&
+    'name' in error &&
+    (error as { name: string }).name === 'ZodError'
+  )
+}
+
+/** يحوّل أي خطأ (خدمة / Zod / غير معروف) إلى رد HTTP موحّد */
 function handleServiceError(error: unknown, reply: FastifyReply) {
+  // 1) أخطاء الخدمة المعروفة
   const message = error instanceof Error ? error.message : String(error)
   const mapped = ERROR_MAP[message]
 
@@ -173,7 +189,20 @@ function handleServiceError(error: unknown, reply: FastifyReply) {
     })
   }
 
-  // أخطاء غير معروفة → 500 مع تسجيل
+  // 2) أخطاء التحقق من Zod → 400
+  if (isZodError(error)) {
+    return reply.status(400).send({
+      success: false,
+      error: {
+        code: 'VALIDATION_ERROR',
+        message: 'Validation failed',
+        messageAr: 'فشل التحقق من البيانات',
+        details: error.issues,
+      },
+    })
+  }
+
+  // 3) أخطاء غير معروفة → 500 مع تسجيل
   requestLogError(error)
   return reply.status(500).send({
     success: false,
@@ -274,9 +303,6 @@ const teamRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
     '/groups',
     {
       preHandler: [fastify.requirePermission('team:view')],
-      schema: {
-        querystring: listGroupsQuerySchema,
-      },
     },
     async (request, reply) => {
       try {
@@ -298,9 +324,6 @@ const teamRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
     '/groups/:groupId',
     {
       preHandler: [fastify.requirePermission('team:view')],
-      schema: {
-        params: groupIdParamsSchema,
-      },
     },
     async (request, reply) => {
       try {
@@ -322,9 +345,6 @@ const teamRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
     '/groups',
     {
       preHandler: [fastify.requirePermission('team:manage')],
-      schema: {
-        body: createGroupSchema,
-      },
     },
     async (request, reply) => {
       try {
@@ -346,10 +366,6 @@ const teamRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
     '/groups/:groupId',
     {
       preHandler: [fastify.requirePermission('team:manage')],
-      schema: {
-        params: groupIdParamsSchema,
-        body: updateGroupSchema,
-      },
     },
     async (request, reply) => {
       try {
@@ -377,9 +393,6 @@ const teamRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
     '/groups/:groupId',
     {
       preHandler: [fastify.requirePermission('team:manage')],
-      schema: {
-        params: groupIdParamsSchema,
-      },
     },
     async (request, reply) => {
       try {
@@ -401,10 +414,6 @@ const teamRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
     '/groups/:groupId/members',
     {
       preHandler: [fastify.requirePermission('team:manage')],
-      schema: {
-        params: groupIdParamsSchema,
-        body: addGroupMembersSchema,
-      },
     },
     async (request, reply) => {
       try {
@@ -432,10 +441,6 @@ const teamRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
     '/groups/:groupId/members',
     {
       preHandler: [fastify.requirePermission('team:manage')],
-      schema: {
-        params: groupIdParamsSchema,
-        body: removeGroupMembersSchema,
-      },
     },
     async (request, reply) => {
       try {
@@ -467,9 +472,6 @@ const teamRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
     '/members',
     {
       preHandler: [fastify.requirePermission('team:view')],
-      schema: {
-        querystring: listMembersQuerySchema,
-      },
     },
     async (request, reply) => {
       try {
@@ -491,9 +493,6 @@ const teamRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
     '/members/:userId',
     {
       preHandler: [fastify.requirePermission('team:view')],
-      schema: {
-        params: userIdParamsSchema,
-      },
     },
     async (request, reply) => {
       try {
@@ -515,10 +514,6 @@ const teamRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
     '/members/:userId',
     {
       preHandler: [fastify.requirePermission('team:manage')],
-      schema: {
-        params: userIdParamsSchema,
-        body: updateMemberRoleSchema,
-      },
     },
     async (request, reply) => {
       try {
@@ -546,10 +541,6 @@ const teamRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
     '/members/:userId/groups',
     {
       preHandler: [fastify.requirePermission('team:manage')],
-      schema: {
-        params: userIdParamsSchema,
-        body: setMemberGroupsSchema,
-      },
     },
     async (request, reply) => {
       try {
@@ -577,9 +568,6 @@ const teamRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
     '/members/:userId/deactivate',
     {
       preHandler: [fastify.requirePermission('team:manage')],
-      schema: {
-        params: userIdParamsSchema,
-      },
     },
     async (request, reply) => {
       try {
@@ -605,9 +593,6 @@ const teamRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
     '/members/:userId/activate',
     {
       preHandler: [fastify.requirePermission('team:manage')],
-      schema: {
-        params: userIdParamsSchema,
-      },
     },
     async (request, reply) => {
       try {
@@ -633,9 +618,6 @@ const teamRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
     '/members/:userId/refresh-token',
     {
       preHandler: [fastify.requirePermission('team:manage')],
-      schema: {
-        params: userIdParamsSchema,
-      },
     },
     async (request, reply) => {
       try {
@@ -665,10 +647,6 @@ const teamRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
     '/members/:userId/overrides',
     {
       preHandler: [fastify.requirePermission('team:manage')],
-      schema: {
-        params: userIdParamsSchema,
-        body: setUserOverridesSchema,
-      },
     },
     async (request, reply) => {
       try {
@@ -696,10 +674,6 @@ const teamRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
     '/members/:userId/overrides',
     {
       preHandler: [fastify.requirePermission('team:manage')],
-      schema: {
-        params: userIdParamsSchema,
-        body: upsertUserOverrideSchema,
-      },
     },
     async (request, reply) => {
       try {
@@ -727,10 +701,6 @@ const teamRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
     '/members/:userId/overrides',
     {
       preHandler: [fastify.requirePermission('team:manage')],
-      schema: {
-        params: userIdParamsSchema,
-        body: deleteUserOverrideSchema,
-      },
     },
     async (request, reply) => {
       try {
@@ -762,9 +732,6 @@ const teamRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
     '/invites',
     {
       preHandler: [fastify.requirePermission('team:view')],
-      schema: {
-        querystring: listInvitesQuerySchema,
-      },
     },
     async (request, reply) => {
       try {
@@ -786,9 +753,6 @@ const teamRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
     '/invites',
     {
       preHandler: [fastify.requirePermission('team:manage')],
-      schema: {
-        body: createTeamInviteSchema,
-      },
     },
     async (request, reply) => {
       try {
@@ -814,10 +778,6 @@ const teamRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
     '/invites/:inviteId/resend',
     {
       preHandler: [fastify.requirePermission('team:manage')],
-      schema: {
-        params: inviteIdParamsSchema,
-        body: resendTeamInviteSchema,
-      },
     },
     async (request, reply) => {
       try {
@@ -845,9 +805,6 @@ const teamRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
     '/invites/:inviteId/revoke',
     {
       preHandler: [fastify.requirePermission('team:manage')],
-      schema: {
-        params: inviteIdParamsSchema,
-      },
     },
     async (request, reply) => {
       try {
