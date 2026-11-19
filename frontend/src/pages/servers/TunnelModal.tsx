@@ -8,13 +8,14 @@
 //  - زر إعادة تدوير التوكن في حال فقدانه
 // ==================================================================
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   AlertTriangle,
   Check,
   Copy,
   ExternalLink,
   Key,
+  Loader2,
   RotateCcw,
   Shield,
   Terminal,
@@ -23,12 +24,16 @@ import { useTranslation } from 'react-i18next'
 import { Button, Modal } from '../../components/ui/kit'
 import {
   enableTunnel,
+  getAgentStatus,
+  getApiErrorInfo,
   rotateAgentToken,
+  type AgentStatus,
   type EnableTunnelResult,
   type InstallChannel,
   type Server,
 } from '../../services/serversService'
 import { useToast } from '../../components/ui/Toast'
+import { timeAgo } from '../../utils/format'
 
 export function TunnelModal({
   open,
@@ -57,6 +62,42 @@ export function TunnelModal({
     if (initialData.install.channel) setChannel(initialData.install.channel)
   }
 
+  // السيرفر اتغيّر → امسح بيانات التوكن القديمة (متعرضش أمر سيرفر تاني)
+  if (server && data && data.serverId !== server.id && !initialData) {
+    setData(null)
+  }
+
+  // ---- متابعة حالة الـ Agent / النفق لحظيًا طول ما المودال مفتوح ----
+  const [agent, setAgent] = useState<AgentStatus | null>(null)
+  const wasUp = useRef(false)
+  const serverId = server?.id
+  useEffect(() => {
+    if (!open || !serverId) return
+    let cancelled = false
+    wasUp.current = false
+    setAgent(null)
+    const poll = async () => {
+      try {
+        const st = await getAgentStatus(serverId)
+        if (cancelled) return
+        setAgent(st)
+        if (st.tunnelUp && !wasUp.current) {
+          wasUp.current = true
+          onEnabled?.()
+        }
+      } catch {
+        // الـ polling بيكمل — الخطأ المؤقت مش مشكلة
+      }
+    }
+    void poll()
+    const timer = window.setInterval(() => void poll(), 5000)
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, serverId])
+
   if (!server) return null
 
   const handleCopy = async () => {
@@ -65,12 +106,12 @@ export function TunnelModal({
       await navigator.clipboard.writeText(data.install.command)
       setCopied(true)
       toast.success(
-        t('tunnel.copiedTitle', 'تم نسخ الأمر بنجاح'),
-        t('tunnel.copiedDesc', 'قم بتشغيل الأمر بصلاحيات root/sudo على سيرفرك.'),
+        t('tunnel.copiedTitle'),
+        t('tunnel.copiedDesc'),
       )
       setTimeout(() => setCopied(false), 3000)
     } catch {
-      // ignore
+      toast.error(t('tunnel.copyFailed'))
     }
   }
 
@@ -90,8 +131,8 @@ export function TunnelModal({
       // إذا كان التوكن قد تم إصداره مسبقاً ولا يمكن استرجاعه بدون rotate
       if (e.response?.data?.error?.code === 'AGENT_TOKEN_ALREADY_ISSUED') {
         toast.warning(
-          t('tunnel.alreadyIssued', 'التوكن صادر مسبقاً'),
-          t('tunnel.needRotate', 'يجب إعادة توليد التوكن لتغيير صيغة الأمر.'),
+          t('tunnel.alreadyIssued'),
+          t('tunnel.needRotate'),
         )
       }
     } finally {
@@ -110,14 +151,14 @@ export function TunnelModal({
       setData(res)
       setConfirmRotate(false)
       toast.success(
-        t('tunnel.rotatedTitle', 'تم تدوير التوكن بنجاح'),
-        t('tunnel.rotatedDesc', 'تم إنشاء أمر تثبيت وتوكن جديد. توقف الـ Agent القديم.'),
+        t('tunnel.rotatedTitle'),
+        t('tunnel.rotatedDesc'),
       )
       onEnabled?.()
     } catch (err) {
       toast.error(
-        t('tunnel.rotateFailed', 'فشل إعادة توليد التوكن'),
-        String(err),
+        t('tunnel.rotateFailed'),
+        getApiErrorInfo(err).message,
       )
     } finally {
       setBusy(false)
@@ -128,8 +169,8 @@ export function TunnelModal({
     <Modal
       open={open}
       onClose={onClose}
-      title={t('tunnel.modalTitle', 'تفعيل حماية Guard / نفق الـ Agent')}
-      description={`${server.domain} — ${t('tunnel.modalSubtitle', 'ثبّت عميل الحماية على سيرفرك لربط النفق مباشرة')}`}
+      title={t('tunnel.modalTitle')}
+      description={`${server.domain} — ${t('tunnel.modalSubtitle')}`}
       icon={Shield}
       tone="cyan"
       width="max-w-2xl"
@@ -144,22 +185,22 @@ export function TunnelModal({
                 disabled={busy}
                 onClick={() => setConfirmRotate(true)}
               >
-                {t('tunnel.rotateBtn', 'إعادة توليد التوكن')}
+                {t('tunnel.rotateBtn')}
               </Button>
             ) : (
               <div className="flex items-center gap-1.5 rounded-lg border border-amber-400/25 bg-amber-500/10 p-1 text-xs">
-                <span className="text-amber-300 px-1">{t('tunnel.confirmRotate', 'هل أنت متأكد؟ سيتوقف الـ Agent الحالي')}</span>
+                <span className="text-amber-300 px-1">{t('tunnel.confirmRotate')}</span>
                 <Button variant="danger" size="sm" loading={busy} onClick={() => void handleRotate()}>
-                  {t('tunnel.yesRotate', 'نعم، دوّر')}
+                  {t('tunnel.yesRotate')}
                 </Button>
                 <Button variant="ghost" size="sm" disabled={busy} onClick={() => setConfirmRotate(false)}>
-                  {t('actions.cancel', 'إلغاء')}
+                  {t('actions.cancel')}
                 </Button>
               </div>
             )}
           </div>
           <Button variant="primary" onClick={onClose}>
-            {t('tunnel.done', 'تم')}
+            {t('tunnel.done')}
           </Button>
         </div>
       }
@@ -169,10 +210,10 @@ export function TunnelModal({
         <div className="flex items-start gap-3 rounded-xl border border-amber-400/25 bg-amber-500/8 p-3.5 text-xs text-amber-200">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
           <div>
-            <p className="font-semibold">{t('tunnel.warningTitle', 'تنبيه: التوكن يظهر لمرة واحدة فقط!')}</p>
+            <p className="font-semibold">{t('tunnel.warningTitle')}</p>
             <p className="mt-0.5 text-amber-200/80">
               {data?.install.tokenHint ??
-                t('tunnel.warningDesc', 'انسخ أمر التثبيت بالكامل وشغّله على خادمك الآن. في حال إغلاق النافذة وفقدان التوكن، ستحتاج إلى إعادة توليد توكن جديد.')}
+                t('tunnel.warningDesc')}
             </p>
           </div>
         </div>
@@ -180,7 +221,7 @@ export function TunnelModal({
         {/* Channel Selection */}
         <div className="space-y-1.5">
           <label className="text-xs font-medium text-slate-300">
-            {t('tunnel.channelLabel', 'صيغة أمر التثبيت')}
+            {t('tunnel.channelLabel')}
           </label>
           <div className="grid grid-cols-3 gap-2">
             {(
@@ -213,7 +254,7 @@ export function TunnelModal({
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium text-slate-300">
-                {t('tunnel.commandLabel', 'أمر التثبيت')}
+                {t('tunnel.commandLabel')}
               </span>
               <button
                 type="button"
@@ -223,12 +264,12 @@ export function TunnelModal({
                 {copied ? (
                   <>
                     <Check className="h-3.5 w-3.5 text-emerald-400" />
-                    <span className="text-emerald-400">{t('tunnel.copied', 'تم النسخ')}</span>
+                    <span className="text-emerald-400">{t('tunnel.copied')}</span>
                   </>
                 ) : (
                   <>
                     <Copy className="h-3.5 w-3.5" />
-                    <span>{t('tunnel.copy', 'نسخ الأمر')}</span>
+                    <span>{t('tunnel.copy')}</span>
                   </>
                 )}
               </button>
@@ -243,7 +284,7 @@ export function TunnelModal({
         ) : (
           <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-white/10 p-6 text-center text-xs text-slate-400">
             <Key className="mb-2 h-6 w-6 text-slate-500" />
-            <p>{t('tunnel.noTokenCached', 'تم إصدار التوكن مسبقاً ولا يمكن استرجاعه للحماية.')}</p>
+            <p>{t('tunnel.noTokenCached')}</p>
             <Button
               variant="outline"
               size="sm"
@@ -252,19 +293,47 @@ export function TunnelModal({
               loading={busy}
               onClick={() => void handleRotate()}
             >
-              {t('tunnel.generateNew', 'توليد أمر وتوكن جديد الآن')}
+              {t('tunnel.generateNew')}
             </Button>
           </div>
         )}
 
         {/* Steps Guide */}
         <div className="rounded-xl border border-white/6 bg-white/2 p-3 text-xs text-slate-400 space-y-2">
-          <p className="font-semibold text-slate-300">{t('tunnel.stepsTitle', 'خطوات العمل:')}</p>
+          <p className="font-semibold text-slate-300">{t('tunnel.stepsTitle')}</p>
           <ol className="list-decimal list-inside space-y-1 text-slate-400">
-            <li>{t('tunnel.step1', 'انسخ الأمر أعلاه وشغّله على سيرفر الـ Origin كمسؤول.')}</li>
-            <li>{t('tunnel.step2', 'سيقوم الـ Agent بإنشاء نفق آمن مشفّر ويرسل نبضات Heartbeat تلقائيًا.')}</li>
-            <li>{t('tunnel.step3', 'ستتحول حالة النفق تلقائيًا على الكارت إلى «متصل Online».')}</li>
+            <li>{t('tunnel.step1')}</li>
+            <li>{t('tunnel.step2')}</li>
+            <li>{t('tunnel.step3')}</li>
           </ol>
+        </div>
+
+        {/* Live agent / tunnel status */}
+        <div
+          className={`flex items-start gap-3 rounded-xl border p-3 text-xs ${
+            agent?.tunnelUp
+              ? 'border-emerald-400/25 bg-emerald-500/8 text-emerald-200'
+              : 'border-white/8 bg-white/3 text-slate-300'
+          }`}
+          role="status"
+          aria-live="polite"
+        >
+          {agent?.tunnelUp ? (
+            <Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />
+          ) : (
+            <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin text-slate-400" />
+          )}
+          <div className="min-w-0">
+            <p className="font-semibold">
+              {agent?.tunnelUp ? t('tunnel.statusConnected') : t('tunnel.statusWaiting')}
+            </p>
+            {agent?.tunnelUp && (
+              <p className="mt-0.5 text-emerald-200/80">
+                {agent.agentVersion ? `${t('tunnel.statusVersion')}: ${agent.agentVersion} · ` : ''}
+                {agent.lastAgentAt ? `${t('tunnel.statusLastSeen')}: ${timeAgo(agent.lastAgentAt)}` : ''}
+              </p>
+            )}
+          </div>
         </div>
 
         {data?.install.docsUrl && (
@@ -274,7 +343,7 @@ export function TunnelModal({
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1.5 text-xs text-cyan-400 hover:underline"
           >
-            <span>{t('tunnel.docsLink', 'دليل التثبيت واستكشاف الأخطاء')}</span>
+            <span>{t('tunnel.docsLink')}</span>
             <ExternalLink className="h-3.5 w-3.5" />
           </a>
         )}

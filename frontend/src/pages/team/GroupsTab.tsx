@@ -20,6 +20,7 @@ import {
   X,
 } from 'lucide-react'
 
+import { useDebounce } from '../../hooks/useDebounce'
 import { Button, Field, TextInput } from '../../components/ui/kit'
 import {
   listGroups,
@@ -31,8 +32,8 @@ import {
   type TeamGroup,
   type PermissionsCatalog,
 } from '../../services/teamService'
-import { selectHasPermission } from '../../store/authStore'
-import useAuthStore from '../../store/authStore'
+import useAuthStore, { selectHasPermission } from '../../store/authStore'
+import { permLabel } from './shared'
 
 // ==================================================================
 // Permission multi-select
@@ -75,7 +76,7 @@ function PermissionSelector({
           />
           <div className="min-w-0">
             <p className="font-mono text-xs text-slate-300">{p.id}</p>
-            <p className="text-[10px] text-slate-500">{p.ar}</p>
+            <p className="text-[10px] text-slate-500">{permLabel(p)}</p>
           </div>
         </label>
       ))}
@@ -98,6 +99,7 @@ function GroupForm({
   onClose: () => void
   onSaved: () => void
 }) {
+  const { t } = useTranslation('team')
   const isEdit = group !== null
   const isSystem = group?.isSystem ?? false
 
@@ -108,12 +110,12 @@ function GroupForm({
   const [error, setError] = useState('')
 
   const handleSave = async () => {
-    if (!name.trim()) {
-      setError('الاسم مطلوب')
+    if (!isSystem && !name.trim()) {
+      setError(t('groups.nameRequired'))
       return
     }
     if (permissions.length === 0) {
-      setError('اختر صلاحية واحدة على الأقل')
+      setError(t('groups.permRequired'))
       return
     }
 
@@ -136,7 +138,7 @@ function GroupForm({
       }
       onSaved()
     } catch (err) {
-      setError(getTeamErrorMessage(err, 'فشل حفظ المجموعة'))
+      setError(getTeamErrorMessage(err, t('groups.saveError')))
     } finally {
       setSaving(false)
     }
@@ -152,26 +154,27 @@ function GroupForm({
         {/* Header */}
         <div className="flex items-center justify-between border-b border-white/8 px-5 py-4">
           <h3 className="font-semibold text-white">
-            {isEdit ? 'تعديل المجموعة' : 'إنشاء مجموعة جديدة'}
+            {isEdit ? t('groups.editTitle') : t('groups.newTitle')}
           </h3>
           <button
             type="button"
             onClick={onClose}
+            aria-label={t('common.close')}
             className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-white/5 hover:text-white"
           >
-            <X className="h-4.5 w-4.5" />
+            <X className="h-4 w-4" />
           </button>
         </div>
 
         <div className="space-y-4 p-5">
           {/* Name */}
           {!isSystem && (
-            <Field label="الاسم">
+            <Field label={t('groups.name')}>
               <TextInput
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 disabled={saving}
-                placeholder="مثال: محللو البيانات"
+                placeholder={t('groups.namePlaceholder')}
                 maxLength={100}
               />
             </Field>
@@ -179,25 +182,25 @@ function GroupForm({
           {isSystem && (
             <div className="flex items-center gap-2 rounded-xl border border-amber-400/20 bg-amber-500/6 px-4 py-3 text-xs text-amber-300">
               <Lock className="h-4 w-4 shrink-0" />
-              <span>مجموعة نظام — لا يمكن تغيير الاسم</span>
+              <span>{t('groups.systemGroup')}</span>
             </div>
           )}
 
           {/* Description */}
-          <Field label="الوصف (اختياري)">
+          <Field label={t('groups.description')}>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               disabled={saving}
               rows={2}
-              placeholder="وصف مختصر للمجموعة"
+              placeholder={t('groups.descPlaceholder')}
               className="w-full rounded-xl border border-white/10 bg-white/3 px-4 py-2.5 text-sm text-white placeholder:text-slate-600 outline-none focus:border-cyan-500/50 disabled:opacity-50"
             />
           </Field>
 
           {/* Permissions */}
           <Field
-            label={`الصلاحيات (${permissions.length} محددة)`}
+            label={t('groups.permissionsSelected', { count: permissions.length })}
           >
             <PermissionSelector
               catalog={catalog}
@@ -214,10 +217,10 @@ function GroupForm({
 
         <div className="flex justify-end gap-2 border-t border-white/8 px-5 py-4">
           <Button variant="ghost" onClick={onClose} disabled={saving}>
-            إلغاء
+            {t('common.cancel')}
           </Button>
           <Button variant="primary" loading={saving} onClick={() => void handleSave()}>
-            {isEdit ? 'حفظ التعديلات' : 'إنشاء'}
+            {isEdit ? t('common.saveChanges') : t('common.create')}
           </Button>
         </div>
       </div>
@@ -240,15 +243,17 @@ function GroupCard({
   onEdit: () => void
   onDelete: () => void
 }) {
+  const { t } = useTranslation('team')
   const [deleting, setDeleting] = useState(false)
 
   const handleDelete = async () => {
-    if (!confirm('حذف المجموعة؟')) return
+    if (!confirm(t('groups.confirmDelete'))) return
     setDeleting(true)
     try {
       await deleteGroup(group.id)
       onDelete()
-    } catch {
+    } catch (err) {
+      alert(getTeamErrorMessage(err, t('groups.deleteError')))
       setDeleting(false)
     }
   }
@@ -261,7 +266,7 @@ function GroupCard({
             <p className="font-medium text-white truncate">{group.name}</p>
             {group.isSystem && (
               <span className="rounded-md border border-amber-400/20 bg-amber-500/8 px-1.5 py-0.5 text-[10px] font-semibold text-amber-300">
-                SYSTEM
+                {t('groups.system')}
               </span>
             )}
           </div>
@@ -270,9 +275,11 @@ function GroupCard({
           )}
         </div>
         {canManage && (
-          <div className="flex shrink-0 items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="flex shrink-0 items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100 transition-opacity">
             <button
               type="button"
+              title={t('groups.edit')}
+              aria-label={t('groups.edit')}
               onClick={onEdit}
               className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-white/8 hover:text-white"
             >
@@ -282,6 +289,8 @@ function GroupCard({
               <button
                 type="button"
                 disabled={deleting}
+                title={t('groups.delete')}
+                aria-label={t('groups.delete')}
                 onClick={() => void handleDelete()}
                 className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-rose-500/10 hover:text-rose-400"
               >
@@ -313,8 +322,8 @@ function GroupCard({
       </div>
 
       <div className="flex items-center justify-between text-xs text-slate-500">
-        <span>{group.membersCount} عضو</span>
-        <span>{group.permissions.length} صلاحية</span>
+        <span>{t('groups.membersCount', { count: group.membersCount })}</span>
+        <span>{t('groups.permCount', { count: group.permissions.length })}</span>
       </div>
     </div>
   )
@@ -335,6 +344,7 @@ export default function GroupsTab() {
   const [page, setPage] = useState(1)
   const [total, setTotal] = useState(0)
   const [q, setQ] = useState('')
+  const debouncedQ = useDebounce(q, 350)
   const [showForm, setShowForm] = useState(false)
   const [editGroup, setEditGroup] = useState<TeamGroup | null>(null)
   const LIMIT = 20
@@ -344,18 +354,18 @@ export default function GroupsTab() {
     setError('')
     try {
       const [groupsRes, catalogRes] = await Promise.all([
-        listGroups({ page, limit: LIMIT, q: q || undefined }),
+        listGroups({ page, limit: LIMIT, q: debouncedQ || undefined }),
         getPermissionsCatalog(),
       ])
       setGroups(groupsRes.items)
       setTotal(groupsRes.total)
       setCatalog(catalogRes)
     } catch (err) {
-      setError(getTeamErrorMessage(err, 'فشل تحميل المجموعات'))
+      setError(getTeamErrorMessage(err, t('groups.loadError')))
     } finally {
       setLoading(false)
     }
-  }, [page, q])
+  }, [page, debouncedQ])
 
   useEffect(() => {
     void fetchData()
@@ -363,7 +373,7 @@ export default function GroupsTab() {
 
   useEffect(() => {
     setPage(1)
-  }, [q])
+  }, [debouncedQ])
 
   const totalPages = Math.ceil(total / LIMIT)
 
@@ -377,17 +387,18 @@ export default function GroupsTab() {
             type="text"
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder={t('groups.search', 'بحث بالاسم...')}
+            placeholder={t('groups.search')}
             className="w-full rounded-xl border border-white/10 bg-white/3 py-2 ps-10 pe-4 text-sm text-white placeholder:text-slate-600 outline-none focus:border-cyan-500/40"
           />
         </div>
         <div className="flex items-center gap-2 text-xs text-slate-500">
           <Layers className="h-4 w-4" />
-          <span>{total} مجموعة</span>
+          <span>{t('groups.count', { count: total })}</span>
         </div>
         <button
           type="button"
           onClick={() => void fetchData()}
+          aria-label={t('common.refresh')}
           className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 text-slate-400 hover:bg-white/5"
         >
           <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
@@ -399,7 +410,7 @@ export default function GroupsTab() {
             size="sm"
             onClick={() => { setEditGroup(null); setShowForm(true) }}
           >
-            {t('groups.create', 'إنشاء مجموعة')}
+            {t('groups.create')}
           </Button>
         )}
       </div>
@@ -424,7 +435,7 @@ export default function GroupsTab() {
         </div>
       ) : groups.length === 0 ? (
         <div className="py-16 text-center text-sm text-slate-500">
-          لا توجد مجموعات
+          {t('groups.noGroups')}
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -446,19 +457,21 @@ export default function GroupsTab() {
           <button
             type="button"
             disabled={page <= 1}
+            aria-label={t('common.prev')}
             onClick={() => setPage((p) => p - 1)}
             className="flex h-7 w-7 items-center justify-center rounded-lg border border-white/10 text-slate-400 hover:bg-white/5 disabled:opacity-40"
           >
-            <ChevronRight className="h-4 w-4 rtl:rotate-180" />
+            <ChevronLeft className="h-4 w-4 rtl:rotate-180" />
           </button>
           <span className="px-3 text-xs text-slate-500">{page} / {totalPages}</span>
           <button
             type="button"
             disabled={page >= totalPages}
+            aria-label={t('common.next')}
             onClick={() => setPage((p) => p + 1)}
             className="flex h-7 w-7 items-center justify-center rounded-lg border border-white/10 text-slate-400 hover:bg-white/5 disabled:opacity-40"
           >
-            <ChevronLeft className="h-4 w-4 rtl:rotate-180" />
+            <ChevronRight className="h-4 w-4 rtl:rotate-180" />
           </button>
         </div>
       )}

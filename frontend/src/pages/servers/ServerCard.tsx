@@ -24,6 +24,7 @@ import { Badge, Button, Card } from '../../components/ui/kit'
 import {
   canRequestProbe,
   hasProbeData,
+  isGuardServer,
   type ProbeConfidence,
   type ProbeRecommendation,
   type Server,
@@ -213,17 +214,17 @@ export function ServerCard({
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
               </span>
               <Shield className="h-3 w-3" />
-              <span>{t('card.tunnelUp', 'النفق متصل (Guard)')}</span>
+              <span>{t('card.tunnelUp')}</span>
             </span>
-          ) : server.agentToken ? (
+          ) : isGuardServer(server) ? (
             <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-400/30 bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-300">
               <Radio className="h-3 w-3" />
-              <span>{t('card.tunnelPending', 'نفق غير متصل')}</span>
+              <span>{t('card.tunnelPending')}</span>
             </span>
           ) : (
             <span className="inline-flex items-center gap-1 text-xs text-slate-500">
               <Shield className="h-3 w-3" />
-              <span>{t('card.originOnly', 'Origin مباشر')}</span>
+              <span>{t('card.originOnly')}</span>
             </span>
           )}
 
@@ -244,10 +245,10 @@ export function ServerCard({
             <div className="flex items-center justify-between text-xs">
               <span className="flex items-center gap-1 text-emerald-300 font-medium">
                 <Shield className="h-3.5 w-3.5" />
-                <span>{t('card.agentLive', 'حالة الـ Agent')}</span>
+                <span>{t('card.agentLive')}</span>
               </span>
               <span className="text-[11px] text-slate-400">
-                {server.lastAgentAt ? `${t('card.lastHeartbeat', 'آخر نبضة:')} ${timeAgo(server.lastAgentAt)}` : '—'}
+                {server.lastAgentAt ? `${t('card.lastHeartbeat')} ${timeAgo(server.lastAgentAt)}` : '—'}
               </span>
             </div>
 
@@ -418,9 +419,12 @@ export function ServerCard({
 
         {/* ---------- Actions ---------- */}
         <div className="mt-5 flex flex-wrap items-center gap-2 border-t border-white/6 pt-4">
-          <Button size="sm" variant={fullySetUp ? 'outline' : 'primary'} icon={Globe} onClick={onDns}>
-            {fullySetUp ? t('card.dns') : t('card.finishSetup')}
-          </Button>
+          {/* Origin: تعليمات DNS — Guard: لا تظهر (مسار النفق فقط) */}
+          {!isGuardServer(server) && (
+            <Button size="sm" variant={fullySetUp ? 'outline' : 'primary'} icon={Globe} onClick={onDns}>
+              {fullySetUp ? t('card.dns') : t('card.finishSetup')}
+            </Button>
+          )}
 
           {/* تفعيل / إدارة النفق */}
           {canManage && onTunnel && (
@@ -432,10 +436,10 @@ export function ServerCard({
               className={cn(server.tunnelUp && 'border-emerald-500/30 text-emerald-300')}
             >
               {server.tunnelUp
-                ? t('card.tunnelActive', 'النفق مفعّل')
-                : server.agentToken
-                ? t('card.tunnelCommand', 'أمر النفق')
-                : t('card.enableTunnel', 'تفعيل Guard')}
+                ? t('card.tunnelActive')
+                : isGuardServer(server)
+                ? t('card.tunnelCommand')
+                : t('card.enableTunnel')}
             </Button>
           )}
 

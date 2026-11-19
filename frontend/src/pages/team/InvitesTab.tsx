@@ -30,9 +30,8 @@ import {
   type InviteStatus,
   type EditableRole,
 } from '../../services/teamService'
-import { selectHasPermission } from '../../store/authStore'
-import useAuthStore from '../../store/authStore'
-import { formatRole, inviteStatusColor, formatDateTime } from './shared'
+import useAuthStore, { selectHasPermission } from '../../store/authStore'
+import { formatRole, formatInviteStatus, inviteStatusColor, formatDateTime } from './shared'
 
 // ==================================================================
 // Create Invite Modal
@@ -47,6 +46,7 @@ function CreateInviteModal({
   onClose: () => void
   onCreated: (invite: TeamInvite, acceptUrl?: string) => void
 }) {
+  const { t } = useTranslation('team')
   const [email, setEmail] = useState('')
   const [role, setRole] = useState<EditableRole>('VIEWER')
   const [expiresInHours, setExpiresInHours] = useState(72)
@@ -55,7 +55,11 @@ function CreateInviteModal({
 
   const handleCreate = async () => {
     if (!email.trim()) {
-      setError('البريد الإلكتروني مطلوب')
+      setError(t('invites.emailRequired'))
+      return
+    }
+    if (!Number.isFinite(expiresInHours) || expiresInHours < 1 || expiresInHours > 720) {
+      setError(t('invites.hoursRange'))
       return
     }
     setSaving(true)
@@ -66,9 +70,9 @@ function CreateInviteModal({
         role,
         expiresInHours,
       })
-      onCreated(result.invite, result.email.acceptUrl)
+      onCreated(result.invite, result.email?.acceptUrl)
     } catch (err) {
-      setError(getTeamErrorMessage(err, 'فشل إرسال الدعوة'))
+      setError(getTeamErrorMessage(err, t('invites.sendError')))
     } finally {
       setSaving(false)
     }
@@ -82,18 +86,19 @@ function CreateInviteModal({
       />
       <div className="relative w-full max-w-sm rounded-2xl border border-white/10 bg-[#080d1a] shadow-2xl">
         <div className="flex items-center justify-between border-b border-white/8 px-5 py-4">
-          <h3 className="font-semibold text-white">دعوة عضو جديد</h3>
+          <h3 className="font-semibold text-white">{t('invites.newTitle')}</h3>
           <button
             type="button"
             onClick={onClose}
+            aria-label={t('common.close')}
             className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-white/5 hover:text-white"
           >
-            <X className="h-4.5 w-4.5" />
+            <X className="h-4 w-4" />
           </button>
         </div>
 
         <div className="space-y-4 p-5">
-          <Field label="البريد الإلكتروني">
+          <Field label={t('invites.email')}>
             <TextInput
               type="email"
               icon={Mail}
@@ -105,7 +110,7 @@ function CreateInviteModal({
             />
           </Field>
 
-          <Field label="الدور">
+          <Field label={t('invites.role')}>
             <select
               value={role}
               onChange={(e) => setRole(e.target.value as EditableRole)}
@@ -120,7 +125,7 @@ function CreateInviteModal({
             </select>
           </Field>
 
-          <Field label="تنتهي خلال (ساعة)">
+          <Field label={t('invites.expiresIn')}>
             <input
               type="number"
               min={1}
@@ -139,7 +144,7 @@ function CreateInviteModal({
 
         <div className="flex justify-end gap-2 border-t border-white/8 px-5 py-4">
           <Button variant="ghost" onClick={onClose} disabled={saving}>
-            إلغاء
+            {t('common.cancel')}
           </Button>
           <Button
             variant="primary"
@@ -147,7 +152,7 @@ function CreateInviteModal({
             loading={saving}
             onClick={() => void handleCreate()}
           >
-            إرسال الدعوة
+            {t('invites.send')}
           </Button>
         </div>
       </div>
@@ -168,16 +173,17 @@ function InviteCreatedBanner({
   acceptUrl?: string
   onClose: () => void
 }) {
+  const { t } = useTranslation('team')
   return (
     <div className="rounded-xl border border-emerald-400/20 bg-emerald-500/8 px-4 py-4 text-sm">
       <div className="flex items-start justify-between gap-2">
         <div className="space-y-1">
           <p className="font-semibold text-emerald-300">
-            تم إرسال الدعوة إلى {invite.email} ✓
+            {t('invites.sentTo', { email: invite.email })} ✓
           </p>
           {acceptUrl && (
             <div>
-              <p className="text-xs text-slate-400">رابط القبول (dev only):</p>
+              <p className="text-xs text-slate-400">{t('invites.acceptUrl')}</p>
               <a
                 href={acceptUrl}
                 target="_blank"
@@ -192,6 +198,7 @@ function InviteCreatedBanner({
         <button
           type="button"
           onClick={onClose}
+          aria-label={t('common.close')}
           className="text-slate-400 hover:text-white"
         >
           <X className="h-4 w-4" />
@@ -216,6 +223,7 @@ function InviteRow({
   onResend: (id: string) => Promise<void>
   onRevoke: (id: string) => Promise<void>
 }) {
+  const { t } = useTranslation('team')
   const [resending, setResending] = useState(false)
   const [revoking, setRevoking] = useState(false)
 
@@ -229,7 +237,7 @@ function InviteRow({
         <span
           className={`inline-flex rounded-md border px-2 py-0.5 text-xs font-medium ${inviteStatusColor(invite.status)}`}
         >
-          {invite.status}
+          {formatInviteStatus(invite.status)}
         </span>
       </td>
       <td className="px-4 py-3 text-xs text-slate-500">
@@ -243,7 +251,8 @@ function InviteRow({
           <div className="flex items-center justify-end gap-1">
             <button
               type="button"
-              title="إعادة إرسال"
+              title={t('invites.resend')}
+              aria-label={t('invites.resend')}
               disabled={resending}
               onClick={async () => {
                 setResending(true)
@@ -260,7 +269,8 @@ function InviteRow({
             </button>
             <button
               type="button"
-              title="إلغاء"
+              title={t('invites.revoke')}
+              aria-label={t('invites.revoke')}
               disabled={revoking}
               onClick={async () => {
                 setRevoking(true)
@@ -286,12 +296,15 @@ function InviteRow({
 // Status filter tabs
 // ==================================================================
 
-const STATUS_TABS: { label: string; value: InviteStatus | '' }[] = [
-  { label: 'الكل', value: '' },
-  { label: 'معلّقة', value: 'PENDING' },
-  { label: 'مقبولة', value: 'ACCEPTED' },
-  { label: 'منتهية', value: 'EXPIRED' },
-  { label: 'ملغاة', value: 'REVOKED' },
+const STATUS_TABS: {
+  labelKey: 'common.all' | 'status.pending' | 'status.accepted' | 'status.expired' | 'status.revoked'
+  value: InviteStatus | ''
+}[] = [
+  { labelKey: 'common.all', value: '' },
+  { labelKey: 'status.pending', value: 'PENDING' },
+  { labelKey: 'status.accepted', value: 'ACCEPTED' },
+  { labelKey: 'status.expired', value: 'EXPIRED' },
+  { labelKey: 'status.revoked', value: 'REVOKED' },
 ]
 
 // ==================================================================
@@ -308,6 +321,7 @@ export default function InvitesTab() {
   const [page, setPage] = useState(1)
   const [total, setTotal] = useState(0)
   const [statusFilter, setStatusFilter] = useState<InviteStatus | ''>('')
+  const [notice, setNotice] = useState('')
   const [showCreate, setShowCreate] = useState(false)
   const [createdBanner, setCreatedBanner] = useState<{ invite: TeamInvite; acceptUrl?: string } | null>(null)
   const LIMIT = 20
@@ -324,7 +338,7 @@ export default function InvitesTab() {
       setInvites(res.items)
       setTotal(res.total)
     } catch (err) {
-      setError(getTeamErrorMessage(err, 'فشل تحميل الدعوات'))
+      setError(getTeamErrorMessage(err, t('invites.loadError')))
     } finally {
       setLoading(false)
     }
@@ -340,19 +354,24 @@ export default function InvitesTab() {
 
   const handleResend = async (id: string) => {
     try {
-      await resendInvite(id)
+      const res = await resendInvite(id)
+      setCreatedBanner(null)
+      setNotice(t('invites.resent'))
       void fetchInvites()
-    } catch {
-      // ignore
+      void res
+    } catch (err) {
+      setError(getTeamErrorMessage(err, t('invites.resendError')))
     }
   }
 
   const handleRevoke = async (id: string) => {
+    if (!window.confirm(t('invites.confirmRevoke'))) return
     try {
       await revokeInvite(id)
+      setNotice(t('invites.revoked'))
       void fetchInvites()
-    } catch {
-      // ignore
+    } catch (err) {
+      setError(getTeamErrorMessage(err, t('invites.revokeError')))
     }
   }
 
@@ -375,7 +394,7 @@ export default function InvitesTab() {
                   : 'text-slate-400 hover:text-white'
               }`}
             >
-              {tab.label}
+              {t(tab.labelKey)}
             </button>
           ))}
         </div>
@@ -384,12 +403,13 @@ export default function InvitesTab() {
 
         <div className="flex items-center gap-2 text-xs text-slate-500">
           <Clock className="h-4 w-4" />
-          <span>{total} دعوة</span>
+          <span>{t('invites.count', { count: total })}</span>
         </div>
 
         <button
           type="button"
           onClick={() => void fetchInvites()}
+          aria-label={t('common.refresh')}
           className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 text-slate-400 hover:bg-white/5"
         >
           <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
@@ -402,7 +422,7 @@ export default function InvitesTab() {
             size="sm"
             onClick={() => setShowCreate(true)}
           >
-            {t('invites.create', 'دعوة عضو')}
+            {t('invites.create')}
           </Button>
         )}
       </div>
@@ -414,6 +434,13 @@ export default function InvitesTab() {
           acceptUrl={createdBanner.acceptUrl}
           onClose={() => setCreatedBanner(null)}
         />
+      )}
+
+      {notice && (
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-emerald-400/20 bg-emerald-500/8 px-4 py-2 text-sm text-emerald-300">
+          <span>{notice}</span>
+          <button type="button" onClick={() => setNotice('')} aria-label={t('common.close')}><X className="h-4 w-4" /></button>
+        </div>
       )}
 
       {/* Error */}
@@ -429,12 +456,12 @@ export default function InvitesTab() {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-white/8 text-xs text-slate-500">
-              <th className="px-4 py-3 text-start font-medium">البريد الإلكتروني</th>
-              <th className="px-4 py-3 text-start font-medium">الدور</th>
-              <th className="px-4 py-3 text-start font-medium">الحالة</th>
-              <th className="px-4 py-3 text-start font-medium">تنتهي في</th>
-              <th className="px-4 py-3 text-start font-medium">أُرسلت في</th>
-              <th className="px-4 py-3 text-end font-medium">إجراءات</th>
+              <th className="px-4 py-3 text-start font-medium">{t('invites.email')}</th>
+              <th className="px-4 py-3 text-start font-medium">{t('invites.role')}</th>
+              <th className="px-4 py-3 text-start font-medium">{t('members.status')}</th>
+              <th className="px-4 py-3 text-start font-medium">{t('invites.expiresAt')}</th>
+              <th className="px-4 py-3 text-start font-medium">{t('invites.sentAt')}</th>
+              <th className="px-4 py-3 text-end font-medium">{t('members.actions')}</th>
             </tr>
           </thead>
           <tbody>
@@ -460,7 +487,7 @@ export default function InvitesTab() {
             {!loading && invites.length === 0 && (
               <tr>
                 <td colSpan={6} className="py-12 text-center text-sm text-slate-500">
-                  لا توجد دعوات
+                  {t('invites.noInvites')}
                 </td>
               </tr>
             )}
@@ -472,25 +499,27 @@ export default function InvitesTab() {
       {totalPages > 1 && (
         <div className="flex items-center justify-between text-xs text-slate-500">
           <span>
-            {(page - 1) * LIMIT + 1}–{Math.min(page * LIMIT, total)} من {total}
+            {(page - 1) * LIMIT + 1}–{Math.min(page * LIMIT, total)} {t('common.of')} {total}
           </span>
           <div className="flex items-center gap-1">
             <button
               type="button"
               disabled={page <= 1}
+              aria-label={t('common.prev')}
               onClick={() => setPage((p) => p - 1)}
               className="flex h-7 w-7 items-center justify-center rounded-lg border border-white/10 text-slate-400 hover:bg-white/5 disabled:opacity-40"
             >
-              <ChevronRight className="h-4 w-4 rtl:rotate-180" />
+              <ChevronLeft className="h-4 w-4 rtl:rotate-180" />
             </button>
             <span className="px-2">{page} / {totalPages}</span>
             <button
               type="button"
               disabled={page >= totalPages}
+              aria-label={t('common.next')}
               onClick={() => setPage((p) => p + 1)}
               className="flex h-7 w-7 items-center justify-center rounded-lg border border-white/10 text-slate-400 hover:bg-white/5 disabled:opacity-40"
             >
-              <ChevronLeft className="h-4 w-4 rtl:rotate-180" />
+              <ChevronRight className="h-4 w-4 rtl:rotate-180" />
             </button>
           </div>
         </div>

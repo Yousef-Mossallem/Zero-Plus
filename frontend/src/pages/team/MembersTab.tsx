@@ -18,6 +18,7 @@ import {
   X,
 } from 'lucide-react'
 
+import { useDebounce } from '../../hooks/useDebounce'
 import { Button } from '../../components/ui/kit'
 import {
   listMembers,
@@ -72,12 +73,15 @@ function MemberRow({
   canManage,
   currentUserId,
   onSelect,
+  onChanged,
 }: {
   member: TeamMember
   canManage: boolean
   currentUserId: string | null
   onSelect: (m: TeamMember) => void
+  onChanged: () => void
 }) {
+  const { t } = useTranslation('team')
   const isSelf = member.id === currentUserId
   const isOwner = member.role === 'OWNER'
 
@@ -91,7 +95,7 @@ function MemberRow({
           <span className="text-sm font-medium text-white">
             {member.fullName || '—'}
             {isSelf && (
-              <span className="ms-2 text-xs text-cyan-400">(أنت)</span>
+              <span className="ms-2 text-xs text-cyan-400">({t('members.you')})</span>
             )}
           </span>
           <span className="font-mono text-xs text-slate-500">{member.email}</span>
@@ -108,7 +112,7 @@ function MemberRow({
         <span
           className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${statusColor(member.isActive)}`}
         >
-          {member.isActive ? 'نشط' : 'معطّل'}
+          {member.isActive ? t('status.active') : t('status.inactive')}
         </span>
       </td>
       <td className="px-4 py-3 text-xs text-slate-500">
@@ -136,9 +140,9 @@ function MemberRow({
           <div className="flex items-center justify-end gap-2">
             {/* Quick activate/deactivate */}
             {member.isActive ? (
-              <QuickDeactivate memberId={member.id} />
+              <QuickDeactivate memberId={member.id} onDone={onChanged} />
             ) : (
-              <QuickActivate memberId={member.id} />
+              <QuickActivate memberId={member.id} onDone={onChanged} />
             )}
           </div>
         )}
@@ -147,18 +151,22 @@ function MemberRow({
   )
 }
 
-function QuickDeactivate({ memberId }: { memberId: string }) {
+function QuickDeactivate({ memberId, onDone }: { memberId: string; onDone: () => void }) {
+  const { t } = useTranslation('team')
   const [loading, setLoading] = useState(false)
   return (
     <button
       type="button"
-      title="إلغاء التفعيل"
+      title={t('members.deactivate')}
+      aria-label={t('members.deactivate')}
       disabled={loading}
       onClick={async () => {
         setLoading(true)
         try {
           await deactivateMember(memberId)
-          window.location.reload()
+          onDone()
+        } catch {
+          // الخطأ يظهر عبر إعادة التحميل
         } finally {
           setLoading(false)
         }
@@ -174,18 +182,22 @@ function QuickDeactivate({ memberId }: { memberId: string }) {
   )
 }
 
-function QuickActivate({ memberId }: { memberId: string }) {
+function QuickActivate({ memberId, onDone }: { memberId: string; onDone: () => void }) {
+  const { t } = useTranslation('team')
   const [loading, setLoading] = useState(false)
   return (
     <button
       type="button"
-      title="تفعيل"
+      title={t('members.activate')}
+      aria-label={t('members.activate')}
       disabled={loading}
       onClick={async () => {
         setLoading(true)
         try {
           await activateMember(memberId)
-          window.location.reload()
+          onDone()
+        } catch {
+          // الخطأ يظهر عبر إعادة التحميل
         } finally {
           setLoading(false)
         }
@@ -218,11 +230,12 @@ function MemberDrawer({
   onClose: () => void
   onUpdated: () => void
 }) {
+  const { t } = useTranslation('team')
   const isOwner = member.role === 'OWNER'
   const isSelf = member.id === currentUserId
 
   const [roleValue, setRoleValue] = useState<EditableRole>(
-    (member.role as EditableRole) ?? 'VIEWER',
+    member.role === 'OWNER' ? 'VIEWER' : (member.role as EditableRole),
   )
   const [savingRole, setSavingRole] = useState(false)
   const [roleError, setRoleError] = useState('')
@@ -235,7 +248,7 @@ function MemberDrawer({
       await updateMemberRole(member.id, roleValue)
       onUpdated()
     } catch (err) {
-      setRoleError(getTeamErrorMessage(err, 'فشل تغيير الدور'))
+      setRoleError(getTeamErrorMessage(err, t('members.roleError')))
     } finally {
       setSavingRole(false)
     }
@@ -250,8 +263,8 @@ function MemberDrawer({
         await activateMember(member.id)
       }
       onUpdated()
-    } catch {
-      // ignore
+    } catch (err) {
+      setRoleError(getTeamErrorMessage(err, t('members.toggleError')))
     } finally {
       setActivating(false)
     }
@@ -273,9 +286,10 @@ function MemberDrawer({
           <button
             type="button"
             onClick={onClose}
+            aria-label={t('common.close')}
             className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-white/5 hover:text-white"
           >
-            <X className="h-4.5 w-4.5" />
+            <X className="h-4 w-4" />
           </button>
         </div>
 
@@ -290,14 +304,14 @@ function MemberDrawer({
             <span
               className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${statusColor(member.isActive)}`}
             >
-              {member.isActive ? 'نشط' : 'معطّل'}
+              {member.isActive ? t('status.active') : t('status.inactive')}
             </span>
           </div>
 
           {/* Change role */}
           {canManage && !isOwner && !isSelf && (
             <div className="space-y-2">
-              <p className="text-xs font-medium text-slate-400">تغيير الدور</p>
+              <p className="text-xs font-medium text-slate-400">{t('members.changeRole')}</p>
               <div className="flex items-center gap-2">
                 <RoleSelect
                   value={roleValue}
@@ -311,7 +325,7 @@ function MemberDrawer({
                   onClick={() => void handleSaveRole()}
                   disabled={roleValue === member.role}
                 >
-                  حفظ
+                  {t('common.save')}
                 </Button>
               </div>
               {roleError && (
@@ -322,9 +336,9 @@ function MemberDrawer({
 
           {/* Groups */}
           <div className="space-y-2">
-            <p className="text-xs font-medium text-slate-400">المجموعات</p>
+            <p className="text-xs font-medium text-slate-400">{t('members.groups')}</p>
             {member.groups.length === 0 ? (
-              <p className="text-xs text-slate-600">لا توجد مجموعات</p>
+              <p className="text-xs text-slate-600">{t('members.noGroups')}</p>
             ) : (
               <div className="flex flex-wrap gap-1.5">
                 {member.groups.map((g) => (
@@ -342,7 +356,7 @@ function MemberDrawer({
           {/* Permissions preview */}
           <div className="space-y-2">
             <p className="text-xs font-medium text-slate-400">
-              الصلاحيات النهائية ({member.permissions.length})
+              {t('members.finalPermissions', { count: member.permissions.length })}
             </p>
             <div className="flex flex-wrap gap-1">
               {member.permissions.slice(0, 20).map((p) => (
@@ -355,7 +369,7 @@ function MemberDrawer({
               ))}
               {member.permissions.length > 20 && (
                 <span className="text-xs text-slate-500">
-                  +{member.permissions.length - 20} أخرى
+                  {t('members.moreCount', { count: member.permissions.length - 20 })}
                 </span>
               )}
             </div>
@@ -364,7 +378,7 @@ function MemberDrawer({
           {/* Overrides */}
           {member.overrides.length > 0 && (
             <div className="space-y-2">
-              <p className="text-xs font-medium text-slate-400">استثناءات فردية</p>
+              <p className="text-xs font-medium text-slate-400">{t('members.overrides')}</p>
               <div className="space-y-1">
                 {member.overrides.map((o) => (
                   <div
@@ -377,7 +391,7 @@ function MemberDrawer({
                     <span
                       className={`text-xs ${o.isDeny ? 'text-rose-400' : 'text-emerald-400'}`}
                     >
-                      {o.isDeny ? 'سحب' : 'منح'}
+                      {o.isDeny ? t('members.deny') : t('members.grant')}
                     </span>
                   </div>
                 ))}
@@ -387,8 +401,8 @@ function MemberDrawer({
 
           {/* Info */}
           <div className="space-y-1 text-xs text-slate-500">
-            <p>آخر دخول: {formatDateTime(member.lastLoginAt)}</p>
-            <p>تاريخ الانضمام: {formatDateTime(member.createdAt)}</p>
+            <p>{t('members.lastLoginLabel')}: {formatDateTime(member.lastLoginAt)}</p>
+            <p>{t('members.joinedAt')}: {formatDateTime(member.createdAt)}</p>
           </div>
         </div>
 
@@ -402,7 +416,7 @@ function MemberDrawer({
               icon={member.isActive ? UserMinus : UserCheck}
               onClick={() => void handleToggleActive()}
             >
-              {member.isActive ? 'إلغاء التفعيل' : 'تفعيل'}
+              {member.isActive ? t('members.deactivate') : t('members.activate')}
             </Button>
           </div>
         )}
@@ -426,6 +440,7 @@ export default function MembersTab() {
   const [page, setPage] = useState(1)
   const [total, setTotal] = useState(0)
   const [q, setQ] = useState('')
+  const debouncedQ = useDebounce(q, 350)
   const [selectedMember, setSelectedMember] = useState<TeamMember | null>(null)
   const LIMIT = 20
 
@@ -433,15 +448,15 @@ export default function MembersTab() {
     setLoading(true)
     setError('')
     try {
-      const res = await listMembers({ page, limit: LIMIT, q: q || undefined })
+      const res = await listMembers({ page, limit: LIMIT, q: debouncedQ || undefined })
       setMembers(res.items)
       setTotal(res.total)
     } catch (err) {
-      setError(getTeamErrorMessage(err, 'فشل تحميل الأعضاء'))
+      setError(getTeamErrorMessage(err, t('members.loadError')))
     } finally {
       setLoading(false)
     }
-  }, [page, q])
+  }, [page, debouncedQ])
 
   useEffect(() => {
     void fetchMembers()
@@ -450,7 +465,7 @@ export default function MembersTab() {
   // Debounced search
   useEffect(() => {
     setPage(1)
-  }, [q])
+  }, [debouncedQ])
 
   const handleSelectMember = async (m: TeamMember) => {
     try {
@@ -473,7 +488,7 @@ export default function MembersTab() {
             type="text"
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder={t('members.search', 'بحث بالاسم أو الإيميل...')}
+            placeholder={t('members.search')}
             className="w-full rounded-xl border border-white/10 bg-white/3 py-2 ps-10 pe-4 text-sm text-white placeholder:text-slate-600 outline-none focus:border-cyan-500/40"
           />
           {q && (
@@ -488,11 +503,12 @@ export default function MembersTab() {
         </div>
         <div className="flex items-center gap-2 text-xs text-slate-500">
           <Users className="h-4 w-4" />
-          <span>{total} عضو</span>
+          <span>{t('members.count', { count: total })}</span>
         </div>
         <button
           type="button"
           onClick={() => void fetchMembers()}
+          aria-label={t('common.refresh')}
           className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 text-slate-400 hover:bg-white/5 hover:text-white"
         >
           <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
@@ -512,12 +528,12 @@ export default function MembersTab() {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-white/8 text-xs text-slate-500">
-              <th className="px-4 py-3 text-start font-medium">المستخدم</th>
-              <th className="px-4 py-3 text-start font-medium">الدور</th>
-              <th className="px-4 py-3 text-start font-medium">الحالة</th>
-              <th className="px-4 py-3 text-start font-medium">آخر دخول</th>
-              <th className="px-4 py-3 text-start font-medium">المجموعات</th>
-              <th className="px-4 py-3 text-end font-medium">إجراءات</th>
+              <th className="px-4 py-3 text-start font-medium">{t('members.user')}</th>
+              <th className="px-4 py-3 text-start font-medium">{t('members.role')}</th>
+              <th className="px-4 py-3 text-start font-medium">{t('members.status')}</th>
+              <th className="px-4 py-3 text-start font-medium">{t('members.lastLogin')}</th>
+              <th className="px-4 py-3 text-start font-medium">{t('members.groups')}</th>
+              <th className="px-4 py-3 text-end font-medium">{t('members.actions')}</th>
             </tr>
           </thead>
           <tbody>
@@ -538,12 +554,13 @@ export default function MembersTab() {
                     canManage={canManage}
                     currentUserId={user?.id ?? null}
                     onSelect={(mem) => void handleSelectMember(mem)}
+                    onChanged={() => void fetchMembers()}
                   />
                 ))}
             {!loading && members.length === 0 && (
               <tr>
                 <td colSpan={6} className="py-12 text-center text-sm text-slate-500">
-                  لا توجد نتائج
+                  {t('members.noResults')}
                 </td>
               </tr>
             )}
@@ -555,16 +572,17 @@ export default function MembersTab() {
       {totalPages > 1 && (
         <div className="flex items-center justify-between text-xs text-slate-500">
           <span>
-            {(page - 1) * LIMIT + 1}–{Math.min(page * LIMIT, total)} من {total}
+            {(page - 1) * LIMIT + 1}–{Math.min(page * LIMIT, total)} {t('common.of')} {total}
           </span>
           <div className="flex items-center gap-1">
             <button
               type="button"
               disabled={page <= 1}
+              aria-label={t('common.prev')}
               onClick={() => setPage((p) => p - 1)}
               className="flex h-7 w-7 items-center justify-center rounded-lg border border-white/10 text-slate-400 hover:bg-white/5 disabled:opacity-40"
             >
-              <ChevronRight className="h-4 w-4 rtl:rotate-180" />
+              <ChevronLeft className="h-4 w-4 rtl:rotate-180" />
             </button>
             <span className="px-2">
               {page} / {totalPages}
@@ -572,10 +590,11 @@ export default function MembersTab() {
             <button
               type="button"
               disabled={page >= totalPages}
+              aria-label={t('common.next')}
               onClick={() => setPage((p) => p + 1)}
               className="flex h-7 w-7 items-center justify-center rounded-lg border border-white/10 text-slate-400 hover:bg-white/5 disabled:opacity-40"
             >
-              <ChevronLeft className="h-4 w-4 rtl:rotate-180" />
+              <ChevronRight className="h-4 w-4 rtl:rotate-180" />
             </button>
           </div>
         </div>

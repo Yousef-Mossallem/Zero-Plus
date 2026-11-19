@@ -631,9 +631,11 @@ export async function getMember(
     overrides: user.permissionOverrides,
   })
 
+  const { groupMemberships, permissionOverrides, ...rest } = user
   return {
-    ...user,
-    groups: user.groupMemberships.map((m) => m.group),
+    ...rest,
+    groups: groupMemberships.map((m) => m.group),
+    overrides: permissionOverrides,
     permissions,
   }
 }

@@ -195,12 +195,13 @@ export function ServerFormModal({
         if (input.mode !== server.mode) patch.mode = input.mode
 
         let updatedServer = server
-        let dnsRes = undefined
+        let dnsRes: DnsInstructions | undefined = undefined
 
         if (Object.keys(patch).length > 0) {
           const res = await updateServer(server.id, patch)
           updatedServer = res.server
-          dnsRes = res.dns
+          // Guard: تعليمات DNS الخاصة بالـ Origin لا تُعرض أبدًا (الـ Backend ممكن يرجعها، نتجاهلها)
+          dnsRes = isGuard ? undefined : res.dns
           if (res.changes.length > 0) {
             toast.success(t('form.toast.updated'), input.domain)
           }
@@ -231,7 +232,7 @@ export function ServerFormModal({
           }
         }
         
-        onSaved(res.server, res.dns)
+        onSaved(res.server, isGuard ? undefined : res.dns)
       }
 
       onClose()
@@ -311,7 +312,7 @@ export function ServerFormModal({
         </Field>
 
         {/* Connection Type Selection: Origin vs Guard */}
-        <Field label={t('form.connectionType.label', 'نوع الربط والحماية')}>
+        <Field label={t('form.connectionType.label')}>
           <div className="grid grid-cols-2 gap-3">
             <button
               type="button"
@@ -327,11 +328,11 @@ export function ServerFormModal({
               <div className="flex items-center gap-2">
                 <Network className={cn('h-4 w-4', form.connectionType === 'ORIGIN' ? 'text-cyan-400' : 'text-slate-400')} />
                 <p className={cn('text-sm font-medium', form.connectionType === 'ORIGIN' ? 'text-cyan-200' : 'text-slate-200')}>
-                  {t('form.connectionType.origin', 'Origin عادي')}
+                  {t('form.connectionType.origin')}
                 </p>
               </div>
               <p className="mt-1 text-xs text-slate-400">
-                {t('form.connectionType.originDesc', 'توجيه DNS للأصل مباشرة دون Agent.')}
+                {t('form.connectionType.originDesc')}
               </p>
             </button>
 
@@ -349,11 +350,11 @@ export function ServerFormModal({
               <div className="flex items-center gap-2">
                 <Shield className={cn('h-4 w-4', form.connectionType === 'GUARD' ? 'text-cyan-400' : 'text-slate-400')} />
                 <p className={cn('text-sm font-medium', form.connectionType === 'GUARD' ? 'text-cyan-200' : 'text-slate-200')}>
-                  {t('form.connectionType.guard', 'Guard (Agent / نفق)')}
+                  {t('form.connectionType.guard')}
                 </p>
               </div>
               <p className="mt-1 text-xs text-slate-400">
-                {t('form.connectionType.guardDesc', 'نفق آمن مشفر وتثبيت Agent على سيرفرك.')}
+                {t('form.connectionType.guardDesc')}
               </p>
             </button>
           </div>
@@ -361,10 +362,7 @@ export function ServerFormModal({
 
         {form.connectionType === 'GUARD' ? (
           <Notice tone="cyan">
-            {t(
-              'form.connectionType.guardNotice',
-              'في وضع Guard، لا تحتاج لإدخال عنوان IP الأصل. سيتم إنشاء نفق آمن وتوليد أمر التثبيت لتشغيله على خادمك مباشرة.',
-            )}
+            {t('form.connectionType.guardNotice')}
           </Notice>
         ) : (
           <div className="grid grid-cols-3 gap-3">
