@@ -24,7 +24,10 @@ enum UserRole {
   ANALYST
   VIEWER
 }
-
+enum ServerSetupMode {
+  ORIGIN  // DNS + CNAME/TXT + Origin Probe
+  GUARD   // Agent / نفق — من غير مسار الأورجن التقليدي
+}
 enum ServerStatus {
   PENDING
   ONLINE
@@ -410,12 +413,19 @@ model TeamInvite {
 // ==================================================================
 
 model Server {
-  id         String       @id @default(uuid())
-  domain     String       @unique
-  originIp   String
-  originPort Int          @default(443)
-  status     ServerStatus @default(PENDING)
-  mode       ServerMode   @default(PROTECT)
+  id         String          @id @default(uuid())
+  domain     String          @unique
+
+  // ORIGIN = مسار تقليدي | GUARD = Agent/نفق فقط
+  // الافتراضي ORIGIN حتى لا تنكسر السيرفرات القديمة
+  setupMode  ServerSetupMode @default(ORIGIN)
+
+  // في وضع GUARD يكون null (مش مطلوب)
+  // في وضع ORIGIN مطلوب من طبقة الـ service/validation
+  originIp   String?
+  originPort Int             @default(443)
+  status     ServerStatus    @default(PENDING)
+  mode       ServerMode      @default(PROTECT)
 
   // Origin Probe
   maxRequestsPerSecond  Int?
@@ -440,43 +450,31 @@ model Server {
   originReachable   Boolean   @default(false)
   sslEnabled        Boolean   @default(true)
 
-  // ✅ جديد — Agent fields
-  // التوكن اللي بيتعمل مرة واحدة وبيتبعت في أمر التثبيت
+  // Agent fields
   agentToken        String?   @unique
-  // hash للتوكن (أكثر أماناً من تخزين النص الخام)
   agentTokenHash    String?   @unique
-  // إصدار الـ Agent المركّب على سيرفر العميل
   agentVersion      String?
-  // نظام التشغيل والمعمارية
   agentOs           AgentOs?
-  agentArch         String?   // amd64 | arm64
-  // آخر نبضة وصلت
+  agentArch         String?
   lastAgentAt       DateTime?
-  // هل النفق شغال؟
   tunnelUp          Boolean   @default(false)
-  // IP peer داخل النفق (من WireGuard)
   tunnelPeerIp      String?
-  // آخر لقطة مقاييس
   agentCpuPercent   Float?
   agentRamPercent   Float?
   agentDiskPercent  Float?
   agentLoadAvg1m    Float?
-  // سعة تقديرية من الـ Agent
   estimatedMaxRps   Int?
-  // هل الأصل شغال من منظور الـ Agent
   agentOriginOk     Boolean?
   agentOriginLatMs  Int?
 
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
-  securityEvents SecurityEvent[]
-  simulationRuns SimulationRun[]
-  challengeLogs  ChallengeLog[]
-  probeRuns      ServerProbeRun[]
-  reports        Report[]
-
-  // ✅ جديد — سجل نبضات الـ Agent
+  securityEvents  SecurityEvent[]
+  simulationRuns  SimulationRun[]
+  challengeLogs   ChallengeLog[]
+  probeRuns       ServerProbeRun[]
+  reports         Report[]
   agentHeartbeats AgentHeartbeat[]
 
   createdAt DateTime @default(now())
@@ -485,10 +483,11 @@ model Server {
   @@index([organizationId])
   @@index([status])
   @@index([lastProbeAt])
-  // ✅ جديد
   @@index([lastAgentAt])
   @@index([tunnelUp])
   @@index([organizationId, tunnelUp])
+  @@index([setupMode])
+  @@index([organizationId, setupMode])
 }
 
 // ==================================================================

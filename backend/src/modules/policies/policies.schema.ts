@@ -14,10 +14,14 @@
 //   GET /internal/gateway/policies/resolve?host=example.com   (الأساسي)
 //   GET /internal/gateway/policies/by-server/:serverId
 //   GET /internal/gateway/policies/by-org/:organizationId
+//
+// تحديث Origin / Guard:
+//   - Server.originIp أصبح String? (null في وضع GUARD)
+//   - GatewayResolveResult.server يحمل setupMode + tunnelUp + lastAgentAt
 // ==================================================================
 
 import { z } from 'zod'
-import type { ServerMode, ServerStatus } from '@prisma/client'
+import type { ServerMode, ServerSetupMode, ServerStatus } from '@prisma/client'
 
 // ==================================================================
 // 1) قائمة الحقول القابلة للتعديل (نفس أسماء Prisma بالحرف)
@@ -378,6 +382,14 @@ export type GatewayPolicyPayload = PolicyValues & {
   organizationId: string
 }
 
+/**
+ * نتيجة resolve للـ Gateway.
+ *
+ * بعد فصل ORIGIN / GUARD:
+ *   - originIp قد يكون null (سيرفر GUARD)
+ *   - setupMode يميّز مسار التوجيه (أصل مباشر vs نفق Agent)
+ *   - tunnelUp / lastAgentAt مساعدة لحالة Guard
+ */
 export interface GatewayResolveResult {
   // ---- تحديد الهوية ----
   organizationId: string
@@ -385,10 +397,17 @@ export interface GatewayResolveResult {
   server: {
     id: string
     domain: string
-    originIp: string
+    /** null في وضع GUARD — الـ Gateway لازم يتحمل غياب الأصل */
+    originIp: string | null
     originPort: number
     status: ServerStatus
     mode: ServerMode // PROTECT | MONITOR_ONLY
+    /** ORIGIN = DNS/أصل تقليدي | GUARD = Agent / نفق */
+    setupMode: ServerSetupMode
+    /** حالة النفق (مفيدة لـ GUARD؛ على ORIGIN غالبًا false) */
+    tunnelUp: boolean
+    /** آخر نبضة Agent (ISO) — null لو لم يصل Agent بعد */
+    lastAgentAt: string | null
     maxRequestsPerSecond: number | null
   }
 
@@ -398,6 +417,7 @@ export interface GatewayResolveResult {
   /**
    * السقف الفعلي للسيرفر كله (طلب/ثانية):
    * policy.maxServerRps لو الشركة حددته، وإلا server.maxRequestsPerSecond
+   * (لـ GUARD قد يأتي من estimatedMaxRps / safeRequestsPerSecond عبر طبقات أخرى)
    * null = مفيش سقف
    */
   effectiveMaxServerRps: number | null

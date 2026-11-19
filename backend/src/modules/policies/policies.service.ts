@@ -14,6 +14,11 @@
 //   2) الـ Gateway بيحدد الشركة من الـ Host/serverId، مش من body
 //   3) الفحص الكامل للترابط بيتم على القيم بعد الدمج مع الحالية
 //   4) التعديل داخل Transaction (Serializable) لمنع تعارض تعديلين مع بعض
+//
+// تحديث Origin / Guard:
+//   - originIp قد يكون null (GUARD)
+//   - resolve يرجّع setupMode + tunnelUp + lastAgentAt
+//   - effectiveMaxServerRps يراعي سعة الـ Agent عند غياب maxRequestsPerSecond
 // ==================================================================
 
 import { Prisma, type Policy } from '@prisma/client'
@@ -145,7 +150,7 @@ function isPrismaError(
   )
 }
 
-// أعمدة السيرفر اللي الـ Gateway محتاجها (مش أكتر)
+// أعمدة السيرفر اللي الـ Gateway محتاجها (Origin + Guard)
 const SERVER_RESOLVE_SELECT = {
   id: true,
   domain: true,
@@ -153,7 +158,12 @@ const SERVER_RESOLVE_SELECT = {
   originPort: true,
   status: true,
   mode: true,
+  setupMode: true,
+  tunnelUp: true,
+  lastAgentAt: true,
   maxRequestsPerSecond: true,
+  safeRequestsPerSecond: true,
+  estimatedMaxRps: true,
   organizationId: true,
   organization: {
     select: {
@@ -165,6 +175,26 @@ const SERVER_RESOLVE_SELECT = {
 type ServerResolveRow = Prisma.ServerGetPayload<{
   select: typeof SERVER_RESOLVE_SELECT
 }>
+
+/**
+ * سقف الطلبات الفعلي:
+ * 1) policy.maxServerRps لو محدد
+ * 2) وإلا سعة السيرفر من الـ Probe (maxRequestsPerSecond)
+ * 3) وإلا تقدير الـ Agent / safe RPS (مفيد لـ GUARD)
+ */
+function resolveEffectiveMaxServerRps(
+  policyMax: number | null,
+  server: Pick<
+    ServerResolveRow,
+    'maxRequestsPerSecond' | 'safeRequestsPerSecond' | 'estimatedMaxRps'
+  >,
+): number | null {
+  if (policyMax != null) return policyMax
+  if (server.maxRequestsPerSecond != null) return server.maxRequestsPerSecond
+  if (server.safeRequestsPerSecond != null) return server.safeRequestsPerSecond
+  if (server.estimatedMaxRps != null) return server.estimatedMaxRps
+  return null
+}
 
 // ==================================================================
 // Service
@@ -496,10 +526,16 @@ export class PoliciesService {
       server: {
         id: server.id,
         domain: server.domain,
+        // GUARD: غالبًا null — الـ Gateway لازم يتحمل ذلك
         originIp: server.originIp,
         originPort: server.originPort,
         status: server.status,
         mode: server.mode,
+        setupMode: server.setupMode,
+        tunnelUp: server.tunnelUp,
+        lastAgentAt: server.lastAgentAt
+          ? server.lastAgentAt.toISOString()
+          : null,
         maxRequestsPerSecond: server.maxRequestsPerSecond,
       },
 
@@ -508,9 +544,11 @@ export class PoliciesService {
         ...values,
       },
 
-      // الشركة هي اللي بتحدد السقف، ولو ما حددتش ناخد سعة السيرفر الفعلية
-      effectiveMaxServerRps:
-        values.maxServerRps ?? server.maxRequestsPerSecond ?? null,
+      // سياسة الشركة أولاً، ثم سعة الـ Probe، ثم تقديرات الـ Agent (GUARD)
+      effectiveMaxServerRps: resolveEffectiveMaxServerRps(
+        values.maxServerRps,
+        server,
+      ),
 
       policyVersion: policy.updatedAt.toISOString(),
     }

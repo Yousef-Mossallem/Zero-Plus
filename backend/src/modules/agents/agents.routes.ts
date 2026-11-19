@@ -13,9 +13,17 @@
  * مسار الـ Agent الداخلي (مصادقة AGENT_TOKEN):
  *   POST   /internal/agent/heartbeat
  *
+ * ملاحظات مهمة:
+ *   - Fastify يعتبر '/:serverId/x' و '/:id/x' نفس المسار (اسم الـ param
+ *     لا يفرّق)، لذلك كل مسار مسجّل مرة واحدة فقط باستخدام :serverId.
+ *   - الـ body الفاضي مع Content-Type: application/json كان يسبب 400 من
+ *     Fastify نفسه (FST_ERR_CTP_EMPTY_JSON_BODY) قبل الوصول للـ handler،
+ *     فتم إضافة JSON parser داخل plugin الـ agents يحوّل الـ body الفاضي
+ *     إلى {}.
+ *
  * ملاحظة التسجيل في app.ts:
- *   - مسارات السيرفر: تُسجَّل مع servers أو كـ plugin منفصل تحت /servers
- *   - مسار heartbeat: تحت /internal/agent
+ *   - مسارات السيرفر: app.register(agentsServerRoutes, { prefix: '/servers' })
+ *   - مسار heartbeat: app.register(agentsInternalRoutes, { prefix: '/internal/agent' })
  * ==================================================================
  */
 
@@ -38,11 +46,9 @@ import {
 
 import {
   serverIdParamsSchema,
-  serverIdAliasParamsSchema,
   enableTunnelBodySchema,
   agentHeartbeatBodySchema,
   listHeartbeatsQuerySchema,
-  rotateAgentTokenBodySchema,
   disableAgentBodySchema,
 } from './agents.schema.js'
 
@@ -110,13 +116,18 @@ function handleError(error: unknown, reply: FastifyReply) {
     'name' in error &&
     (error as { name: string }).name === 'ZodError'
   ) {
+    const issues = (error as { issues?: unknown }).issues
+
+    // تسجيل تفاصيل الخطأ عشان يظهر السبب الحقيقي للـ 400 في الـ console
+    reply.log.warn({ issues }, '[agents.routes] validation failed')
+
     return reply.status(400).send({
       success: false,
       error: {
         code: 'VALIDATION_ERROR',
         message: 'Validation failed',
         messageAr: 'فشل التحقق من البيانات',
-        details: (error as { issues?: unknown }).issues,
+        details: issues,
       },
     })
   }
@@ -142,22 +153,42 @@ function getActorId(request: FastifyRequest): string {
 }
 
 function parseServerId(params: unknown): string {
-  // يدعم :serverId أو :id
-  try {
-    return serverIdParamsSchema.parse(params).serverId
-  } catch {
-    return serverIdAliasParamsSchema.parse(params).serverId
-  }
+  return serverIdParamsSchema.parse(params).serverId
 }
 
 // ==================================================================
 // Plugin — مسارات مرتبطة بالسيرفر (تحت /servers)
-// يُسجَّل: app.register(agentsServerRoutes, { prefix: '/servers' })
+// يُسجَّل: app.register(agentsServerRoutes, { prefix: '/servers' })
 // ==================================================================
 
 export const agentsServerRoutes: FastifyPluginAsync = async (
   fastify: FastifyInstance,
 ) => {
+  // ----------------------------------------------------------------
+  // JSON parser متسامح مع الـ body الفاضي (داخل هذا الـ plugin فقط)
+  //
+  // المشكلة: طلب POST بـ Content-Type: application/json وبدون body
+  // يرجع 400 (FST_ERR_CTP_EMPTY_JSON_BODY) من Fastify قبل الـ handler.
+  // الحل: الـ body الفاضي يتحول لـ {} وباقي الحالات تمر على الـ parser
+  // الافتراضي (يحافظ على الحماية من __proto__ / constructor).
+  // ----------------------------------------------------------------
+  const defaultJsonParser = fastify.getDefaultJsonParser('error', 'error')
+
+  fastify.addContentTypeParser(
+    'application/json',
+    { parseAs: 'string' },
+    (request, body, done) => {
+      const raw = typeof body === 'string' ? body : String(body ?? '')
+
+      if (raw.trim() === '') {
+        done(null, {})
+        return
+      }
+
+      defaultJsonParser(request, raw, done)
+    },
+  )
+
   /**
    * POST /servers/:serverId/enable-tunnel
    * توليد توكن + أمر تثبيت
@@ -194,41 +225,13 @@ export const agentsServerRoutes: FastifyPluginAsync = async (
     },
   )
 
-  // توافق مع :id بدل :serverId
-  fastify.post(
-    '/:id/enable-tunnel',
-    {
-      preHandler: [
-        fastify.authenticate,
-        fastify.requirePermission('servers:enable-agent'),
-      ],
-    },
-    async (request, reply) => {
-      try {
-        const actorId = getActorId(request)
-        const serverId = parseServerId(request.params)
-        const body = enableTunnelBodySchema.parse(request.body ?? {})
-
-        const result = await enableTunnel(
-          fastify,
-          actorId,
-          serverId,
-          body,
-        )
-
-        return reply.status(200).send({
-          success: true,
-          data: result,
-        })
-      } catch (err) {
-        return handleError(err, reply)
-      }
-    },
-  )
-
   /**
    * POST /servers/:serverId/rotate-agent-token
    * توكن جديد + أمر تثبيت جديد
+   * صلاحية: servers:enable-agent
+   *
+   * ملاحظة: لا يوجد تحقق من الـ body هنا (التدوير يتم مباشرة
+   * ولا يعتمد على أي حقل من الـ body).
    */
   fastify.post(
     '/:serverId/rotate-agent-token',
@@ -242,9 +245,6 @@ export const agentsServerRoutes: FastifyPluginAsync = async (
       try {
         const actorId = getActorId(request)
         const serverId = parseServerId(request.params)
-        const body = rotateAgentTokenBodySchema.parse(request.body ?? {})
-        // body.confirm اختياري — التدوير يتم مباشرة
-        void body
 
         const result = await rotateAgentToken(
           fastify,
@@ -263,34 +263,10 @@ export const agentsServerRoutes: FastifyPluginAsync = async (
     },
   )
 
-  fastify.post(
-    '/:id/rotate-agent-token',
-    {
-      preHandler: [
-        fastify.authenticate,
-        fastify.requirePermission('servers:enable-agent'),
-      ],
-    },
-    async (request, reply) => {
-      try {
-        const actorId = getActorId(request)
-        const serverId = parseServerId(request.params)
-        const result = await rotateAgentToken(
-          fastify,
-          actorId,
-          serverId,
-          'script',
-        )
-        return reply.status(200).send({ success: true, data: result })
-      } catch (err) {
-        return handleError(err, reply)
-      }
-    },
-  )
-
   /**
    * POST /servers/:serverId/disable-agent
    * إيقاف النفق + إلغاء التوكن
+   * صلاحية: servers:enable-agent
    */
   fastify.post(
     '/:serverId/disable-agent',
@@ -317,32 +293,6 @@ export const agentsServerRoutes: FastifyPluginAsync = async (
           success: true,
           data: result,
         })
-      } catch (err) {
-        return handleError(err, reply)
-      }
-    },
-  )
-
-  fastify.post(
-    '/:id/disable-agent',
-    {
-      preHandler: [
-        fastify.authenticate,
-        fastify.requirePermission('servers:enable-agent'),
-      ],
-    },
-    async (request, reply) => {
-      try {
-        const actorId = getActorId(request)
-        const serverId = parseServerId(request.params)
-        const body = disableAgentBodySchema.parse(request.body ?? {})
-        const result = await disableAgent(
-          fastify,
-          actorId,
-          serverId,
-          body,
-        )
-        return reply.status(200).send({ success: true, data: result })
       } catch (err) {
         return handleError(err, reply)
       }
@@ -378,29 +328,10 @@ export const agentsServerRoutes: FastifyPluginAsync = async (
     },
   )
 
-  fastify.get(
-    '/:id/agent-status',
-    {
-      preHandler: [
-        fastify.authenticate,
-        fastify.requirePermission('servers:view'),
-      ],
-    },
-    async (request, reply) => {
-      try {
-        const actorId = getActorId(request)
-        const serverId = parseServerId(request.params)
-        const result = await getAgentStatus(fastify, actorId, serverId)
-        return reply.status(200).send({ success: true, data: result })
-      } catch (err) {
-        return handleError(err, reply)
-      }
-    },
-  )
-
   /**
    * GET /servers/:serverId/heartbeats
    * آخر النبضات
+   * صلاحية: servers:view
    */
   fastify.get(
     '/:serverId/heartbeats',
@@ -432,37 +363,11 @@ export const agentsServerRoutes: FastifyPluginAsync = async (
       }
     },
   )
-
-  fastify.get(
-    '/:id/heartbeats',
-    {
-      preHandler: [
-        fastify.authenticate,
-        fastify.requirePermission('servers:view'),
-      ],
-    },
-    async (request, reply) => {
-      try {
-        const actorId = getActorId(request)
-        const serverId = parseServerId(request.params)
-        const query = listHeartbeatsQuerySchema.parse(request.query)
-        const result = await listHeartbeats(
-          fastify,
-          actorId,
-          serverId,
-          query,
-        )
-        return reply.status(200).send({ success: true, data: result })
-      } catch (err) {
-        return handleError(err, reply)
-      }
-    },
-  )
 }
 
 // ==================================================================
 // Plugin — مسار داخلي للـ Agent
-// يُسجَّل: app.register(agentsInternalRoutes, { prefix: '/internal/agent' })
+// يُسجَّل: app.register(agentsInternalRoutes, { prefix: '/internal/agent' })
 // ==================================================================
 
 export const agentsInternalRoutes: FastifyPluginAsync = async (

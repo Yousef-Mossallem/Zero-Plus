@@ -4,15 +4,25 @@
 // ------------------------------------------------------------------
 // prefix: /servers  (متسجل في app.ts)
 //
-//   POST   /                         إنشاء سيرفر + تعليمات DNS      (OWNER, ADMIN)
-//   GET    /                         قائمة + فلاتر + pagination       (أي مستخدم)
-//   GET    /:id                      تفاصيل سيرفر                     (أي مستخدم)
-//   GET    /:id/dns                  تعليمات الـ DNS                  (أي مستخدم)
-//   PATCH  /:id                      تعديل                            (OWNER, ADMIN)
-//   POST   /:id/verify               فحص الـ DNS (ملكية / توجيه)      (OWNER, ADMIN)
-//   POST   /:id/probe                إعادة قياس السعة (Origin Probe)  (OWNER, ADMIN)
-//   POST   /:id/maintenance          تشغيل/إيقاف الصيانة              (OWNER, ADMIN)
-//   DELETE /:id?confirmDomain=       حذف بتأكيد الدومين               (OWNER, ADMIN)
+//   POST   /                         إنشاء سيرفر (ORIGIN: + DNS | GUARD: + خطوات النفق)  (OWNER, ADMIN)
+//   GET    /                         قائمة + فلاتر (setupMode / tunnelUp) + pagination    (أي مستخدم)
+//   GET    /:id                      تفاصيل سيرفر                                         (أي مستخدم)
+//   GET    /:id/dns                  تعليمات الـ DNS (ORIGIN فقط)                         (أي مستخدم)
+//   GET    /:id/setup                خطوات الإعداد حسب الوضع (DNS | نفق)                  (أي مستخدم)
+//   PATCH  /:id                      تعديل (بقواعد حسب وضع الربط)                         (OWNER, ADMIN)
+//   POST   /:id/verify               فحص الـ DNS (ORIGIN فقط)                             (OWNER, ADMIN)
+//   POST   /:id/probe                إعادة قياس السعة (ORIGIN فقط)                        (OWNER, ADMIN)
+//   POST   /:id/maintenance          تشغيل/إيقاف الصيانة                                  (OWNER, ADMIN)
+//   DELETE /:id?confirmDomain=       حذف بتأكيد الدومين                                   (OWNER, ADMIN)
+//
+// وضع الربط (setupMode: ORIGIN | GUARD):
+//   - بيتحدد في body الإنشاء فقط (الافتراضي ORIGIN لو مش مبعوت)
+//   - createServerSchema هي اللي بتتحقق منه وبتمرره للـ service
+//   - verify / probe / dns لسيرفر GUARD بيرجعوا 409 من الـ service
+//     (الـ route مفيهوش منطق خاص بالوضع، بيحوّل خطأ الـ service لـ HTTP بس)
+//
+// مسارات الـ Agent (enable-tunnel / rotate / disable / heartbeat) مش هنا،
+// ليها موديول/ملف راوتس خاص بيها.
 //
 // قواعد:
 //   1) organizationId بييجي من JWT فقط (مش من body/query/params)
@@ -20,20 +30,24 @@
 //   3) كل الـ Validation بـ Zod، وكل أخطاء الـ Service بتتحول لـ HTTP هنا
 // ==================================================================
 
+import type { ServerSetupMode } from '@prisma/client'
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import type { ZodError } from 'zod'
 
 import { ServerServiceError, ServersService } from './servers.service.js'
 
 import {
+  SETUP_MODE_ERRORS,
   createServerSchema,
   deleteServerQuerySchema,
+  getServerCapabilities,
   listServersQuerySchema,
   maintenanceSchema,
   serverIdParamsSchema,
   updateServerSchema,
   verifyServerSchema,
 } from './servers.schema.js'
+import type { SetupModeErrorCode } from './servers.schema.js'
 
 const SERVER_MANAGE_ROLES: string[] = ['OWNER', 'ADMIN']
 
@@ -61,6 +75,17 @@ function sendValidationError(
   })
 }
 
+/** رسالة نجاح الإنشاء (201) حسب وضع الربط */
+function createdMessage(setupMode: ServerSetupMode): string {
+  return setupMode === 'GUARD'
+    ? 'تم إضافة السيرفر. الخطوة التالية: فعّل الـ Guard (النفق) لتوليد توكن الـ Agent وأمر التثبيت'
+    : 'تم إضافة السيرفر. اتبع تعليمات الـ DNS لتفعيل الحماية'
+}
+
+function isSetupModeErrorCode(value: string): value is SetupModeErrorCode {
+  return Object.prototype.hasOwnProperty.call(SETUP_MODE_ERRORS, value)
+}
+
 function handleRouteError(
   request: FastifyRequest,
   reply: FastifyReply,
@@ -80,6 +105,17 @@ function handleRouteError(
       code: error.code,
       message: error.message,
       ...(error.details !== undefined && { details: error.details }),
+    })
+  }
+
+  // أخطاء قواعد وضع الربط لو اترمت خام (Error(<code>)) من أي مكان
+  if (error instanceof Error && isSetupModeErrorCode(error.message)) {
+    const info = SETUP_MODE_ERRORS[error.message]
+
+    return reply.status(info.status).send({
+      success: false,
+      code: info.code,
+      message: info.messageAr,
     })
   }
 
@@ -110,7 +146,10 @@ export async function serverRoutes(fastify: FastifyInstance) {
 
   // ================================================================
   // POST /servers
-  // Body: { domain, originIp, originPort?, sslEnabled?, mode? }
+  // Body:
+  //   ORIGIN (الافتراضي): { domain, originIp, originPort?, sslEnabled?, mode? }
+  //   GUARD             : { setupMode: "GUARD", domain, mode? }
+  // setupMode بيتحقق منه createServerSchema (والـ schema strict).
   // ================================================================
   fastify.post('/', manage, async (request, reply) => {
     const parsed = createServerSchema.safeParse(request.body)
@@ -122,16 +161,18 @@ export async function serverRoutes(fastify: FastifyInstance) {
     try {
       const { organizationId } = request.user
 
-      const { server, dns } = await service.createServer(
-        organizationId,
-        parsed.data,
-      )
+      const result = await service.createServer(organizationId, parsed.data)
 
       return reply.status(201).send({
         success: true,
-        message: 'تم إضافة السيرفر. اتبع تعليمات الـ DNS لتفعيل الحماية',
-        data: server,
-        dns,
+        message: createdMessage(result.setupMode),
+        data: result.server,
+        setupMode: result.setupMode,
+        capabilities: result.capabilities,
+        // ORIGIN: تعليمات DNS (غير موجودة لـ GUARD)
+        ...(result.dns && { dns: result.dns }),
+        // GUARD: خطوات تفعيل النفق (غير موجودة لـ ORIGIN)
+        ...(result.guard && { guard: result.guard }),
       })
     } catch (error) {
       return handleRouteError(request, reply, error)
@@ -139,7 +180,8 @@ export async function serverRoutes(fastify: FastifyInstance) {
   })
 
   // ================================================================
-  // GET /servers?page=&limit=&status=&mode=&dnsVerified=&search=&sortBy=&sortOrder=
+  // GET /servers?page=&limit=&status=&mode=&setupMode=&dnsVerified=&tunnelUp=
+  //             &search=&sortBy=&sortOrder=
   // ================================================================
   fastify.get('/', read, async (request, reply) => {
     const parsed = listServersQuerySchema.safeParse(request.query)
@@ -158,6 +200,7 @@ export async function serverRoutes(fastify: FastifyInstance) {
         data: result.servers,
         pagination: result.pagination,
         summary: result.summary,
+        setupSummary: result.setupSummary,
       })
     } catch (error) {
       return handleRouteError(request, reply, error)
@@ -179,7 +222,11 @@ export async function serverRoutes(fastify: FastifyInstance) {
 
       const server = await service.getServerById(organizationId, params.data.id)
 
-      return reply.status(200).send({ success: true, data: server })
+      return reply.status(200).send({
+        success: true,
+        data: server,
+        capabilities: getServerCapabilities(server.setupMode),
+      })
     } catch (error) {
       return handleRouteError(request, reply, error)
     }
@@ -187,6 +234,7 @@ export async function serverRoutes(fastify: FastifyInstance) {
 
   // ================================================================
   // GET /servers/:id/dns
+  // ORIGIN فقط — لسيرفر GUARD الـ service يرد 409
   // ================================================================
   fastify.get('/:id/dns', read, async (request, reply) => {
     const params = serverIdParamsSchema.safeParse(request.params)
@@ -220,8 +268,51 @@ export async function serverRoutes(fastify: FastifyInstance) {
   })
 
   // ================================================================
+  // GET /servers/:id/setup
+  // خطوات الإعداد حسب وضع السيرفر:
+  //   ORIGIN → dns | GUARD → guard (خطوات النفق)
+  // (مسار إضافي: بيسمح للواجهة تعيد عرض الخطوات بعد refresh)
+  // ================================================================
+  fastify.get('/:id/setup', read, async (request, reply) => {
+    const params = serverIdParamsSchema.safeParse(request.params)
+
+    if (!params.success) {
+      return sendValidationError(reply, 'معرف السيرفر غير صالح', params.error)
+    }
+
+    try {
+      const { organizationId } = request.user
+
+      const result = await service.getSetupInstructions(
+        organizationId,
+        params.data.id,
+      )
+
+      return reply.status(200).send({
+        success: true,
+        data: {
+          serverId: result.server.id,
+          status: result.server.status,
+          setupMode: result.setupMode,
+          dnsVerified: result.server.dnsVerified,
+          gatewayReachable: result.server.gatewayReachable,
+          tunnelUp: result.server.tunnelUp,
+          lastAgentAt: result.server.lastAgentAt,
+        },
+        capabilities: result.capabilities,
+        ...(result.dns && { dns: result.dns }),
+        ...(result.guard && { guard: result.guard }),
+      })
+    } catch (error) {
+      return handleRouteError(request, reply, error)
+    }
+  })
+
+  // ================================================================
   // PATCH /servers/:id
-  // Body (واحد على الأقل): { domain?, originIp?, originPort?, sslEnabled?, mode? }
+  // Body (واحد على الأقل): { domain?, originIp?, originPort?, sslEnabled?, mode?, setupMode? }
+  //   - setupMode مقبول بس لو نفس القيمة الحالية (غير كده 400 SETUP_MODE_IMMUTABLE)
+  //   - GUARD: originIp / originPort / sslEnabled مرفوضين (400)
   // ================================================================
   fastify.patch('/:id', manage, async (request, reply) => {
     const params = serverIdParamsSchema.safeParse(request.params)
@@ -266,6 +357,7 @@ export async function serverRoutes(fastify: FastifyInstance) {
   // ================================================================
   // POST /servers/:id/verify
   // Body (اختياري): { "step": "ownership" | "routing" | "all" }  (الافتراضي all)
+  // ORIGIN فقط — لسيرفر GUARD الـ service يرد 409
   // ================================================================
   fastify.post('/:id/verify', manage, async (request, reply) => {
     const params = serverIdParamsSchema.safeParse(request.params)
@@ -310,6 +402,7 @@ export async function serverRoutes(fastify: FastifyInstance) {
   // ================================================================
   // POST /servers/:id/probe
   // إعادة قياس السعة (Origin Probe) — OWNER, ADMIN
+  // ORIGIN فقط — لسيرفر GUARD الـ service يرد 409 PROBE_NOT_AVAILABLE_FOR_GUARD
   // يرد 202 فورًا؛ النتيجة توصل عبر Socket بعد انتهاء القياس
   // ================================================================
   fastify.post('/:id/probe', manage, async (request, reply) => {

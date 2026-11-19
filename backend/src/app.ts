@@ -2,6 +2,15 @@
 // ==================================================================
 // Zero Plus - Fastify Application Builder
 // هنا بنجمع كل الـ Plugins والـ Modules مع بعض
+//
+// Modules:
+//   auth · organizations · team · policies · servers · agents
+//   reputation · events · notifications · reports · dashboard
+//   simulations
+//
+// Servers setup modes:
+//   ORIGIN — DNS / CNAME / Origin Probe
+//   GUARD  — Agent tunnel (enable-tunnel + heartbeat)
 // ==================================================================
 
 import Fastify from 'fastify'
@@ -46,16 +55,17 @@ import { reportRoutes } from './modules/reports/reports.routes.js'
 
 import { dashboardRoutes } from './modules/dashboard/dashboard.routes.js'
 
-// Simulation Lab
 import { simulationsRoutes } from './modules/simulations/simulations.routes.js'
 
-// Team & Permissions
 import teamRoutes from './modules/team/team.routes.js'
 
-// Agent — نفق + Heartbeat (من غير تعديل modules/servers)
 import agentsServerRoutes, {
   agentsInternalRoutes,
 } from './modules/agents/agents.routes.js'
+
+// Sweeper اختياري — يعلّم Guard الساكت OFFLINE
+// لو الدالة مش مُصدَّرة من agents.service احذف السطر والاستدعاء تحت
+import { startAgentSweeper } from './modules/agents/agents.service.js'
 
 // ------------------------------------------------------------------
 // بناء التطبيق
@@ -104,13 +114,13 @@ export async function buildApp() {
   await app.register(socketPlugin)
 
   // ================================================================
-  // 2.1 DNS config check
+  // 2.1 Startup checks
   // ================================================================
   const dnsConfig = readDnsConfig()
 
   if (!dnsConfig.cnameTarget && dnsConfig.gatewayIps.length === 0) {
     app.log.warn(
-      'GATEWAY_CNAME_TARGET و GATEWAY_PUBLIC_IPS مش مضبوطين: تعليمات توجيه الـ DNS هتبقى فاضية وخطوة verify (routing) هترجع 503',
+      'GATEWAY_CNAME_TARGET و GATEWAY_PUBLIC_IPS مش مضبوطين: تعليمات توجيه الـ DNS (ORIGIN) هتبقى فاضية وخطوة verify (routing) هترجع 503',
     )
   } else {
     app.log.info(
@@ -118,7 +128,7 @@ export async function buildApp() {
         cnameTarget: dnsConfig.cnameTarget,
         gatewayIps: dnsConfig.gatewayIps,
       },
-      'DNS routing config loaded',
+      'DNS routing config loaded (ORIGIN setup)',
     )
   }
 
@@ -168,10 +178,13 @@ export async function buildApp() {
     )
   }
 
-  // Agent — روابط التثبيت و API
-  if (!process.env.AGENT_INSTALL_SCRIPT_URL && !process.env.AGENT_DOWNLOAD_BASE_URL) {
+  // Agent / GUARD — روابط التثبيت و API
+  if (
+    !process.env.AGENT_INSTALL_SCRIPT_URL &&
+    !process.env.AGENT_DOWNLOAD_BASE_URL
+  ) {
     app.log.warn(
-      'AGENT_INSTALL_SCRIPT_URL / AGENT_DOWNLOAD_BASE_URL مش مضبوطين: أمر تثبيت الـ Agent هيستخدم رابط GitHub افتراضي',
+      'AGENT_INSTALL_SCRIPT_URL / AGENT_DOWNLOAD_BASE_URL مش مضبوطين: أمر تثبيت الـ Agent (GUARD) هيستخدم رابط GitHub افتراضي',
     )
   }
   if (!process.env.AGENT_API_BASE_URL && !process.env.GATEWAY_PUBLIC_URL) {
@@ -227,6 +240,7 @@ export async function buildApp() {
   // 5. Register Modules (Routes)
   // ================================================================
 
+  // Auth (Passkeys + قبول دعوة الفريق)
   await app.register(authRoutes.authRoutes, { prefix: '/auth' })
 
   await app.register(organizationRoutes, { prefix: '/organizations' })
@@ -234,22 +248,23 @@ export async function buildApp() {
   // Team & Permissions
   await app.register(teamRoutes, { prefix: '/team' })
 
+  // Policies (Dashboard + Gateway resolve — يدعم originIp null / setupMode)
   await app.register(policiesRoutes, { prefix: '/policies' })
   await app.register(policiesInternalRoutes, {
     prefix: '/internal/gateway',
   })
 
-  // Servers (القديم — بدون تعديل)
+  // Servers — ORIGIN + GUARD عند الإنشاء (setupMode)
   await app.register(serverRoutes, { prefix: '/servers' })
   await app.register(serversInternalRoutes, {
     prefix: '/internal/gateway',
   })
 
-  // Agent على نفس بادئ /servers (enable-tunnel, status, heartbeats, ...)
-  // من غير ما نلمس modules/servers
+  // Agent dashboard routes على نفس /servers
+  // enable-tunnel · rotate · disable · agent-status · heartbeats
   await app.register(agentsServerRoutes, { prefix: '/servers' })
 
-  // Heartbeat من الـ Agent (مصادقة AGENT_TOKEN)
+  // Heartbeat من الـ Agent (AGENT_TOKEN فقط)
   await app.register(agentsInternalRoutes, {
     prefix: '/internal/agent',
   })
@@ -270,8 +285,26 @@ export async function buildApp() {
 
   await app.register(dashboardRoutes, { prefix: '/dashboard' })
 
-  // Simulation Lab
   await app.register(simulationsRoutes, { prefix: '/simulations' })
+
+  // ================================================================
+  // 6. Background jobs (اختياري)
+  // ================================================================
+  // AGENT_SWEEPER_ENABLED=false لتعطيل التعليم التلقائي لـ Guard الساكت
+  const sweeperDisabled =
+    process.env.AGENT_SWEEPER_ENABLED === '0' ||
+    process.env.AGENT_SWEEPER_ENABLED === 'false'
+
+  if (!sweeperDisabled && typeof startAgentSweeper === 'function') {
+    try {
+      startAgentSweeper(app)
+      app.log.info('Agent stale-guard sweeper started')
+    } catch (err) {
+      app.log.warn({ err }, 'Failed to start agent sweeper (non-fatal)')
+    }
+  } else if (sweeperDisabled) {
+    app.log.info('Agent sweeper disabled via AGENT_SWEEPER_ENABLED')
+  }
 
   return app
 }

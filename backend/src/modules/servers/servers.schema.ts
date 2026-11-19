@@ -3,22 +3,35 @@
 // Zero Plus - Servers Validation Schemas
 // ------------------------------------------------------------------
 // مصدر الحقيقة لكل ما يخص السيرفرات المحمية، ومتطابق مع model Server
-// في schema.prisma (originIp / originPort / sslEnabled / mode ...).
+// في schema.prisma (setupMode / originIp? / originPort / sslEnabled / mode ...).
+//
+// مساران منفصلان تمامًا (ممنوع يتلخبطوا):
+//
+//   ORIGIN  → مسار تقليدي كامل:
+//             دومين + originIp (إلزامي) + DNS (TXT/CNAME/A) + verify + Origin Probe.
+//             ملهوش دعوة بتفعيل النفق.
+//
+//   GUARD   → مسار Agent / نفق فقط:
+//             دومين فقط. ما فيش originIp ولا DNS routing ولا Probe.
+//             التفعيل بعد الإنشاء عن طريق enable-tunnel والـ heartbeat.
+//
+// وضع الربط (setupMode) بيتحدد عند الإنشاء فقط، والتحويل بينهم
+// ميزة منفصلة لاحقًا (PATCH بيرفض تغييره).
 //
 // Dashboard (JWT)  → prefix: /servers
-//   POST   /                       إنشاء سيرفر (+ تعليمات DNS)
-//   GET    /                       قائمة السيرفرات
+//   POST   /                       إنشاء سيرفر (ORIGIN: + تعليمات DNS | GUARD: + خطوات النفق)
+//   GET    /                       قائمة السيرفرات (فلتر setupMode / tunnelUp)
 //   GET    /:id                    تفاصيل سيرفر
-//   PATCH  /:id                    تعديل
+//   PATCH  /:id                    تعديل (بقواعد حسب وضع الربط)
 //   DELETE /:id?confirmDomain=     حذف (بتأكيد اسم الدومين)
-//   GET    /:id/dns                تعليمات الـ DNS
-//   POST   /:id/verify             فحص الـ DNS (ملكية / توجيه / الاتنين)
+//   GET    /:id/dns                تعليمات الـ DNS (ORIGIN فقط)
+//   POST   /:id/verify             فحص الـ DNS (ORIGIN فقط)
 //   POST   /:id/maintenance        تشغيل/إيقاف وضع الصيانة
 //
 // Gateway (X-Gateway-Key) → prefix: /internal/gateway
 //   GET  /servers                  مزامنة كل السيرفرات (cursor + updatedSince)
 //   GET  /servers/resolve?host=    سيرفر واحد من الـ Host
-//   POST /servers/:id/health       الـ Gateway يبلّغ بحالة السيرفر (+ نتائج Probe)
+//   POST /servers/:id/health       الـ Gateway يبلّغ بحالة السيرفر (+ نتائج Probe لـ ORIGIN فقط)
 //
 // ملاحظة: متوافق مع Zod v3 و v4 (من غير required_error).
 // ==================================================================
@@ -26,11 +39,23 @@
 import { isIP } from 'node:net'
 import { domainToASCII } from 'node:url'
 import { z } from 'zod'
-import type { ServerMode, ServerStatus } from '@prisma/client'
+import type {
+  ServerMode,
+  ServerSetupMode,
+  ServerStatus,
+} from '@prisma/client'
 
 // ==================================================================
 // 1) Enums (متطابقة مع Prisma، والـ TypeScript هيكسر الـ build لو اختلفت)
 // ==================================================================
+
+export const SERVER_SETUP_MODES = [
+  'ORIGIN',
+  'GUARD',
+] as const satisfies readonly ServerSetupMode[]
+
+/** الافتراضي ORIGIN عشان السيرفرات القديمة وأي عميل لا يرسل setupMode */
+export const DEFAULT_SETUP_MODE: ServerSetupMode = 'ORIGIN'
 
 export const SERVER_MODES = [
   'PROTECT',
@@ -45,8 +70,133 @@ export const SERVER_STATUSES = [
   'MAINTENANCE',
 ] as const satisfies readonly ServerStatus[]
 
+/** وصف الوضعين للواجهة (يُعرض في اختيار نوع الربط) */
+export const SETUP_MODE_META = {
+  ORIGIN: {
+    label: 'Origin',
+    labelAr: 'ربط تقليدي (Origin)',
+    description:
+      'Point your domain to the Gateway via DNS and provide your origin server IP. Includes DNS verification and an Origin Probe.',
+    descriptionAr:
+      'وجّه الدومين للـ Gateway عبر DNS واكتب عنوان السيرفر الأصلي. يشمل التحقق من DNS وقياس قدرة الأصل (Origin Probe).',
+  },
+  GUARD: {
+    label: 'Guard',
+    labelAr: 'حارس (Agent / نفق)',
+    description:
+      'Install a lightweight agent on your server. It opens a secure tunnel to the platform, so no origin IP is required.',
+    descriptionAr:
+      'ثبّت Agent خفيف على السيرفر يفتح نفقًا آمنًا مع المنصة، من غير ما تحتاج تكتب عنوان الأصل.',
+  },
+} as const satisfies Record<
+  ServerSetupMode,
+  { label: string; labelAr: string; description: string; descriptionAr: string }
+>
+
 // ==================================================================
-// 2) الدومين
+// 2) قدرات كل وضع (Capabilities) — الفاصل بين المسارين
+// ==================================================================
+// أي ميزة خاصة بمسار واحد بتتفحص من هنا. الـ service / agents.service
+// يستدعوا assertFeature() قبل تنفيذ أي إجراء، فمفيش حد يقدر يعمل
+// verify لسيرفر Guard ولا enable-tunnel لسيرفر Origin بالغلط.
+
+export type ServerFeature =
+  | 'DNS_INSTRUCTIONS' // GET /:id/dns
+  | 'DNS_VERIFY' // POST /:id/verify
+  | 'ORIGIN_PROBE' // قياس قدرة الأصل
+  | 'ORIGIN_FIELDS' // originIp / originPort / sslEnabled
+  | 'AGENT_TUNNEL' // enable-tunnel / rotate / disable / heartbeat
+
+const SETUP_MODE_FEATURES = {
+  ORIGIN: new Set<ServerFeature>([
+    'DNS_INSTRUCTIONS',
+    'DNS_VERIFY',
+    'ORIGIN_PROBE',
+    'ORIGIN_FIELDS',
+  ]),
+  GUARD: new Set<ServerFeature>(['AGENT_TUNNEL']),
+} as const satisfies Record<ServerSetupMode, ReadonlySet<ServerFeature>>
+
+export function supportsFeature(
+  setupMode: ServerSetupMode,
+  feature: ServerFeature,
+): boolean {
+  return SETUP_MODE_FEATURES[setupMode].has(feature)
+}
+
+export function getServerCapabilities(
+  setupMode: ServerSetupMode,
+): Record<ServerFeature, boolean> {
+  return {
+    DNS_INSTRUCTIONS: supportsFeature(setupMode, 'DNS_INSTRUCTIONS'),
+    DNS_VERIFY: supportsFeature(setupMode, 'DNS_VERIFY'),
+    ORIGIN_PROBE: supportsFeature(setupMode, 'ORIGIN_PROBE'),
+    ORIGIN_FIELDS: supportsFeature(setupMode, 'ORIGIN_FIELDS'),
+    AGENT_TUNNEL: supportsFeature(setupMode, 'AGENT_TUNNEL'),
+  }
+}
+
+/**
+ * يرمي Error('FEATURE_NOT_AVAILABLE_FOR_SETUP_MODE') لو الميزة مش
+ * متاحة للوضع ده. أضف الكود في ERROR_MAP بتاع الراوت (شوف
+ * SETUP_MODE_ERRORS تحت).
+ */
+export function assertFeature(
+  setupMode: ServerSetupMode,
+  feature: ServerFeature,
+): void {
+  if (!supportsFeature(setupMode, feature)) {
+    throw new Error('FEATURE_NOT_AVAILABLE_FOR_SETUP_MODE')
+  }
+}
+
+// ==================================================================
+// 3) أخطاء وضع الربط (بنفس شكل ERROR_MAP في الراوتات)
+// ==================================================================
+
+export type SetupModeErrorCode =
+  | 'SETUP_MODE_IMMUTABLE'
+  | 'ORIGIN_FIELDS_NOT_ALLOWED_FOR_GUARD'
+  | 'FEATURE_NOT_AVAILABLE_FOR_SETUP_MODE'
+  | 'EMPTY_UPDATE'
+
+/**
+ * استخدمها في ERROR_MAP:  { ...ERROR_MAP, ...SETUP_MODE_ERRORS }
+ */
+export const SETUP_MODE_ERRORS: Record<
+  SetupModeErrorCode,
+  { status: number; code: SetupModeErrorCode; message: string; messageAr: string }
+> = {
+  SETUP_MODE_IMMUTABLE: {
+    status: 400,
+    code: 'SETUP_MODE_IMMUTABLE',
+    message: 'The setup mode cannot be changed after the server is created',
+    messageAr: 'لا يمكن تغيير وضع الربط (Origin / Guard) بعد إنشاء السيرفر',
+  },
+  ORIGIN_FIELDS_NOT_ALLOWED_FOR_GUARD: {
+    status: 400,
+    code: 'ORIGIN_FIELDS_NOT_ALLOWED_FOR_GUARD',
+    message:
+      'originIp / originPort / sslEnabled do not apply to a Guard (agent) server',
+    messageAr:
+      'حقول الأصل (originIp / originPort / sslEnabled) لا تنطبق على سيرفر Guard',
+  },
+  FEATURE_NOT_AVAILABLE_FOR_SETUP_MODE: {
+    status: 409,
+    code: 'FEATURE_NOT_AVAILABLE_FOR_SETUP_MODE',
+    message: 'This action is not available for this server setup mode',
+    messageAr: 'هذا الإجراء غير متاح لوضع الربط الخاص بهذا السيرفر',
+  },
+  EMPTY_UPDATE: {
+    status: 400,
+    code: 'EMPTY_UPDATE',
+    message: 'Nothing to update',
+    messageAr: 'لا توجد حقول للتعديل',
+  },
+}
+
+// ==================================================================
+// 4) الدومين
 // ==================================================================
 
 export type DomainCheck =
@@ -169,7 +319,7 @@ export function normalizeHostHeader(raw: string): string | null {
 }
 
 // ==================================================================
-// 3) عنوان الـ Origin (IPv4 فقط في الـ MVP)
+// 5) عنوان الـ Origin (IPv4 فقط في الـ MVP) — لمسار ORIGIN فقط
 // ==================================================================
 
 export type IpClass = 'PUBLIC' | 'PRIVATE' | 'FORBIDDEN'
@@ -240,7 +390,7 @@ export function validateOriginIp(raw: string): OriginIpCheck {
 }
 
 // ==================================================================
-// 4) المنفذ
+// 6) المنفذ
 // ==================================================================
 
 const BLOCKED_ORIGIN_PORTS: ReadonlySet<number> = new Set([
@@ -248,8 +398,12 @@ const BLOCKED_ORIGIN_PORTS: ReadonlySet<number> = new Set([
   11211, 27017,
 ])
 
+/** القيم الافتراضية المخزّنة لسيرفر Guard (مش بتُستخدم، بس الأعمدة لها defaults) */
+const GUARD_DEFAULT_ORIGIN_PORT = 443
+const GUARD_DEFAULT_SSL_ENABLED = true
+
 // ==================================================================
-// 5) تعريف الحقول (مرة واحدة)
+// 7) تعريف الحقول (مرة واحدة)
 // ==================================================================
 
 const domainField = z
@@ -297,27 +451,152 @@ const modeField = z.enum(SERVER_MODES, {
   message: 'mode يجب أن يكون PROTECT أو MONITOR_ONLY',
 })
 
+const setupModeField = z.enum(SERVER_SETUP_MODES, {
+  message: 'setupMode يجب أن يكون ORIGIN أو GUARD',
+})
+
+/** null / undefined / نص فاضي = "مش مبعوت" */
+const isBlank = (value: unknown): boolean =>
+  value === undefined ||
+  value === null ||
+  (typeof value === 'string' && value.trim() === '')
+
 // ==================================================================
-// 6) إنشاء سيرفر  (POST /servers)
+// 8) إنشاء سيرفر  (POST /servers)
 // ==================================================================
+//
+//   ORIGIN: domain + originIp (إلزامي) + originPort + sslEnabled (اختياريين)
+//   GUARD : domain فقط. أي originIp / originPort / sslEnabled مبعوتين
+//           بالغلط بيتتجاهلوا ولا يتخزنوا (originIp = null دايمًا).
+//
+// الناتج union مميّز بـ setupMode، فالـ service يعمل narrowing مباشر:
+//   if (input.setupMode === 'ORIGIN') { input.originIp  // string }
+//   else                              { input.originIp  // null   }
+
+export interface CreateOriginServerInput {
+  setupMode: 'ORIGIN'
+  domain: string
+  originIp: string
+  originPort: number
+  sslEnabled: boolean
+  mode: ServerMode | undefined
+}
+
+export interface CreateGuardServerInput {
+  setupMode: 'GUARD'
+  domain: string
+  originIp: null
+  originPort: number
+  sslEnabled: boolean
+  mode: ServerMode | undefined
+}
+
+export type CreateServerInput =
+  | CreateOriginServerInput
+  | CreateGuardServerInput
 
 export const createServerSchema = z
   .object({
+    setupMode: setupModeField.default(DEFAULT_SETUP_MODE),
     domain: domainField,
-    originIp: originIpField,
-    originPort: originPortField.default(443),
-    sslEnabled: sslEnabledField.optional(),
+
+    // حقول الأصل: بتتفحص جوه الـ transform حسب الوضع، مش هنا
+    originIp: z.unknown().optional(),
+    originPort: z.unknown().optional(),
+    sslEnabled: z.unknown().optional(),
+
     mode: modeField.optional(),
   })
   .strict()
-  .transform((data) => ({
-    ...data,
-    sslEnabled: data.sslEnabled ?? data.originPort !== 80,
-  }))
+  .transform((data, ctx): CreateServerInput => {
+    // ---------------- GUARD ----------------
+    if (data.setupMode === 'GUARD') {
+      return {
+        setupMode: 'GUARD',
+        domain: data.domain,
+        originIp: null,
+        originPort: GUARD_DEFAULT_ORIGIN_PORT,
+        sslEnabled: GUARD_DEFAULT_SSL_ENABLED,
+        mode: data.mode,
+      }
+    }
+
+    // ---------------- ORIGIN ----------------
+    let hasIssues = false
+
+    const report = (path: string, message: string) => {
+      hasIssues = true
+      ctx.addIssue({ code: 'custom', message, path: [path] })
+    }
+
+    // originIp (إلزامي)
+    let originIp = ''
+    if (isBlank(data.originIp)) {
+      report('originIp', 'عنوان IP الأصل مطلوب عند اختيار وضع Origin')
+    } else {
+      const parsed = originIpField.safeParse(data.originIp)
+      if (parsed.success) {
+        originIp = parsed.data
+      } else {
+        report(
+          'originIp',
+          parsed.error.issues[0]?.message ?? 'عنوان IP غير صحيح',
+        )
+      }
+    }
+
+    // originPort (اختياري → 443)
+    let originPort = 443
+    if (!isBlank(data.originPort)) {
+      const parsed = originPortField.safeParse(data.originPort)
+      if (parsed.success) {
+        originPort = parsed.data
+      } else {
+        report(
+          'originPort',
+          parsed.error.issues[0]?.message ?? 'المنفذ غير صحيح',
+        )
+      }
+    }
+
+    // sslEnabled (اختياري → حسب المنفذ)
+    let sslEnabled: boolean | undefined
+    if (data.sslEnabled !== undefined && data.sslEnabled !== null) {
+      const parsed = sslEnabledField.safeParse(data.sslEnabled)
+      if (parsed.success) {
+        sslEnabled = parsed.data
+      } else {
+        report(
+          'sslEnabled',
+          parsed.error.issues[0]?.message ?? 'sslEnabled غير صحيح',
+        )
+      }
+    }
+
+    if (hasIssues) return z.NEVER
+
+    return {
+      setupMode: 'ORIGIN',
+      domain: data.domain,
+      originIp,
+      originPort,
+      sslEnabled: sslEnabled ?? originPort !== 80,
+      mode: data.mode,
+    }
+  })
 
 // ==================================================================
-// 7) تعديل سيرفر  (PATCH /servers/:id)
+// 9) تعديل سيرفر  (PATCH /servers/:id)
 // ==================================================================
+//
+// - setupMode ما يتغيرش بعد الإنشاء. مقبول في الـ body فقط لو نفس
+//   القيمة الحالية (عشان الفرونت اللي بيبعت الكائن كله)، ويتشال من
+//   البيانات قبل الحفظ.
+// - سيرفر GUARD: يرفض originIp / originPort / sslEnabled.
+// - سيرفر ORIGIN: originIp ما ينفعش يتفرّغ.
+//
+// الـ schema بتتحقق من الشكل بس، وقواعد الوضع بتتطبّق في
+// resolveServerUpdate() بعد ما الـ service يجيب السيرفر الحالي.
 
 export const updateServerSchema = z
   .object({
@@ -326,6 +605,7 @@ export const updateServerSchema = z
     originPort: originPortField,
     sslEnabled: sslEnabledField,
     mode: modeField,
+    setupMode: setupModeField,
   })
   .partial()
   .strict()
@@ -333,8 +613,52 @@ export const updateServerSchema = z
     message: 'يجب إرسال حقل واحد على الأقل للتعديل',
   })
 
+/** البيانات الجاهزة للحفظ (من غير setupMode) */
+export type ResolvedServerUpdate = Omit<
+  z.infer<typeof updateServerSchema>,
+  'setupMode'
+>
+
+/**
+ * يطبّق قواعد وضع الربط على التعديل.
+ * يرمي Error(<SetupModeErrorCode>) عند المخالفة، أو يرجّع البيانات
+ * النظيفة للحفظ.
+ *
+ * الاستخدام في الـ service:
+ *   const input = updateServerSchema.parse(body)
+ *   const data  = resolveServerUpdate(existingServer, input)
+ *   await prisma.server.update({ where: { id }, data })
+ */
+export function resolveServerUpdate(
+  existing: { setupMode: ServerSetupMode },
+  input: z.infer<typeof updateServerSchema>,
+): ResolvedServerUpdate {
+  const { setupMode, ...data } = input
+
+  if (setupMode !== undefined && setupMode !== existing.setupMode) {
+    throw new Error('SETUP_MODE_IMMUTABLE' satisfies SetupModeErrorCode)
+  }
+
+  if (
+    !supportsFeature(existing.setupMode, 'ORIGIN_FIELDS') &&
+    (data.originIp !== undefined ||
+      data.originPort !== undefined ||
+      data.sslEnabled !== undefined)
+  ) {
+    throw new Error(
+      'ORIGIN_FIELDS_NOT_ALLOWED_FOR_GUARD' satisfies SetupModeErrorCode,
+    )
+  }
+
+  if (!Object.values(data).some((value) => value !== undefined)) {
+    throw new Error('EMPTY_UPDATE' satisfies SetupModeErrorCode)
+  }
+
+  return data
+}
+
 // ==================================================================
-// 8) Params / Query / Actions للـ Dashboard
+// 10) Params / Query / Actions للـ Dashboard
 // ==================================================================
 
 export const serverIdParamsSchema = z.object({
@@ -366,18 +690,27 @@ export const listServersQuerySchema = z.object({
 
   status: z.enum(SERVER_STATUSES).optional(),
   mode: z.enum(SERVER_MODES).optional(),
+
+  /** ORIGIN | GUARD — تصفية القائمة حسب وضع الربط */
+  setupMode: z.enum(SERVER_SETUP_MODES).optional(),
+
+  /** خاص بـ ORIGIN */
   dnsVerified: queryBoolean,
+
+  /** خاص بـ GUARD (النفق شغال دلوقتي؟) */
+  tunnelUp: queryBoolean,
 
   search: z.string().trim().min(1).max(100).optional(),
 
   sortBy: z
-    .enum(['createdAt', 'updatedAt', 'domain', 'status'])
+    .enum(['createdAt', 'updatedAt', 'domain', 'status', 'lastAgentAt'])
     .default('createdAt'),
   sortOrder: z.enum(['asc', 'desc']).default('desc'),
 })
 
 export const VERIFY_STEPS = ['ownership', 'routing', 'all'] as const
 
+/** POST /:id/verify — لسيرفرات ORIGIN فقط (الـ service يستدعي assertFeature('DNS_VERIFY')) */
 export const verifyServerSchema = z
   .object({
     step: z.enum(VERIFY_STEPS).default('all'),
@@ -411,7 +744,7 @@ export const deleteServerQuerySchema = z.object({
 })
 
 // ==================================================================
-// 9) الـ Gateway
+// 11) الـ Gateway
 // ==================================================================
 
 export const gatewayServersQuerySchema = z.object({
@@ -430,7 +763,7 @@ export const gatewayServerResolveQuerySchema = z.object({
 })
 
 // ---- POST /internal/gateway/servers/:id/health ----
-// يدعم تقارير الصحة العادية + نتائج Origin Probe الكاملة
+// يدعم تقارير الصحة العادية + نتائج Origin Probe الكاملة (ORIGIN فقط)
 
 const probeStepSchema = z.object({
   connections: z.number().int().min(1).max(2000),
@@ -473,8 +806,47 @@ export const gatewayHealthReportSchema = z
     { message: 'يجب إرسال قيمة صحة واحدة على الأقل' },
   )
 
+export type GatewayHealthReport = z.infer<typeof gatewayHealthReportSchema>
+
+/** حقول الـ Origin Probe: لا تنطبق على سيرفر GUARD (سعته بتيجي من الـ Agent) */
+const ORIGIN_ONLY_HEALTH_FIELDS = [
+  'originReachable',
+  'loadLatencyP99Ms',
+  'maxRequestsPerSecond',
+  'safeRequestsPerSecond',
+  'probeErrorRate',
+  'probeConfidence',
+  'probeRecommendation',
+  'probeDetails',
+] as const satisfies readonly (keyof GatewayHealthReport)[]
+
+/**
+ * يشيل حقول الأصل/الـ Probe من تقرير الصحة لو السيرفر GUARD.
+ * ما بيرميش خطأ (الـ Gateway يفضل يبعت نفس التقرير)، بس الـ service
+ * ما يخزّنش بيانات أورجن لسيرفر ملوش أورجن.
+ */
+export function sanitizeHealthReportForSetupMode(
+  setupMode: ServerSetupMode,
+  report: GatewayHealthReport,
+): GatewayHealthReport {
+  if (supportsFeature(setupMode, 'ORIGIN_PROBE')) return report
+
+  const cleaned: GatewayHealthReport = { ...report }
+  for (const key of ORIGIN_ONLY_HEALTH_FIELDS) {
+    delete cleaned[key]
+  }
+  return cleaned
+}
+
+/** هل التقرير (بعد التنظيف) لسه فيه قيمة صحة؟ لو لأ، الـ service يتجاهله */
+export function hasHealthValues(report: GatewayHealthReport): boolean {
+  return Object.entries(report).some(
+    ([key, value]) => key !== 'lastError' && value !== undefined,
+  )
+}
+
 // ==================================================================
-// 10) إعدادات وتعليمات الـ DNS
+// 12) إعدادات وتعليمات الـ DNS (ORIGIN فقط)
 // ==================================================================
 
 export const DNS_TXT_LABEL = '_zeroplus-verify'
@@ -519,6 +891,11 @@ export interface DnsInstructions {
   warnings: string[]
 }
 
+/**
+ * تعليمات DNS الكاملة — لمسار ORIGIN فقط.
+ * (للتوافق: التوقيع ما اتغيرش. لو عايز رد يناسب الوضعين استخدم
+ *  buildSetupInstructions تحت.)
+ */
 export function buildDnsInstructions(
   server: { domain: string; verificationToken: string },
   config: DnsConfig,
@@ -583,8 +960,63 @@ export function buildDnsInstructions(
   }
 }
 
+// ------------------------------------------------------------------
+// خطوات التفعيل حسب الوضع (للرد على POST /servers و GET /servers/:id/setup)
+// ------------------------------------------------------------------
+
+export interface GuardInstructions {
+  /** الخطوة اللي الواجهة تعرض زرارها بعد الإنشاء */
+  nextAction: 'ENABLE_TUNNEL'
+  steps: string[]
+  warnings: string[]
+}
+
+export type ServerSetupInstructions =
+  | { setupMode: 'ORIGIN'; dns: DnsInstructions; guard: null }
+  | { setupMode: 'GUARD'; dns: null; guard: GuardInstructions }
+
+export function buildGuardInstructions(): GuardInstructions {
+  return {
+    nextAction: 'ENABLE_TUNNEL',
+    steps: [
+      'Click "Enable tunnel" to generate the agent token and the install command.',
+      'Run the install command on your server (Linux or Windows). The token is shown only once.',
+      'Wait for the first heartbeat: the tunnel status will turn ONLINE automatically.',
+      'Start with MONITOR_ONLY mode to observe decisions, then switch to PROTECT.',
+    ],
+    warnings: [
+      'Keep the agent token secret. If it leaks, rotate it from the server page.',
+      'No origin IP or DNS routing record is required for Guard servers.',
+    ],
+  }
+}
+
+/**
+ * يبني التعليمات المناسبة لوضع السيرفر:
+ *   ORIGIN → تعليمات DNS كاملة
+ *   GUARD  → خطوات النفق فقط (من غير CNAME/TXT إجباريين)
+ */
+export function buildSetupInstructions(
+  server: {
+    setupMode: ServerSetupMode
+    domain: string
+    verificationToken: string
+  },
+  config: DnsConfig,
+): ServerSetupInstructions {
+  if (server.setupMode === 'GUARD') {
+    return { setupMode: 'GUARD', dns: null, guard: buildGuardInstructions() }
+  }
+
+  return {
+    setupMode: 'ORIGIN',
+    dns: buildDnsInstructions(server, config),
+    guard: null,
+  }
+}
+
 // ==================================================================
-// 11) أشكال الردود (يبنيها الـ Service)
+// 13) أشكال الردود (يبنيها الـ Service)
 // ==================================================================
 
 export interface DnsCheckResult {
@@ -611,16 +1043,28 @@ export interface GatewayServerPayload {
   id: string
   domain: string
   organizationId: string
-  originIp: string
+
+  /** ORIGIN = توجيه مباشر للأصل | GUARD = توجيه عبر النفق */
+  setupMode: ServerSetupMode
+
+  /** null لسيرفرات GUARD */
+  originIp: string | null
   originPort: number
   sslEnabled: boolean
+
   status: ServerStatus
   mode: ServerMode
   dnsVerified: boolean
   gatewayReachable: boolean
   originReachable: boolean
+
+  /** GUARD: حالة النفق وعنوان الـ peer اللي الـ Gateway يوجّه عليه */
+  tunnelUp: boolean
+  tunnelPeerIp: string | null
+  lastAgentAt: string | null
+
   maxRequestsPerSecond: number | null
-  /** رقم التسعير الآمن من آخر Probe */
+  /** رقم التسعير الآمن (ORIGIN: من آخر Probe | GUARD: من تقدير الـ Agent) */
   safeRequestsPerSecond: number | null
   updatedAt: string
 }
@@ -632,10 +1076,9 @@ export interface GatewayServersListResult {
 }
 
 // ==================================================================
-// 12) Types
+// 14) Types
 // ==================================================================
 
-export type CreateServerInput = z.infer<typeof createServerSchema>
 export type UpdateServerInput = z.infer<typeof updateServerSchema>
 export type ServerIdParams = z.infer<typeof serverIdParamsSchema>
 export type ListServersQuery = z.infer<typeof listServersQuerySchema>
@@ -646,4 +1089,3 @@ export type GatewayServersQuery = z.infer<typeof gatewayServersQuerySchema>
 export type GatewayServerResolveQuery = z.infer<
   typeof gatewayServerResolveQuerySchema
 >
-export type GatewayHealthReport = z.infer<typeof gatewayHealthReportSchema>
