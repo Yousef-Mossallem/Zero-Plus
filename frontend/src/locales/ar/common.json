@@ -6,7 +6,8 @@
     "search": "بحث",
     "close": "إغلاق",
     "back": "رجوع",
-    "tryAgain": "إعادة المحاولة"
+    "tryAgain": "إعادة المحاولة",
+    "done": "تم"
   },
   "status": {
     "loading": "جارٍ التحميل...",
@@ -14,5 +15,14 @@
   },
   "language": {
     "label": "اللغة"
+  },
+  "ui": {
+    "somethingWrong": "حدث خطأ ما",
+    "showing": "عرض",
+    "of": "من",
+    "perPage": "صفحة",
+    "page": "صفحة",
+    "prevPage": "الصفحة السابقة",
+    "nextPage": "الصفحة التالية"
   }
 }

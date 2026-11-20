@@ -6,9 +6,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
-  AlertTriangle,
-  ChevronLeft,
-  ChevronRight,
   Clock,
   Loader2,
   Mail,
@@ -19,19 +16,23 @@ import {
   XCircle,
 } from 'lucide-react'
 
-import { Button, Field, TextInput } from '../../components/ui/kit'
+import { Button, EmptyState, ErrorState, Field, Modal, TextInput } from '../../components/ui/kit'
 import {
+  listGroups,
   listInvites,
   createInvite,
   resendInvite,
   revokeInvite,
   getTeamErrorMessage,
+  type TeamGroup,
   type TeamInvite,
   type InviteStatus,
   type EditableRole,
 } from '../../services/teamService'
 import { selectHasPermission } from '../../store/authStore'
 import useAuthStore from '../../store/authStore'
+import { useNotice } from './Notice'
+import Pager from './Pager'
 import { formatRole, inviteStatusColor, formatDateTime } from './shared'
 
 // ==================================================================
@@ -47,111 +48,123 @@ function CreateInviteModal({
   onClose: () => void
   onCreated: (invite: TeamInvite, acceptUrl?: string) => void
 }) {
+  const { t } = useTranslation('team')
   const [email, setEmail] = useState('')
   const [role, setRole] = useState<EditableRole>('VIEWER')
   const [expiresInHours, setExpiresInHours] = useState(72)
+  const [groups, setGroups] = useState<TeamGroup[]>([])
+  const [groupIds, setGroupIds] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
+  useEffect(() => {
+    listGroups({ limit: 100 })
+      .then((r) => setGroups(r.items))
+      .catch(() => undefined) // المجموعات اختيارية — الدعوة تشتغل من غيرها
+  }, [])
+
   const handleCreate = async () => {
-    if (!email.trim()) {
-      setError('البريد الإلكتروني مطلوب')
-      return
+    const value = email.trim()
+    if (!value) return setError(t('invites.emailRequired'))
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return setError(t('invites.emailInvalid'))
+    if (!Number.isInteger(expiresInHours) || expiresInHours < 1 || expiresInHours > 720) {
+      return setError(t('invites.expiresInvalid'))
     }
     setSaving(true)
     setError('')
     try {
       const result = await createInvite({
-        email: email.trim(),
+        email: value,
         role,
         expiresInHours,
+        ...(groupIds.length > 0 ? { initialGroupIds: groupIds } : {}),
       })
       onCreated(result.invite, result.email.acceptUrl)
     } catch (err) {
-      setError(getTeamErrorMessage(err, 'فشل إرسال الدعوة'))
+      setError(getTeamErrorMessage(err, t('invites.errors.send')))
     } finally {
       setSaving(false)
     }
   }
 
+  const selectCls =
+    'w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white outline-none focus:border-cyan-500/50 disabled:opacity-50 [&>option]:bg-[#0b1224]'
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-        onClick={onClose}
-      />
-      <div className="relative w-full max-w-sm rounded-2xl border border-white/10 bg-[#080d1a] shadow-2xl">
-        <div className="flex items-center justify-between border-b border-white/8 px-5 py-4">
-          <h3 className="font-semibold text-white">دعوة عضو جديد</h3>
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-white/5 hover:text-white"
-          >
-            <X className="h-4.5 w-4.5" />
-          </button>
-        </div>
-
-        <div className="space-y-4 p-5">
-          <Field label="البريد الإلكتروني">
-            <TextInput
-              type="email"
-              icon={Mail}
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              disabled={saving}
-              placeholder="colleague@company.com"
-              dir="ltr"
-            />
-          </Field>
-
-          <Field label="الدور">
-            <select
-              value={role}
-              onChange={(e) => setRole(e.target.value as EditableRole)}
-              disabled={saving}
-              className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white outline-none focus:border-cyan-500/50 disabled:opacity-50"
-            >
-              {EDITABLE_ROLES.map((r) => (
-                <option key={r} value={r}>
-                  {formatRole(r)}
-                </option>
-              ))}
-            </select>
-          </Field>
-
-          <Field label="تنتهي خلال (ساعة)">
-            <input
-              type="number"
-              min={1}
-              max={720}
-              value={expiresInHours}
-              onChange={(e) => setExpiresInHours(Number(e.target.value))}
-              disabled={saving}
-              className="w-full rounded-xl border border-white/10 bg-white/3 px-4 py-2.5 text-sm text-white outline-none focus:border-cyan-500/50 disabled:opacity-50"
-            />
-          </Field>
-
-          {error && (
-            <p className="text-xs text-rose-400">{error}</p>
-          )}
-        </div>
-
-        <div className="flex justify-end gap-2 border-t border-white/8 px-5 py-4">
+    <Modal
+      open
+      onClose={saving ? () => undefined : onClose}
+      title={t('invites.newTitle')}
+      icon={Mail}
+      width="max-w-md"
+      footer={
+        <div className="flex justify-end gap-2">
           <Button variant="ghost" onClick={onClose} disabled={saving}>
-            إلغاء
+            {t('actions.cancel')}
           </Button>
-          <Button
-            variant="primary"
-            icon={Mail}
-            loading={saving}
-            onClick={() => void handleCreate()}
-          >
-            إرسال الدعوة
+          <Button variant="primary" icon={Mail} loading={saving} onClick={() => void handleCreate()}>
+            {t('invites.send')}
           </Button>
         </div>
+      }
+    >
+      <div className="space-y-4">
+        <Field label={t('invites.email')}>
+          <TextInput
+            type="email"
+            icon={Mail}
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            disabled={saving}
+            placeholder="colleague@company.com"
+            dir="ltr"
+          />
+        </Field>
+
+        <Field label={t('invites.role')}>
+          <select value={role} onChange={(e) => setRole(e.target.value as EditableRole)} disabled={saving} className={selectCls}>
+            {EDITABLE_ROLES.map((r) => (
+              <option key={r} value={r}>{formatRole(r)}</option>
+            ))}
+          </select>
+        </Field>
+
+        <Field label={t('invites.initialGroups')} hint={t('invites.initialGroupsHint')}>
+          {groups.length === 0 ? (
+            <p className="text-xs text-slate-600">{t('invites.noGroups')}</p>
+          ) : (
+            <div className="max-h-40 space-y-0.5 overflow-y-auto rounded-xl border border-white/8 bg-white/2 p-1.5">
+              {groups.map((g) => (
+                <label key={g.id} className="flex cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-1.5 hover:bg-white/5">
+                  <input
+                    type="checkbox"
+                    disabled={saving}
+                    checked={groupIds.includes(g.id)}
+                    onChange={() => setGroupIds((ids) => (ids.includes(g.id) ? ids.filter((x) => x !== g.id) : [...ids, g.id]))}
+                    className="h-3.5 w-3.5 accent-cyan-400"
+                  />
+                  <span className="text-sm text-slate-300">{g.name}</span>
+                </label>
+              ))}
+            </div>
+          )}
+        </Field>
+
+        <Field label={t('invites.expiresHours')} hint={t('invites.expiresHint')}>
+          <input
+            type="number"
+            min={1}
+            max={720}
+            value={expiresInHours}
+            onChange={(e) => setExpiresInHours(Number(e.target.value))}
+            disabled={saving}
+            className="w-full rounded-xl border border-white/10 bg-white/3 px-4 py-2.5 text-sm text-white outline-none focus:border-cyan-500/50 disabled:opacity-50"
+          />
+        </Field>
+
+        {error && <p dir="auto" className="text-xs text-rose-400">{error}</p>}
       </div>
-    </div>
+    </Modal>
   )
 }
 
@@ -168,21 +181,23 @@ function InviteCreatedBanner({
   acceptUrl?: string
   onClose: () => void
 }) {
+  const { t } = useTranslation('team')
   return (
     <div className="rounded-xl border border-emerald-400/20 bg-emerald-500/8 px-4 py-4 text-sm">
       <div className="flex items-start justify-between gap-2">
         <div className="space-y-1">
           <p className="font-semibold text-emerald-300">
-            تم إرسال الدعوة إلى {invite.email} ✓
+            {t('invites.sentTo', { email: invite.email })} ✓
           </p>
           {acceptUrl && (
             <div>
-              <p className="text-xs text-slate-400">رابط القبول (dev only):</p>
+              <p className="text-xs text-slate-400">{t('invites.acceptLink')}</p>
               <a
                 href={acceptUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="break-all font-mono text-xs text-cyan-400 underline"
+                dir="ltr"
+                className="block break-all font-mono text-xs text-cyan-400 underline"
               >
                 {acceptUrl}
               </a>
@@ -192,6 +207,7 @@ function InviteCreatedBanner({
         <button
           type="button"
           onClick={onClose}
+          aria-label={t('actions.close')}
           className="text-slate-400 hover:text-white"
         >
           <X className="h-4 w-4" />
@@ -205,6 +221,13 @@ function InviteCreatedBanner({
 // Invite Row
 // ==================================================================
 
+const INVITE_STATUS_KEY = {
+  PENDING: 'status.pending',
+  ACCEPTED: 'status.accepted',
+  EXPIRED: 'status.expired',
+  REVOKED: 'status.revoked',
+} as const
+
 function InviteRow({
   invite,
   canManage,
@@ -213,15 +236,16 @@ function InviteRow({
 }: {
   invite: TeamInvite
   canManage: boolean
-  onResend: (id: string) => Promise<void>
-  onRevoke: (id: string) => Promise<void>
+  onResend: (inv: TeamInvite) => Promise<void>
+  onRevoke: (inv: TeamInvite) => Promise<void>
 }) {
+  const { t } = useTranslation('team')
   const [resending, setResending] = useState(false)
   const [revoking, setRevoking] = useState(false)
 
   return (
     <tr className="border-b border-white/5">
-      <td className="px-4 py-3 font-mono text-sm text-slate-300">{invite.email}</td>
+      <td className="px-4 py-3 font-mono text-sm text-slate-300" dir="ltr">{invite.email}</td>
       <td className="px-4 py-3">
         <span className="text-xs text-slate-400">{formatRole(invite.role)}</span>
       </td>
@@ -229,13 +253,13 @@ function InviteRow({
         <span
           className={`inline-flex rounded-md border px-2 py-0.5 text-xs font-medium ${inviteStatusColor(invite.status)}`}
         >
-          {invite.status}
+          {t(INVITE_STATUS_KEY[invite.status])}
         </span>
       </td>
-      <td className="px-4 py-3 text-xs text-slate-500">
+      <td className="whitespace-nowrap px-4 py-3 text-xs text-slate-500">
         {formatDateTime(invite.expiresAt)}
       </td>
-      <td className="px-4 py-3 text-xs text-slate-500">
+      <td className="whitespace-nowrap px-4 py-3 text-xs text-slate-500">
         {formatDateTime(invite.createdAt)}
       </td>
       <td className="px-4 py-3 text-end">
@@ -243,14 +267,15 @@ function InviteRow({
           <div className="flex items-center justify-end gap-1">
             <button
               type="button"
-              title="إعادة إرسال"
+              title={t('invites.resend')}
+              aria-label={t('invites.resend')}
               disabled={resending}
               onClick={async () => {
                 setResending(true)
-                await onResend(invite.id)
+                await onResend(invite)
                 setResending(false)
               }}
-              className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-white/8 hover:text-cyan-400"
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-white/8 hover:text-cyan-400 disabled:opacity-50"
             >
               {resending ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -260,14 +285,15 @@ function InviteRow({
             </button>
             <button
               type="button"
-              title="إلغاء"
+              title={t('invites.revoke')}
+              aria-label={t('invites.revoke')}
               disabled={revoking}
               onClick={async () => {
                 setRevoking(true)
-                await onRevoke(invite.id)
+                await onRevoke(invite)
                 setRevoking(false)
               }}
-              className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-rose-500/10 hover:text-rose-400"
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-rose-500/10 hover:text-rose-400 disabled:opacity-50"
             >
               {revoking ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -286,12 +312,19 @@ function InviteRow({
 // Status filter tabs
 // ==================================================================
 
-const STATUS_TABS: { label: string; value: InviteStatus | '' }[] = [
-  { label: 'الكل', value: '' },
-  { label: 'معلّقة', value: 'PENDING' },
-  { label: 'مقبولة', value: 'ACCEPTED' },
-  { label: 'منتهية', value: 'EXPIRED' },
-  { label: 'ملغاة', value: 'REVOKED' },
+type StatusTabKey =
+  | 'invites.tabs.all'
+  | 'invites.tabs.pending'
+  | 'invites.tabs.accepted'
+  | 'invites.tabs.expired'
+  | 'invites.tabs.revoked'
+
+const STATUS_TABS: { label: StatusTabKey; value: InviteStatus | '' }[] = [
+  { label: 'invites.tabs.all', value: '' },
+  { label: 'invites.tabs.pending', value: 'PENDING' },
+  { label: 'invites.tabs.accepted', value: 'ACCEPTED' },
+  { label: 'invites.tabs.expired', value: 'EXPIRED' },
+  { label: 'invites.tabs.revoked', value: 'REVOKED' },
 ]
 
 // ==================================================================
@@ -301,6 +334,7 @@ const STATUS_TABS: { label: string; value: InviteStatus | '' }[] = [
 export default function InvitesTab() {
   const { t } = useTranslation('team')
   const canManage = useAuthStore(selectHasPermission('team:manage'))
+  const { show, node } = useNotice()
 
   const [invites, setInvites] = useState<TeamInvite[]>([])
   const [loading, setLoading] = useState(true)
@@ -324,11 +358,11 @@ export default function InvitesTab() {
       setInvites(res.items)
       setTotal(res.total)
     } catch (err) {
-      setError(getTeamErrorMessage(err, 'فشل تحميل الدعوات'))
+      setError(getTeamErrorMessage(err, t('invites.errors.load')))
     } finally {
       setLoading(false)
     }
-  }, [page, statusFilter])
+  }, [page, statusFilter, t])
 
   useEffect(() => {
     void fetchInvites()
@@ -338,44 +372,47 @@ export default function InvitesTab() {
     setPage(1)
   }, [statusFilter])
 
-  const handleResend = async (id: string) => {
+  const handleResend = async (inv: TeamInvite) => {
     try {
-      await resendInvite(id)
-      void fetchInvites()
-    } catch {
-      // ignore
+      await resendInvite(inv.id)
+      show('success', t('invites.notice.resent', { email: inv.email }))
+      await fetchInvites()
+    } catch (err) {
+      show('error', getTeamErrorMessage(err, t('invites.errors.resend')))
     }
   }
 
-  const handleRevoke = async (id: string) => {
+  const handleRevoke = async (inv: TeamInvite) => {
+    if (!window.confirm(t('invites.confirmRevoke', { email: inv.email }))) return
     try {
-      await revokeInvite(id)
-      void fetchInvites()
-    } catch {
-      // ignore
+      await revokeInvite(inv.id)
+      show('success', t('invites.notice.revoked'))
+      await fetchInvites()
+    } catch (err) {
+      show('error', getTeamErrorMessage(err, t('invites.errors.revoke')))
     }
   }
 
-  const totalPages = Math.ceil(total / LIMIT)
+  const totalPages = Math.max(1, Math.ceil(total / LIMIT))
 
   return (
     <div className="space-y-4">
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-3">
         {/* Status tabs */}
-        <div className="flex gap-1 rounded-xl border border-white/8 bg-white/2 p-1">
+        <div className="flex max-w-full gap-1 overflow-x-auto rounded-xl border border-white/8 bg-white/2 p-1">
           {STATUS_TABS.map((tab) => (
             <button
               key={tab.value}
               type="button"
               onClick={() => setStatusFilter(tab.value)}
-              className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+              className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
                 statusFilter === tab.value
                   ? 'bg-cyan-500/20 text-cyan-300'
                   : 'text-slate-400 hover:text-white'
               }`}
             >
-              {tab.label}
+              {t(tab.label)}
             </button>
           ))}
         </div>
@@ -384,12 +421,13 @@ export default function InvitesTab() {
 
         <div className="flex items-center gap-2 text-xs text-slate-500">
           <Clock className="h-4 w-4" />
-          <span>{total} دعوة</span>
+          <span>{t('invites.count', { count: total })}</span>
         </div>
 
         <button
           type="button"
           onClick={() => void fetchInvites()}
+          aria-label={t('actions.refresh')}
           className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 text-slate-400 hover:bg-white/5"
         >
           <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
@@ -402,7 +440,7 @@ export default function InvitesTab() {
             size="sm"
             onClick={() => setShowCreate(true)}
           >
-            {t('invites.create', 'دعوة عضو')}
+            {t('invites.create')}
           </Button>
         )}
       </div>
@@ -416,25 +454,20 @@ export default function InvitesTab() {
         />
       )}
 
-      {/* Error */}
-      {error && (
-        <div className="flex items-center gap-3 rounded-xl border border-rose-500/20 bg-rose-500/6 px-4 py-3 text-sm text-rose-300">
-          <AlertTriangle className="h-4 w-4 shrink-0" />
-          {error}
-        </div>
-      )}
+      {error && <ErrorState message={error} onRetry={() => void fetchInvites()} />}
 
       {/* Table */}
+      {!error && (
       <div className="overflow-x-auto rounded-xl border border-white/8">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-white/8 text-xs text-slate-500">
-              <th className="px-4 py-3 text-start font-medium">البريد الإلكتروني</th>
-              <th className="px-4 py-3 text-start font-medium">الدور</th>
-              <th className="px-4 py-3 text-start font-medium">الحالة</th>
-              <th className="px-4 py-3 text-start font-medium">تنتهي في</th>
-              <th className="px-4 py-3 text-start font-medium">أُرسلت في</th>
-              <th className="px-4 py-3 text-end font-medium">إجراءات</th>
+              <th className="px-4 py-3 text-start font-medium">{t('invites.cols.email')}</th>
+              <th className="px-4 py-3 text-start font-medium">{t('invites.cols.role')}</th>
+              <th className="px-4 py-3 text-start font-medium">{t('invites.cols.status')}</th>
+              <th className="px-4 py-3 text-start font-medium">{t('invites.cols.expiresAt')}</th>
+              <th className="px-4 py-3 text-start font-medium">{t('invites.cols.sentAt')}</th>
+              <th className="px-4 py-3 text-end font-medium">{t('invites.cols.actions')}</th>
             </tr>
           </thead>
           <tbody>
@@ -459,40 +492,22 @@ export default function InvitesTab() {
                 ))}
             {!loading && invites.length === 0 && (
               <tr>
-                <td colSpan={6} className="py-12 text-center text-sm text-slate-500">
-                  لا توجد دعوات
+                <td colSpan={6}>
+                  <EmptyState icon={Mail} title={t('invites.empty')} />
                 </td>
               </tr>
             )}
           </tbody>
         </table>
       </div>
+      )}
 
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between text-xs text-slate-500">
+      {total > 0 && !error && (
+        <div className="flex flex-col items-center justify-between gap-2 text-xs text-slate-500 sm:flex-row">
           <span>
-            {(page - 1) * LIMIT + 1}–{Math.min(page * LIMIT, total)} من {total}
+            {t('invites.range', { from: (page - 1) * LIMIT + 1, to: Math.min(page * LIMIT, total), total })}
           </span>
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              disabled={page <= 1}
-              onClick={() => setPage((p) => p - 1)}
-              className="flex h-7 w-7 items-center justify-center rounded-lg border border-white/10 text-slate-400 hover:bg-white/5 disabled:opacity-40"
-            >
-              <ChevronRight className="h-4 w-4 rtl:rotate-180" />
-            </button>
-            <span className="px-2">{page} / {totalPages}</span>
-            <button
-              type="button"
-              disabled={page >= totalPages}
-              onClick={() => setPage((p) => p + 1)}
-              className="flex h-7 w-7 items-center justify-center rounded-lg border border-white/10 text-slate-400 hover:bg-white/5 disabled:opacity-40"
-            >
-              <ChevronLeft className="h-4 w-4 rtl:rotate-180" />
-            </button>
-          </div>
+          {totalPages > 1 && <Pager page={page} totalPages={totalPages} onPage={setPage} disabled={loading} />}
         </div>
       )}
 
@@ -503,10 +518,13 @@ export default function InvitesTab() {
           onCreated={(invite, acceptUrl) => {
             setShowCreate(false)
             setCreatedBanner({ invite, acceptUrl })
+            show('success', t('invites.notice.created'))
             void fetchInvites()
           }}
         />
       )}
+
+      {node}
     </div>
   )
 }

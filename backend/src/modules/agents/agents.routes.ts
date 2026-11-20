@@ -109,6 +109,17 @@ function handleError(error: unknown, reply: FastifyReply) {
     })
   }
 
+  // أخطاء الخدمة اللي بتحمل statusCode و code (مثل AgentServiceError): نحافظ عليهم بدل 500 عام
+  if (error && typeof error === 'object') {
+    const e = error as { statusCode?: unknown; code?: unknown; message?: string; messageAr?: string }
+    if (typeof e.statusCode === 'number' && e.statusCode >= 400 && e.statusCode < 500 && typeof e.code === 'string') {
+      return reply.status(e.statusCode).send({
+        success: false,
+        error: { code: e.code, message: e.message ?? e.code, ...(e.messageAr ? { messageAr: e.messageAr } : {}) },
+      })
+    }
+  }
+
   // Zod
   if (
     error &&

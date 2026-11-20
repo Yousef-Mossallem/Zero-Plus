@@ -23,6 +23,8 @@ import { useTranslation } from 'react-i18next'
 import { Button, Modal } from '../../components/ui/kit'
 import {
   enableTunnel,
+  getApiErrorInfo,
+  getApiErrorText,
   rotateAgentToken,
   type EnableTunnelResult,
   type InstallChannel,
@@ -65,12 +67,12 @@ export function TunnelModal({
       await navigator.clipboard.writeText(data.install.command)
       setCopied(true)
       toast.success(
-        t('tunnel.copiedTitle', 'تم نسخ الأمر بنجاح'),
-        t('tunnel.copiedDesc', 'قم بتشغيل الأمر بصلاحيات root/sudo على سيرفرك.'),
+        t('tunnel.copiedTitle'),
+        t('tunnel.copiedDesc'),
       )
       setTimeout(() => setCopied(false), 3000)
     } catch {
-      // ignore
+      toast.error(t('tunnel.copyFailed'))
     }
   }
 
@@ -86,13 +88,11 @@ export function TunnelModal({
       })
       setData(res)
     } catch (err: unknown) {
-      const e = err as { response?: { data?: { error?: { code?: string } } } }
-      // إذا كان التوكن قد تم إصداره مسبقاً ولا يمكن استرجاعه بدون rotate
-      if (e.response?.data?.error?.code === 'AGENT_TOKEN_ALREADY_ISSUED') {
-        toast.warning(
-          t('tunnel.alreadyIssued', 'التوكن صادر مسبقاً'),
-          t('tunnel.needRotate', 'يجب إعادة توليد التوكن لتغيير صيغة الأمر.'),
-        )
+      // التوكن اتصدر قبل كده ومينفعش يتسترجع من غير rotate
+      if (getApiErrorInfo(err).code === 'AGENT_TOKEN_ALREADY_ISSUED') {
+        toast.warning(t('tunnel.alreadyIssued'), t('tunnel.needRotate'))
+      } else {
+        toast.error(t('tunnel.enableFailed'), getApiErrorText(err))
       }
     } finally {
       setBusy(false)
@@ -110,14 +110,14 @@ export function TunnelModal({
       setData(res)
       setConfirmRotate(false)
       toast.success(
-        t('tunnel.rotatedTitle', 'تم تدوير التوكن بنجاح'),
-        t('tunnel.rotatedDesc', 'تم إنشاء أمر تثبيت وتوكن جديد. توقف الـ Agent القديم.'),
+        t('tunnel.rotatedTitle'),
+        t('tunnel.rotatedDesc'),
       )
       onEnabled?.()
     } catch (err) {
       toast.error(
-        t('tunnel.rotateFailed', 'فشل إعادة توليد التوكن'),
-        String(err),
+        t('tunnel.rotateFailed'),
+        getApiErrorText(err),
       )
     } finally {
       setBusy(false)
@@ -128,8 +128,8 @@ export function TunnelModal({
     <Modal
       open={open}
       onClose={onClose}
-      title={t('tunnel.modalTitle', 'تفعيل حماية Guard / نفق الـ Agent')}
-      description={`${server.domain} — ${t('tunnel.modalSubtitle', 'ثبّت عميل الحماية على سيرفرك لربط النفق مباشرة')}`}
+      title={t('tunnel.modalTitle')}
+      description={`${server.domain} — ${t('tunnel.modalSubtitle')}`}
       icon={Shield}
       tone="cyan"
       width="max-w-2xl"
@@ -144,22 +144,22 @@ export function TunnelModal({
                 disabled={busy}
                 onClick={() => setConfirmRotate(true)}
               >
-                {t('tunnel.rotateBtn', 'إعادة توليد التوكن')}
+                {t('tunnel.rotateBtn')}
               </Button>
             ) : (
               <div className="flex items-center gap-1.5 rounded-lg border border-amber-400/25 bg-amber-500/10 p-1 text-xs">
-                <span className="text-amber-300 px-1">{t('tunnel.confirmRotate', 'هل أنت متأكد؟ سيتوقف الـ Agent الحالي')}</span>
+                <span className="text-amber-300 px-1">{t('tunnel.confirmRotate')}</span>
                 <Button variant="danger" size="sm" loading={busy} onClick={() => void handleRotate()}>
-                  {t('tunnel.yesRotate', 'نعم، دوّر')}
+                  {t('tunnel.yesRotate')}
                 </Button>
                 <Button variant="ghost" size="sm" disabled={busy} onClick={() => setConfirmRotate(false)}>
-                  {t('actions.cancel', 'إلغاء')}
+                  {t('actions.cancel', { ns: 'common' })}
                 </Button>
               </div>
             )}
           </div>
           <Button variant="primary" onClick={onClose}>
-            {t('tunnel.done', 'تم')}
+            {t('tunnel.done')}
           </Button>
         </div>
       }
@@ -169,10 +169,10 @@ export function TunnelModal({
         <div className="flex items-start gap-3 rounded-xl border border-amber-400/25 bg-amber-500/8 p-3.5 text-xs text-amber-200">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
           <div>
-            <p className="font-semibold">{t('tunnel.warningTitle', 'تنبيه: التوكن يظهر لمرة واحدة فقط!')}</p>
+            <p className="font-semibold">{t('tunnel.warningTitle')}</p>
             <p className="mt-0.5 text-amber-200/80">
               {data?.install.tokenHint ??
-                t('tunnel.warningDesc', 'انسخ أمر التثبيت بالكامل وشغّله على خادمك الآن. في حال إغلاق النافذة وفقدان التوكن، ستحتاج إلى إعادة توليد توكن جديد.')}
+                t('tunnel.warningDesc')}
             </p>
           </div>
         </div>
@@ -180,7 +180,7 @@ export function TunnelModal({
         {/* Channel Selection */}
         <div className="space-y-1.5">
           <label className="text-xs font-medium text-slate-300">
-            {t('tunnel.channelLabel', 'صيغة أمر التثبيت')}
+            {t('tunnel.channelLabel')}
           </label>
           <div className="grid grid-cols-3 gap-2">
             {(
@@ -213,7 +213,7 @@ export function TunnelModal({
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium text-slate-300">
-                {t('tunnel.commandLabel', 'أمر التثبيت')}
+                {t('tunnel.commandLabel')}
               </span>
               <button
                 type="button"
@@ -223,12 +223,12 @@ export function TunnelModal({
                 {copied ? (
                   <>
                     <Check className="h-3.5 w-3.5 text-emerald-400" />
-                    <span className="text-emerald-400">{t('tunnel.copied', 'تم النسخ')}</span>
+                    <span className="text-emerald-400">{t('tunnel.copied')}</span>
                   </>
                 ) : (
                   <>
                     <Copy className="h-3.5 w-3.5" />
-                    <span>{t('tunnel.copy', 'نسخ الأمر')}</span>
+                    <span>{t('tunnel.copy')}</span>
                   </>
                 )}
               </button>
@@ -243,7 +243,7 @@ export function TunnelModal({
         ) : (
           <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-white/10 p-6 text-center text-xs text-slate-400">
             <Key className="mb-2 h-6 w-6 text-slate-500" />
-            <p>{t('tunnel.noTokenCached', 'تم إصدار التوكن مسبقاً ولا يمكن استرجاعه للحماية.')}</p>
+            <p>{t('tunnel.noTokenCached')}</p>
             <Button
               variant="outline"
               size="sm"
@@ -252,18 +252,18 @@ export function TunnelModal({
               loading={busy}
               onClick={() => void handleRotate()}
             >
-              {t('tunnel.generateNew', 'توليد أمر وتوكن جديد الآن')}
+              {t('tunnel.generateNew')}
             </Button>
           </div>
         )}
 
         {/* Steps Guide */}
         <div className="rounded-xl border border-white/6 bg-white/2 p-3 text-xs text-slate-400 space-y-2">
-          <p className="font-semibold text-slate-300">{t('tunnel.stepsTitle', 'خطوات العمل:')}</p>
+          <p className="font-semibold text-slate-300">{t('tunnel.stepsTitle')}</p>
           <ol className="list-decimal list-inside space-y-1 text-slate-400">
-            <li>{t('tunnel.step1', 'انسخ الأمر أعلاه وشغّله على سيرفر الـ Origin كمسؤول.')}</li>
-            <li>{t('tunnel.step2', 'سيقوم الـ Agent بإنشاء نفق آمن مشفّر ويرسل نبضات Heartbeat تلقائيًا.')}</li>
-            <li>{t('tunnel.step3', 'ستتحول حالة النفق تلقائيًا على الكارت إلى «متصل Online».')}</li>
+            <li>{t('tunnel.step1')}</li>
+            <li>{t('tunnel.step2')}</li>
+            <li>{t('tunnel.step3')}</li>
           </ol>
         </div>
 
@@ -274,7 +274,7 @@ export function TunnelModal({
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1.5 text-xs text-cyan-400 hover:underline"
           >
-            <span>{t('tunnel.docsLink', 'دليل التثبيت واستكشاف الأخطاء')}</span>
+            <span>{t('tunnel.docsLink')}</span>
             <ExternalLink className="h-3.5 w-3.5" />
           </a>
         )}

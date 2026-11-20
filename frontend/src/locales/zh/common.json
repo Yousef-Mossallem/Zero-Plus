@@ -6,7 +6,8 @@
     "search": "搜索",
     "close": "关闭",
     "back": "返回",
-    "tryAgain": "重试"
+    "tryAgain": "重试",
+    "done": "完成"
   },
   "status": {
     "loading": "加载中...",
@@ -14,5 +15,14 @@
   },
   "language": {
     "label": "语言"
+  },
+  "ui": {
+    "somethingWrong": "出错了",
+    "showing": "显示",
+    "of": "共",
+    "perPage": "页",
+    "page": "第",
+    "prevPage": "上一页",
+    "nextPage": "下一页"
   }
 }

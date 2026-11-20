@@ -117,14 +117,14 @@ export function TextInput({
   return (
     <div className="relative">
       {Icon && (
-        <Icon className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+        <Icon className="pointer-events-none absolute start-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
       )}
       <input
         className={cn(
           CONTROL_BASE,
           controlBorder(invalid),
-          'py-2.5 pr-4',
-          Icon ? 'pl-10' : 'pl-4',
+          'py-2.5 pe-4',
+          Icon ? 'ps-10' : 'ps-4',
           className,
         )}
         {...rest}

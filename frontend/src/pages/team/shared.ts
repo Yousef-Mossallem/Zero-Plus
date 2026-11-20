@@ -1,16 +1,13 @@
 // frontend/src/pages/team/shared.ts
 // أنواع وأدوات مشتركة بين صفحات الفريق
 
+import i18n from 'i18next'
 import type { TeamRole } from '../../services/teamService'
 
 export function formatRole(role: TeamRole | string): string {
-  const map: Record<string, string> = {
-    OWNER: 'مالك',
-    ADMIN: 'مسؤول',
-    ANALYST: 'محلل',
-    VIEWER: 'مشاهد',
-  }
-  return map[role] ?? role
+  // المفتاح ديناميكي (حسب الدور) فمنعدّي على الـ typed keys
+  const tr = i18n.t.bind(i18n) as (key: string, opts?: Record<string, unknown>) => string
+  return tr(`team:roles.${String(role).toLowerCase()}`, { defaultValue: String(role) })
 }
 
 export function roleColor(role: TeamRole | string): string {
@@ -41,7 +38,7 @@ export function inviteStatusColor(status: string): string {
 
 export function formatDate(iso: string | null | undefined): string {
   if (!iso) return '—'
-  return new Date(iso).toLocaleDateString('ar-EG', {
+  return new Date(iso).toLocaleDateString((i18n.language?.startsWith('ar') ? 'ar-EG' : 'en-US'), {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
@@ -50,7 +47,7 @@ export function formatDate(iso: string | null | undefined): string {
 
 export function formatDateTime(iso: string | null | undefined): string {
   if (!iso) return '—'
-  return new Date(iso).toLocaleString('ar-EG', {
+  return new Date(iso).toLocaleString((i18n.language?.startsWith('ar') ? 'ar-EG' : 'en-US'), {
     year: 'numeric',
     month: 'short',
     day: 'numeric',

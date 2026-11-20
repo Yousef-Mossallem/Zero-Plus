@@ -189,43 +189,101 @@ export interface PermissionsCatalog {
 // Members API
 // ==================================================================
 
+/**
+ * Normalizes a member payload from the Backend into the strict TeamMember shape.
+ * GET /team/members/:id spreads Prisma fields (`groupMemberships`, `permissionOverrides`)
+ * and also attaches mapped `groups` / `overrides` / `permissions`.
+ * List endpoint returns the mapped shape. Some mutations (e.g. role update) historically
+ * returned a partial user without arrays — we always coerce to real arrays here so
+ * components never see undefined.
+ */
+type RawMember = Partial<Omit<TeamMember, 'groups' | 'overrides' | 'permissions'>> & {
+  id: string
+  groups?: GroupSummary[] | null
+  groupMemberships?: Array<{ group?: GroupSummary | null } | GroupSummary> | null
+  overrides?: Override[] | null
+  permissionOverrides?: Override[] | null
+  permissions?: string[] | null
+}
+
+function normalizeMember(raw: RawMember): TeamMember {
+  // Prefer explicit `groups`; fall back to Prisma relation shape
+  let groups: GroupSummary[] = []
+  if (Array.isArray(raw.groups)) {
+    groups = raw.groups.filter(Boolean).map((g) => ({ id: g.id, name: g.name }))
+  } else if (Array.isArray(raw.groupMemberships)) {
+    groups = raw.groupMemberships
+      .map((m) => {
+        if (m && typeof m === 'object' && 'group' in m && m.group) {
+          return { id: m.group.id, name: m.group.name }
+        }
+        if (m && typeof m === 'object' && 'id' in m && 'name' in m) {
+          return { id: (m as GroupSummary).id, name: (m as GroupSummary).name }
+        }
+        return null
+      })
+      .filter((g): g is GroupSummary => g != null)
+  }
+
+  const overrides: Override[] = Array.isArray(raw.overrides)
+    ? raw.overrides
+    : Array.isArray(raw.permissionOverrides)
+      ? raw.permissionOverrides
+      : []
+
+  const permissions: string[] = Array.isArray(raw.permissions) ? raw.permissions : []
+
+  return {
+    id: raw.id,
+    email: raw.email ?? '',
+    fullName: raw.fullName ?? '',
+    role: (raw.role as TeamRole) ?? 'VIEWER',
+    isActive: Boolean(raw.isActive),
+    lastLoginAt: raw.lastLoginAt ?? null,
+    createdAt: raw.createdAt ?? '',
+    invitedById: raw.invitedById ?? null,
+    groups,
+    overrides,
+    permissions,
+  }
+}
+
 export async function listMembers(
   params: ListMembersParams = {},
 ): Promise<PaginatedResponse<TeamMember>> {
-  const response = await api.get<ApiResponse<PaginatedResponse<TeamMember>>>(
-    '/team/members',
-    { params: cleanParams(params) },
-  )
-  return response.data.data
+  const response = await api.get<
+    ApiResponse<PaginatedResponse<RawMember>>
+  >('/team/members', { params: cleanParams(params) })
+  const data = response.data.data
+  return { ...data, items: data.items.map(normalizeMember) }
 }
 
 export async function getMember(userId: string): Promise<TeamMember> {
-  const response = await api.get<ApiResponse<TeamMember>>(
+  const response = await api.get<ApiResponse<RawMember>>(
     `/team/members/${userId}`,
   )
-  return response.data.data
+  return normalizeMember(response.data.data)
 }
 
 export async function updateMemberRole(
   userId: string,
   role: EditableRole,
 ): Promise<TeamMember> {
-  const response = await api.patch<ApiResponse<TeamMember>>(
-    `/team/members/${userId}`,
-    { role },
-  )
-  return response.data.data
+  // Backend updateMemberRole returns a partial user (id/email/role only).
+  // Always re-fetch the full member so the Drawer keeps groups/overrides/permissions.
+  await api.patch(`/team/members/${userId}`, { role })
+  return getMember(userId)
 }
 
 export async function setMemberGroups(
   userId: string,
   groupIds: string[],
 ): Promise<TeamMember> {
-  const response = await api.put<ApiResponse<TeamMember>>(
+  const response = await api.put<ApiResponse<RawMember>>(
     `/team/members/${userId}/groups`,
     { groupIds },
   )
-  return response.data.data
+  return normalizeMember(response.data.data)
 }
 
 export async function deactivateMember(userId: string): Promise<void> {
@@ -241,11 +299,11 @@ export async function setMemberOverrides(
   userId: string,
   overrides: Override[],
 ): Promise<TeamMember> {
-  const response = await api.put<ApiResponse<TeamMember>>(
+  const response = await api.put<ApiResponse<RawMember>>(
     `/team/members/${userId}/overrides`,
     { overrides },
   )
-  return response.data.data
+  return normalizeMember(response.data.data)
 }
 
 /** إضافة/تعديل استثناء واحد */
@@ -253,11 +311,11 @@ export async function patchMemberOverride(
   userId: string,
   override: Override,
 ): Promise<TeamMember> {
-  const response = await api.patch<ApiResponse<TeamMember>>(
+  const response = await api.patch<ApiResponse<RawMember>>(
     `/team/members/${userId}/overrides`,
     override,
   )
-  return response.data.data
+  return normalizeMember(response.data.data)
 }
 
 /** حذف استثناء واحد */
@@ -265,11 +323,11 @@ export async function deleteMemberOverride(
   userId: string,
   permission: string,
 ): Promise<TeamMember> {
-  const response = await api.delete<ApiResponse<TeamMember>>(
+  const response = await api.delete<ApiResponse<RawMember>>(
     `/team/members/${userId}/overrides`,
     { data: { permission } },
   )
-  return response.data.data
+  return normalizeMember(response.data.data)
 }
 
 /** تجديد توكن عضو بعد تغيير صلاحياته */

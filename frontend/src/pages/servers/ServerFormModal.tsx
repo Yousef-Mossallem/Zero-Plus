@@ -8,7 +8,9 @@ import { useToast } from '../../components/ui/Toast'
 import { Button, Field, Modal, TextInput, Toggle } from '../../components/ui/kit'
 import {
   createServer,
+  type UpdateServerInput,
   getApiErrorInfo,
+  getApiErrorText,
   updateServer,
   enableTunnel,
   type DnsInstructions,
@@ -128,7 +130,7 @@ export function ServerFormModal({
       server
         ? {
             domain: server.domain,
-            connectionType: (server.agentToken || server.tunnelUp) ? 'GUARD' : 'ORIGIN',
+            connectionType: server.setupMode ?? ((server.agentToken || server.tunnelUp) ? 'GUARD' : 'ORIGIN'),
             originIp: server.originIp,
             originPort: String(server.originPort),
             sslEnabled: server.sslEnabled,
@@ -176,23 +178,20 @@ export function ServerFormModal({
 
     setBusy(true)
     try {
-      const isGuard = form.connectionType === 'GUARD'
-      const input = {
-        domain: normalizeDomain(form.domain),
-        originIp: isGuard ? (server?.originIp || '127.0.0.1') : form.originIp.trim(),
-        originPort: isGuard ? (server?.originPort || 443) : Number(form.originPort),
-        sslEnabled: form.sslEnabled,
-        mode: form.mode,
-      }
+      // setupMode is immutable: an existing server keeps the mode the backend reports
+      const isGuard = (server?.setupMode ?? form.connectionType) === 'GUARD'
+      const domain = normalizeDomain(form.domain)
 
       if (server) {
-        // Edit: send only the fields that changed (the backend body is strict)
-        const patch: Partial<typeof input> = {}
-        if (input.domain !== server.domain) patch.domain = input.domain
-        if (!isGuard && input.originIp !== server.originIp) patch.originIp = input.originIp
-        if (!isGuard && input.originPort !== server.originPort) patch.originPort = input.originPort
-        if (input.sslEnabled !== server.sslEnabled) patch.sslEnabled = input.sslEnabled
-        if (input.mode !== server.mode) patch.mode = input.mode
+        // Edit: send only changed fields (strict body). Origin fields never go to a GUARD server.
+        const patch: UpdateServerInput = {}
+        if (domain !== server.domain) patch.domain = domain
+        if (!isGuard) {
+          if (form.originIp.trim() !== server.originIp) patch.originIp = form.originIp.trim()
+          if (Number(form.originPort) !== server.originPort) patch.originPort = Number(form.originPort)
+          if (form.sslEnabled !== server.sslEnabled) patch.sslEnabled = form.sslEnabled
+        }
+        if (form.mode !== server.mode) patch.mode = form.mode
 
         let updatedServer = server
         let dnsRes = undefined
@@ -201,36 +200,34 @@ export function ServerFormModal({
           const res = await updateServer(server.id, patch)
           updatedServer = res.server
           dnsRes = res.dns
-          if (res.changes.length > 0) {
-            toast.success(t('form.toast.updated'), input.domain)
-          }
+          if (res.changes.length > 0) toast.success(t('form.toast.updated'), domain)
         }
 
-        // If user changed to GUARD mode or wants tunnel
-        if (isGuard && !server.tunnelUp) {
-          try {
-            const tunnelRes = await enableTunnel(updatedServer.id)
-            onTunnelCreated?.(updatedServer, tunnelRes)
-          } catch {
-            // Tunnel can be enabled later
-          }
-        }
-
-        onSaved(updatedServer, dnsRes)
-      } else {
-        const res = await createServer(input)
+        // Guard servers never open the Origin DNS flow
+        onSaved(updatedServer, isGuard ? undefined : dnsRes)
+      } else if (isGuard) {
+        const res = await createServer({ domain, setupMode: 'GUARD' })
         toast.success(t('form.toast.added'), t('form.toast.addedDesc'))
-        
-        // If GUARD selected on create, immediately trigger enable-tunnel
-        if (isGuard) {
-          try {
-            const tunnelRes = await enableTunnel(res.server.id)
-            onTunnelCreated?.(res.server, tunnelRes)
-          } catch (tErr) {
-            console.error('Failed to auto-enable tunnel on create:', tErr)
-          }
+        try {
+          const tunnelRes = await enableTunnel(res.server.id)
+          onTunnelCreated?.(res.server, tunnelRes)
+        } catch (tErr) {
+          // Server exists; the tunnel can be enabled from the server card / drawer
+          toast.error(t('form.toast.tunnelFailed'), getApiErrorText(tErr))
         }
-        
+        onSaved(res.server)
+      } else {
+        const res = await createServer({
+          domain,
+          setupMode: 'ORIGIN',
+          originIp: form.originIp.trim(),
+          originPort: Number(form.originPort),
+          sslEnabled: form.sslEnabled,
+          mode: form.mode,
+        })
+        toast.success(t('form.toast.added'), t('form.toast.addedDesc'))
+        // ORIGIN path only: pass DNS so the caller can show Origin DNS instructions.
+        // Never call enable-tunnel here — that is Guard-only.
         onSaved(res.server, res.dns)
       }
 
@@ -246,7 +243,10 @@ export function ServerFormModal({
       }
       setErrors(fieldMap)
 
-      toast.error(server ? t('form.toast.updateFailed') : t('form.toast.addFailed'), info.message)
+      toast.error(
+        server ? t('form.toast.updateFailed') : t('form.toast.addFailed'),
+        getApiErrorText(err),
+      )
     } finally {
       setBusy(false)
     }
@@ -311,7 +311,8 @@ export function ServerFormModal({
         </Field>
 
         {/* Connection Type Selection: Origin vs Guard */}
-        <Field label={t('form.connectionType.label', 'نوع الربط والحماية')}>
+        {!server && (
+        <Field label={t('form.connectionType.label')}>
           <div className="grid grid-cols-2 gap-3">
             <button
               type="button"
@@ -327,11 +328,11 @@ export function ServerFormModal({
               <div className="flex items-center gap-2">
                 <Network className={cn('h-4 w-4', form.connectionType === 'ORIGIN' ? 'text-cyan-400' : 'text-slate-400')} />
                 <p className={cn('text-sm font-medium', form.connectionType === 'ORIGIN' ? 'text-cyan-200' : 'text-slate-200')}>
-                  {t('form.connectionType.origin', 'Origin عادي')}
+                  {t('form.connectionType.origin')}
                 </p>
               </div>
               <p className="mt-1 text-xs text-slate-400">
-                {t('form.connectionType.originDesc', 'توجيه DNS للأصل مباشرة دون Agent.')}
+                {t('form.connectionType.originDesc')}
               </p>
             </button>
 
@@ -349,22 +350,20 @@ export function ServerFormModal({
               <div className="flex items-center gap-2">
                 <Shield className={cn('h-4 w-4', form.connectionType === 'GUARD' ? 'text-cyan-400' : 'text-slate-400')} />
                 <p className={cn('text-sm font-medium', form.connectionType === 'GUARD' ? 'text-cyan-200' : 'text-slate-200')}>
-                  {t('form.connectionType.guard', 'Guard (Agent / نفق)')}
+                  {t('form.connectionType.guard')}
                 </p>
               </div>
               <p className="mt-1 text-xs text-slate-400">
-                {t('form.connectionType.guardDesc', 'نفق آمن مشفر وتثبيت Agent على سيرفرك.')}
+                {t('form.connectionType.guardDesc')}
               </p>
             </button>
           </div>
         </Field>
+        )}
 
         {form.connectionType === 'GUARD' ? (
           <Notice tone="cyan">
-            {t(
-              'form.connectionType.guardNotice',
-              'في وضع Guard، لا تحتاج لإدخال عنوان IP الأصل. سيتم إنشاء نفق آمن وتوليد أمر التثبيت لتشغيله على خادمك مباشرة.',
-            )}
+            {t('form.connectionType.guardNotice')}
           </Notice>
         ) : (
           <div className="grid grid-cols-3 gap-3">

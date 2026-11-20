@@ -595,9 +595,17 @@ export const selectIsInitialized = (state: AuthState): boolean =>
 export const selectUserPermissions = (state: AuthState): string[] =>
   state.user?.permissions ?? []
 
+/**
+ * هل المستخدم عنده الصلاحية؟ المصدر: user.permissions من GET /auth/me.
+ * OWNER عنده كل الصلاحيات (نفس منطق الباك). لو permissions مش متاحة بترجع false.
+ */
 export const selectHasPermission =
   (permission: string) =>
-  (state: AuthState): boolean =>
-    state.user?.permissions?.includes(permission) ?? false
+  (state: AuthState): boolean => {
+    const user = state.user
+    if (!user) return false
+    if (user.role === 'OWNER') return true
+    return Array.isArray(user.permissions) && user.permissions.includes(permission)
+  }
 
 export default useAuthStore

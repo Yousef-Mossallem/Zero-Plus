@@ -2,6 +2,7 @@
 // حالات التحميل والفاضي والخطأ + الـ Pagination
 
 import type { ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 import { AlertCircle, ChevronLeft, ChevronRight, Inbox, RefreshCw } from 'lucide-react'
 
 import { cn } from '../../utils/format'
@@ -46,18 +47,19 @@ export function ErrorState({
   message: string
   onRetry?: () => void
 }) {
+  const { t } = useTranslation('common')
   return (
     <div className="zp-anim-fade-in flex flex-col items-center justify-center px-6 py-16 text-center">
       <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-rose-500/10 text-rose-400 ring-1 ring-rose-500/20">
         <AlertCircle className="h-7 w-7" />
       </div>
-      <p className="mt-4 text-base font-semibold text-white">Something went wrong</p>
+      <p className="mt-4 text-base font-semibold text-white">{t('ui.somethingWrong', 'Something went wrong')}</p>
       <p dir="auto" className="mt-1 max-w-md text-sm text-slate-400">
         {message}
       </p>
       {onRetry && (
         <Button className="mt-5" icon={RefreshCw} onClick={onRetry}>
-          Try again
+          {t('actions.tryAgain', 'Try again')}
         </Button>
       )}
     </div>
@@ -85,13 +87,14 @@ export function PaginationBar({
   onLimit?: (limit: number) => void
   disabled?: boolean
 }) {
+  const { t } = useTranslation('common')
   const from = total === 0 ? 0 : (page - 1) * limit + 1
   const to = Math.min(page * limit, total)
 
   return (
     <div className="flex flex-col items-center justify-between gap-3 border-t border-white/6 px-5 py-3.5 sm:flex-row">
       <p className="text-xs text-slate-500">
-        Showing <span className="text-slate-300">{from}–{to}</span> of{' '}
+        {t('ui.showing', 'Showing')} <span className="text-slate-300">{from}–{to}</span> {t('ui.of', 'of')}{' '}
         <span className="text-slate-300">{total.toLocaleString('en-US')}</span>
       </p>
 
@@ -105,7 +108,7 @@ export function PaginationBar({
           >
             {[10, 20, 50, 100].map((n) => (
               <option key={n} value={n} className="bg-[#0b1224]">
-                {n} / page
+                {n} / {t('ui.perPage', 'page')}
               </option>
             ))}
           </select>
@@ -117,21 +120,21 @@ export function PaginationBar({
             disabled={disabled || page <= 1}
             onClick={() => onPage(page - 1)}
             className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 text-slate-400 hover:bg-white/5 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
-            aria-label="Previous page"
+            aria-label={t('ui.prevPage', 'Previous page')}
           >
-            <ChevronLeft className="h-4 w-4" />
+            <ChevronLeft className="h-4 w-4 rtl:rotate-180" />
           </button>
           <span className="min-w-20 text-center text-xs text-slate-400">
-            Page <span className="text-white">{page}</span> / {Math.max(1, totalPages)}
+            {t('ui.page', 'Page')} <span className="text-white">{page}</span> / {Math.max(1, totalPages)}
           </span>
           <button
             type="button"
             disabled={disabled || page >= totalPages}
             onClick={() => onPage(page + 1)}
             className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 text-slate-400 hover:bg-white/5 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
-            aria-label="Next page"
+            aria-label={t('ui.nextPage', 'Next page')}
           >
-            <ChevronRight className="h-4 w-4" />
+            <ChevronRight className="h-4 w-4 rtl:rotate-180" />
           </button>
         </div>
       </div>

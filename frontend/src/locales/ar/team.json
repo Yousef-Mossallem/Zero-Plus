@@ -54,7 +54,56 @@
     "deactivate": "إلغاء التفعيل",
     "activate": "تفعيل",
     "you": "أنت",
-    "noMembers": "لا يوجد أعضاء"
+    "noMembers": "لا يوجد أعضاء",
+    "save": "حفظ",
+    "noGroups": "لا توجد مجموعات",
+    "effectivePermissions": "الصلاحيات النهائية ({{count}})",
+    "morePermissions": "+{{count}} أخرى",
+    "overrides": "استثناءات فردية",
+    "deny": "سحب",
+    "grant": "منح",
+    "joinedAt": "تاريخ الانضمام",
+    "count": "{{count}} عضو",
+    "noResults": "لا توجد نتائج",
+    "range": "{{from}}–{{to}} من {{total}}",
+    "cols": {
+      "user": "المستخدم",
+      "role": "الدور",
+      "status": "الحالة",
+      "lastLogin": "آخر دخول",
+      "groups": "المجموعات",
+      "actions": "إجراءات"
+    },
+    "errors": {
+      "changeRole": "فشل تغيير الدور",
+      "load": "فشل تحميل الأعضاء",
+      "toggle": "فشل تحديث حالة العضو",
+      "loadMember": "فشل تحميل بيانات العضو",
+      "groups": "فشل تحديث المجموعات",
+      "override": "فشل تحديث الاستثناء"
+    },
+    "allRoles": "كل الأدوار",
+    "allStatuses": "كل الحالات",
+    "allGroups": "كل المجموعات",
+    "clearFilters": "مسح الفلاتر",
+    "confirmDeactivate": "إلغاء تفعيل {{name}}؟ سيفقد الوصول فورًا.",
+    "confirmActivate": "تفعيل {{name}}؟",
+    "confirmRole": "تغيير الدور إلى {{role}}؟",
+    "confirmRemoveOverride": "إزالة الاستثناء الخاص بـ {{permission}}؟",
+    "notice": {
+      "deactivated": "تم إلغاء تفعيل العضو",
+      "activated": "تم تفعيل العضو",
+      "roleChanged": "تم تحديث الدور",
+      "groupsSaved": "تم تحديث المجموعات",
+      "overrideSaved": "تم حفظ الاستثناء",
+      "overrideRemoved": "تمت إزالة الاستثناء"
+    },
+    "saveGroups": "حفظ المجموعات",
+    "noGroupsAvailable": "لا توجد مجموعات متاحة",
+    "noOverrides": "لا توجد استثناءات فردية",
+    "selectPermission": "اختر صلاحية…",
+    "addOverride": "إضافة",
+    "removeOverride": "إزالة الاستثناء"
   },
   "groups": {
     "search": "بحث في المجموعات...",
@@ -63,7 +112,51 @@
     "description": "الوصف",
     "permissions": "الصلاحيات",
     "systemGroup": "مجموعة نظام — لا يمكن تعديل اسمها",
-    "noGroups": "لا توجد مجموعات"
+    "noGroups": "لا توجد مجموعات",
+    "nameRequired": "الاسم مطلوب",
+    "permsRequired": "اختر صلاحية واحدة على الأقل",
+    "errors": {
+      "save": "فشل حفظ المجموعة",
+      "load": "فشل تحميل المجموعات",
+      "members": "فشل تحميل أعضاء المجموعة",
+      "addMember": "فشل إضافة العضو",
+      "removeMember": "فشل إزالة العضو",
+      "delete": "فشل حذف المجموعة",
+      "catalog": "فشل تحميل كتالوج الصلاحيات"
+    },
+    "editTitle": "تعديل المجموعة",
+    "createTitle": "إنشاء مجموعة جديدة",
+    "namePlaceholder": "مثال: محللو البيانات",
+    "systemNote": "مجموعة نظام — لا يمكن تغيير الاسم",
+    "descriptionPlaceholder": "وصف مختصر للمجموعة",
+    "permissionsSelected": "الصلاحيات ({{count}} محددة)",
+    "saveChanges": "حفظ التعديلات",
+    "createBtn": "إنشاء",
+    "confirmDelete": "حذف المجموعة؟",
+    "memberCount": "{{count}} عضو",
+    "permCount": "{{count}} صلاحية",
+    "count": "{{count}} مجموعة",
+    "empty": "لا توجد مجموعات",
+    "noResults": "لا توجد مجموعات مطابقة",
+    "systemBadge": "نظام",
+    "edit": "تعديل المجموعة",
+    "delete": "حذف المجموعة",
+    "confirmDeleteNamed": "حذف المجموعة «{{name}}»؟ سيفقد أعضاؤها صلاحياتها.",
+    "notice": {
+      "created": "تم إنشاء المجموعة",
+      "updated": "تم تحديث المجموعة",
+      "deleted": "تم حذف المجموعة",
+      "memberAdded": "تمت إضافة العضو",
+      "memberRemoved": "تمت إزالة العضو"
+    },
+    "manageMembers": "إدارة الأعضاء",
+    "membersTitle": "أعضاء {{name}}",
+    "searchUsers": "ابحث عن مستخدم لإضافته…",
+    "addMember": "إضافة",
+    "removeMember": "إزالة من المجموعة",
+    "currentMembers": "الأعضاء الحاليون ({{count}})",
+    "noMembers": "لا يوجد أعضاء في هذه المجموعة",
+    "confirmRemoveMember": "إزالة {{name}} من هذه المجموعة؟"
   },
   "invites": {
     "create": "دعوة عضو جديد",
@@ -74,9 +167,61 @@
     "resend": "إعادة إرسال",
     "revoke": "إلغاء",
     "sentSuccess": "تم إرسال الدعوة بنجاح",
-    "noInvites": "لا توجد دعوات"
+    "noInvites": "لا توجد دعوات",
+    "emailRequired": "البريد الإلكتروني مطلوب",
+    "errors": {
+      "send": "فشل إرسال الدعوة",
+      "load": "فشل تحميل الدعوات",
+      "resend": "فشل إعادة إرسال الدعوة",
+      "revoke": "فشل إلغاء الدعوة"
+    },
+    "newTitle": "دعوة عضو جديد",
+    "expiresHours": "تنتهي خلال (ساعة)",
+    "sentTo": "تم إرسال الدعوة إلى {{email}}",
+    "acceptLink": "رابط القبول (dev only):",
+    "tabs": {
+      "all": "الكل",
+      "pending": "معلّقة",
+      "accepted": "مقبولة",
+      "expired": "منتهية",
+      "revoked": "ملغاة"
+    },
+    "count": "{{count}} دعوة",
+    "cols": {
+      "email": "البريد الإلكتروني",
+      "role": "الدور",
+      "status": "الحالة",
+      "expiresAt": "تنتهي في",
+      "sentAt": "أُرسلت في",
+      "actions": "إجراءات"
+    },
+    "empty": "لا توجد دعوات",
+    "range": "{{from}}–{{to}} من {{total}}",
+    "emailInvalid": "أدخل بريدًا إلكترونيًا صحيحًا",
+    "expiresInvalid": "مدة الصلاحية بين 1 و720 ساعة",
+    "initialGroups": "المجموعات الابتدائية",
+    "initialGroupsHint": "اختياري — ينضم المستخدم لهذه المجموعات عند القبول",
+    "noGroups": "لا توجد مجموعات متاحة",
+    "expiresHint": "بين 1 و720 ساعة (30 يومًا)",
+    "notice": {
+      "resent": "تمت إعادة إرسال الدعوة إلى {{email}}",
+      "revoked": "تم إلغاء الدعوة",
+      "created": "تم إنشاء الدعوة"
+    },
+    "confirmRevoke": "إلغاء الدعوة المرسلة إلى {{email}}؟"
   },
   "errors": {
     "noPermission": "ليس لديك صلاحية لعرض هذه الصفحة"
+  },
+  "actions": {
+    "cancel": "إلغاء",
+    "close": "إغلاق",
+    "clear": "مسح",
+    "refresh": "تحديث"
+  },
+  "loading": "جارٍ التحميل…",
+  "pager": {
+    "prev": "الصفحة السابقة",
+    "next": "الصفحة التالية"
   }
 }

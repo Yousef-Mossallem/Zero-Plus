@@ -3,6 +3,7 @@
 
 import { useEffect, type ReactNode } from 'react'
 import { X } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 import { cn } from '../../utils/format'
 import { TONE_ICON, type IconType, type Tone } from './tones'
@@ -98,7 +99,7 @@ export function Modal({
             type="button"
             onClick={onClose}
             className="rounded-lg p-1.5 text-slate-500 hover:bg-white/5 hover:text-white"
-            aria-label="Close"
+            aria-label={t('actions.close', 'Close')}
           >
             <X className="h-5 w-5" />
           </button>
@@ -135,8 +136,11 @@ export function Drawer({
   subtitle?: ReactNode
   children: ReactNode
 }) {
+  const { t, i18n } = useTranslation('common')
   useOverlayBehavior(open, onClose)
   if (!open) return null
+  // الغلاف ثابت LTR (الدراور ملزوق يمين)، لكن المحتوى بيتبع اتجاه اللغة
+  const contentDir = i18n.dir(i18n.language)
 
   return (
     <div dir="ltr" className="fixed inset-0 z-60">
@@ -145,7 +149,7 @@ export function Drawer({
         onClick={onClose}
       />
       <aside className="zp-anim-drawer absolute right-0 top-0 flex h-dvh w-full max-w-xl flex-col border-l border-white/10 bg-[#070b14] shadow-2xl shadow-black/60">
-        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-white/6 px-5 py-5 sm:px-6">
+        <div dir={contentDir} className="flex shrink-0 items-start justify-between gap-3 border-b border-white/6 px-5 py-5 sm:px-6">
           <div className="min-w-0">
             <h3 className="truncate text-lg font-semibold text-white">{title}</h3>
             {subtitle && <div className="mt-1 text-xs text-slate-500">{subtitle}</div>}
@@ -159,7 +163,7 @@ export function Drawer({
             <X className="h-5 w-5" />
           </button>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5 sm:px-6">
+        <div dir={contentDir} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5 sm:px-6">
           {children}
         </div>
       </aside>

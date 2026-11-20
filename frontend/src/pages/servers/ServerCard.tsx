@@ -18,6 +18,7 @@ import {
   Shield,
   Trash2,
   Wrench,
+  Network,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Badge, Button, Card } from '../../components/ui/kit'
@@ -29,6 +30,7 @@ import {
   type Server,
 } from '../../services/serversService'
 import { cn, timeAgo } from '../../utils/format'
+import { getGuardAgentState } from '../../utils/serverMeta'
 import { STATUS_META } from './shared'
 
 // ==================================================================
@@ -134,6 +136,9 @@ export function ServerCard({
 }) {
   const { t } = useTranslation('servers')
   const meta = STATUS_META[server.status]
+  // Flow is decided by the backend's setupMode, never by which buttons exist
+  const isGuard = server.setupMode === 'GUARD'
+  const agentState = getGuardAgentState(server)
   const inMaintenance = server.status === 'MAINTENANCE'
   const fullySetUp = server.dnsVerified && server.gatewayReachable
   const load = server.currentLoadPercent
@@ -206,24 +211,29 @@ export function ServerCard({
           </Badge>
 
           {/* نفق الـ Agent / Guard Badge */}
-          {server.tunnelUp ? (
+          {!isGuard ? (
+            <span className="inline-flex items-center gap-1 text-xs text-slate-500">
+              <Network className="h-3 w-3" />
+              <span>{t('card.setupMode.ORIGIN')}</span>
+            </span>
+          ) : agentState === 'connected' ? (
             <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-300">
               <span className="relative flex h-2 w-2">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
               </span>
               <Shield className="h-3 w-3" />
-              <span>{t('card.tunnelUp', 'النفق متصل (Guard)')}</span>
+              <span>{t('card.tunnelUp')}</span>
             </span>
-          ) : server.agentToken ? (
+          ) : agentState === 'unstable' ? (
             <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-400/30 bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-300">
               <Radio className="h-3 w-3" />
-              <span>{t('card.tunnelPending', 'نفق غير متصل')}</span>
+              <span>{t('card.tunnelUnstable')}</span>
             </span>
           ) : (
-            <span className="inline-flex items-center gap-1 text-xs text-slate-500">
-              <Shield className="h-3 w-3" />
-              <span>{t('card.originOnly', 'Origin مباشر')}</span>
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-400/20 bg-slate-500/10 px-2 py-0.5 text-xs font-medium text-slate-300">
+              <Radio className="h-3 w-3" />
+              <span>{server.agentToken ? t('card.tunnelDown') : t('card.tunnelPending')}</span>
             </span>
           )}
 
@@ -239,15 +249,15 @@ export function ServerCard({
         </div>
 
         {/* ---------- Agent Live Metrics (if tunnel up) ---------- */}
-        {server.tunnelUp && (
+        {isGuard && agentState !== 'disconnected' && (
           <div className="mt-3 rounded-xl border border-emerald-400/20 bg-emerald-500/5 p-3 space-y-2">
             <div className="flex items-center justify-between text-xs">
               <span className="flex items-center gap-1 text-emerald-300 font-medium">
                 <Shield className="h-3.5 w-3.5" />
-                <span>{t('card.agentLive', 'حالة الـ Agent')}</span>
+                <span>{t('card.agentLive')}</span>
               </span>
               <span className="text-[11px] text-slate-400">
-                {server.lastAgentAt ? `${t('card.lastHeartbeat', 'آخر نبضة:')} ${timeAgo(server.lastAgentAt)}` : '—'}
+                {server.lastAgentAt ? `${t('card.lastHeartbeat')} ${timeAgo(server.lastAgentAt)}` : '—'}
               </span>
             </div>
 
@@ -404,11 +414,13 @@ export function ServerCard({
         </div>
 
         {/* ---------- Setup checklist ---------- */}
-        <div className="mt-4 grid grid-cols-3 gap-2">
-          <SetupItem label={t('card.setup.ownership')} ok={server.dnsVerified} />
-          <SetupItem label={t('card.setup.routing')} ok={server.gatewayReachable} />
-          <SetupItem label={t('card.setup.origin')} ok={server.originReachable} />
-        </div>
+        {!isGuard && (
+          <div className="mt-4 grid grid-cols-3 gap-2">
+            <SetupItem label={t('card.setup.ownership')} ok={server.dnsVerified} />
+            <SetupItem label={t('card.setup.routing')} ok={server.gatewayReachable} />
+            <SetupItem label={t('card.setup.origin')} ok={server.originReachable} />
+          </div>
+        )}
 
         {onDetails && (
           <Button size="sm" variant="ghost" icon={Gauge} onClick={onDetails}>
@@ -418,9 +430,28 @@ export function ServerCard({
 
         {/* ---------- Actions ---------- */}
         <div className="mt-5 flex flex-wrap items-center gap-2 border-t border-white/6 pt-4">
-          <Button size="sm" variant={fullySetUp ? 'outline' : 'primary'} icon={Globe} onClick={onDns}>
-            {fullySetUp ? t('card.dns') : t('card.finishSetup')}
-          </Button>
+          {!isGuard && (
+            <Button size="sm" variant={fullySetUp ? 'outline' : 'primary'} icon={Globe} onClick={onDns}>
+              {fullySetUp ? t('card.dns') : t('card.finishSetup')}
+            </Button>
+          )}
+
+          {/* تفعيل / إدارة النفق */}
+          {isGuard && canManage && onTunnel && (
+            <Button
+              size="sm"
+              variant={server.tunnelUp ? 'outline' : 'ghost'}
+              icon={Shield}
+              onClick={onTunnel}
+              className={cn(server.tunnelUp && 'border-emerald-500/30 text-emerald-300')}
+            >
+              {server.tunnelUp
+                ? t('card.tunnelActive')
+                : server.agentToken
+                ? t('card.tunnelCommand')
+                : t('card.enableTunnel')}
+            </Button>
+          )}
 
           {/* تفعيل / إدارة النفق */}
           {canManage && onTunnel && (
@@ -432,16 +463,16 @@ export function ServerCard({
               className={cn(server.tunnelUp && 'border-emerald-500/30 text-emerald-300')}
             >
               {server.tunnelUp
-                ? t('card.tunnelActive', 'النفق مفعّل')
+                ? t('card.tunnelActive')
                 : server.agentToken
-                ? t('card.tunnelCommand', 'أمر النفق')
-                : t('card.enableTunnel', 'تفعيل Guard')}
+                ? t('card.tunnelCommand')
+                : t('card.enableTunnel')}
             </Button>
           )}
 
           {canManage && (
             <>
-              {onProbe && (
+              {!isGuard && onProbe && (
                 <Button
                   size="sm"
                   icon={Gauge}

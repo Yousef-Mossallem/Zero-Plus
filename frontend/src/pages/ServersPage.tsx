@@ -49,6 +49,7 @@ import { useDebounce } from '../hooks/useDebounce'
 import { getSocket } from '../services/socket'
 import {
   getApiErrorInfo,
+  getApiErrorText,
   listServers,
   mergeServerStatusEvent,
   requestProbe,
@@ -60,7 +61,7 @@ import {
   type ServerStatusEvent,
 } from '../services/serversService'
 import type { ServerMode, ServerStatus } from '../services/types'
-import { selectUserRole, useAuthStore } from '../store/authStore'
+import { selectHasPermission, selectUserRole, useAuthStore } from '../store/authStore'
 import { cn, timeAgo } from '../utils/format'
 import { MANAGE_ROLES, PAGE_SIZE, STATUS_META } from './servers/shared'
 import { ServerFormModal } from './servers/ServerFormModal'
@@ -136,6 +137,23 @@ export default function ServersPage() {
 
   const role = useAuthStore(selectUserRole)
   const canManage = role !== null && MANAGE_ROLES.includes(role)
+  // Guard agent actions follow the backend permission (servers:enable-agent)
+  const canAgent = useAuthStore(selectHasPermission('servers:enable-agent'))
+
+  /** Guard only: enable-tunnel → show the install command. A token that already exists opens the modal so it can be rotated. */
+  const openTunnel = async (srv: Server) => {
+    if (srv.setupMode !== 'GUARD') return
+    try {
+      const res = await enableTunnel(srv.id)
+      setTunnelState({ server: srv, initialData: res })
+    } catch (err) {
+      if (getApiErrorInfo(err).code === 'AGENT_TOKEN_ALREADY_ISSUED') {
+        setTunnelState({ server: srv, initialData: null })
+      } else {
+        toast.error(t('tunnel.enableFailed'), getApiErrorText(err))
+      }
+    }
+  }
 
   const fmtInt = useCallback(
     (n: number) =>
@@ -150,6 +168,8 @@ export default function ServersPage() {
   const [status, setStatus] = useState('')
   const [mode, setMode] = useState('')
   const [dnsFilter, setDnsFilter] = useState('')
+  const [setupFilter, setSetupFilter] = useState('')
+  const [tunnelFilter, setTunnelFilter] = useState('')
   const [sort, setSort] = useState<SortKey>('newest')
   const [page, setPage] = useState(1)
   const debouncedSearch = useDebounce(search)
@@ -251,8 +271,11 @@ export default function ServersPage() {
       ...(status && { status: status as ServerStatus }),
       ...(mode && { mode: mode as ServerMode }),
       ...(dnsFilter && { dnsVerified: dnsFilter === 'true' }),
+      ...(setupFilter && { setupMode: setupFilter as 'ORIGIN' | 'GUARD' }),
+      // tunnelUp only applies to Guard servers
+      ...(tunnelFilter && { tunnelUp: tunnelFilter === 'true' }),
     }),
-    [page, sortOption, debouncedSearch, status, mode, dnsFilter],
+    [page, sortOption, debouncedSearch, status, mode, dnsFilter, setupFilter, tunnelFilter],
   )
 
   /** silent = background refresh: no loading state, no error toast */
@@ -277,7 +300,7 @@ export default function ServersPage() {
         setError(null)
       } catch (err) {
         if (id !== requestId.current) return
-        const { message } = getApiErrorInfo(err)
+        const message = getApiErrorText(err)
         if (!silent) {
           setError(message)
           toastRef.current.error(t('toast.loadFailed'), message)
@@ -352,12 +375,14 @@ export default function ServersPage() {
   }, [handleSocketEvent])
 
   // ---------------- Helpers ----------------
-  const hasFilters = Boolean(search || status || mode || dnsFilter)
+  const hasFilters = Boolean(search || status || mode || dnsFilter || setupFilter || tunnelFilter)
   const clearFilters = () => {
     setSearch('')
     setStatus('')
     setMode('')
     setDnsFilter('')
+    setSetupFilter('')
+    setTunnelFilter('')
     setPage(1)
   }
 
@@ -381,7 +406,7 @@ export default function ServersPage() {
       toast.success(res.message)
       void load(true) // summary changes
     } catch (err) {
-      toast.error(t('toast.maintenanceFailed'), getApiErrorInfo(err).message)
+      toast.error(t('toast.maintenanceFailed'), getApiErrorText(err))
     } finally {
       setBusyId(null)
     }
@@ -390,6 +415,8 @@ export default function ServersPage() {
   /** Re-measure capacity: POST /probe → 202, the numbers arrive via Socket / polling */
   const handleProbe = async (server: Server) => {
     if (probingIds.has(server.id)) return
+    // Probe is Origin-only (PROBE_NOT_AVAILABLE_FOR_GUARD)
+    if (server.setupMode === 'GUARD') return
 
     if (!server.dnsVerified) {
       toast.info(t('toast.verifyFirst'), t('toast.verifyFirstDesc'))
@@ -402,7 +429,8 @@ export default function ServersPage() {
       startProbing(server.id, server.lastProbeAt)
       toast.info(t('toast.measureStarted'), res.message)
     } catch (err) {
-      const { status: httpStatus, code, message, retryAfterSec } = getApiErrorInfo(err)
+      const { status: httpStatus, code, retryAfterSec } = getApiErrorInfo(err)
+      const message = getApiErrorText(err)
       if (httpStatus === 409 || code === 'OWNERSHIP_REQUIRED') {
         toast.info(t('toast.verifyFirst'), message)
         setDnsState({ server, dns: null })
@@ -461,6 +489,7 @@ export default function ServersPage() {
   }
 
   const openDnsFromDrawer = (server: Server) => {
+    if (server.setupMode === 'GUARD') return
     setDetail(null)
     setDnsState({ server, dns: null })
   }
@@ -482,7 +511,7 @@ export default function ServersPage() {
   // Capacity numbers for the servers on the current page
   const measuredOnPage = servers.filter((s) => s.safeRequestsPerSecond !== null)
   const pageCapacity = measuredOnPage.reduce((n, s) => n + (s.safeRequestsPerSecond ?? 0), 0)
-  const unverifiedOnPage = servers.filter((s) => !s.dnsVerified).length
+  const unverifiedOnPage = servers.filter((s) => s.setupMode !== 'GUARD' && !s.dnsVerified).length
 
   // ==================================================================
   // Render
@@ -660,6 +689,33 @@ export default function ServersPage() {
             <option value="MONITOR_ONLY" className="bg-[#0b1224]">{t('mode.MONITOR_ONLY')}</option>
           </SelectInput>
           <SelectInput
+            value={setupFilter}
+            onChange={(e) => {
+              setSetupFilter(e.target.value)
+              if (e.target.value === 'ORIGIN') setTunnelFilter('')
+              setPage(1)
+            }}
+            className="lg:w-40"
+          >
+            <option value="">{t('page.filters.allSetupModes')}</option>
+            <option value="ORIGIN" className="bg-[#0b1224]">{t('card.setupMode.ORIGIN')}</option>
+            <option value="GUARD" className="bg-[#0b1224]">{t('card.setupMode.GUARD')}</option>
+          </SelectInput>
+          {setupFilter !== 'ORIGIN' && (
+            <SelectInput
+              value={tunnelFilter}
+              onChange={(e) => {
+                setTunnelFilter(e.target.value)
+                setPage(1)
+              }}
+              className="lg:w-44"
+            >
+              <option value="">{t('page.filters.anyTunnel')}</option>
+              <option value="true" className="bg-[#0b1224]">{t('page.filters.tunnelUp')}</option>
+              <option value="false" className="bg-[#0b1224]">{t('page.filters.tunnelDown')}</option>
+            </SelectInput>
+          )}
+          <SelectInput
             value={dnsFilter}
             onChange={(e) => {
               setDnsFilter(e.target.value)
@@ -744,14 +800,7 @@ export default function ServersPage() {
                 onMaintenance={() => void handleMaintenance(server)}
                 onProbe={() => void handleProbe(server)}
                 onDetails={() => setDetail(server)}
-                onTunnel={async () => {
-                  try {
-                    const res = await enableTunnel(server.id)
-                    setTunnelState({ server, initialData: res })
-                  } catch {
-                    setTunnelState({ server, initialData: null })
-                  }
-                }}
+                onTunnel={canAgent ? () => void openTunnel(server) : undefined}
               />
             ))}
           </div>
@@ -799,16 +848,10 @@ export default function ServersPage() {
       <ServerDetailDrawer
         server={detailServer}
         canManage={canManage}
+        canAgent={canAgent}
         onClose={() => setDetail(null)}
         onOpenDns={openDnsFromDrawer}
-        onOpenTunnel={async (srv) => {
-          try {
-            const res = await enableTunnel(srv.id)
-            setTunnelState({ server: srv, initialData: res })
-          } catch {
-            setTunnelState({ server: srv, initialData: null })
-          }
-        }}
+        onOpenTunnel={(srv) => void openTunnel(srv)}
         onServerUpdated={replaceServer}
       />
 

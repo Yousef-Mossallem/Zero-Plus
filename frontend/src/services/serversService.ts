@@ -20,6 +20,7 @@
 //     الصفحة عن طريق getApiErrorInfo (تحت)
 // ==================================================================
 
+import i18n from 'i18next'
 import api from './api'
 import { cleanParams } from './types'
 import type { Pagination, ServerMode, ServerStatus } from './types'
@@ -39,6 +40,8 @@ export interface Server {
   originPort: number
   status: ServerStatus
   mode: ServerMode
+  /** ORIGIN | GUARD — fixed at creation time by the backend */
+  setupMode?: SetupMode
   cpuCores: number | null
   ramMb: number | null
   verificationToken: string
@@ -142,6 +145,8 @@ export interface ServersQuery {
   status?: ServerStatus
   mode?: ServerMode
   dnsVerified?: boolean
+  setupMode?: SetupMode
+  tunnelUp?: boolean
   search?: string
   sortBy?: 'createdAt' | 'updatedAt' | 'domain' | 'status'
   sortOrder?: 'asc' | 'desc'
@@ -153,15 +158,32 @@ export interface ServersListResult {
   summary: Record<ServerStatus, number>
 }
 
-export interface CreateServerInput {
+export type SetupMode = 'ORIGIN' | 'GUARD'
+
+/** POST /servers — setupMode is sent explicitly and is immutable afterwards */
+export type CreateServerInput =
+  | {
+      domain: string
+      setupMode: 'ORIGIN'
+      originIp: string
+      originPort?: number
+      sslEnabled?: boolean
+      mode?: ServerMode
+    }
+  | {
+      // GUARD: the backend rejects origin fields (ORIGIN_FIELDS_NOT_ALLOWED_FOR_GUARD)
+      domain: string
+      setupMode: 'GUARD'
+    }
+
+/** PATCH /servers/:id — setupMode can never be changed */
+export type UpdateServerInput = Partial<{
   domain: string
   originIp: string
-  originPort?: number
-  sslEnabled?: boolean
-  mode?: ServerMode
-}
-
-export type UpdateServerInput = Partial<CreateServerInput>
+  originPort: number
+  sslEnabled: boolean
+  mode: ServerMode
+}>
 
 export interface ServerChange {
   field: 'domain' | 'originIp' | 'originPort' | 'sslEnabled' | 'mode'
@@ -220,6 +242,8 @@ export interface ApiErrorInfo {
   status: number | null
   code: string | null
   message: string
+  /** i18n key (servers ns) for known setup-mode error codes, else null */
+  messageKey: string | null
   /** من details.retryAfterSec أو هيدر Retry-After (للـ 429) */
   retryAfterSec: number | null
   /** أخطاء الحقول (400 VALIDATION_ERROR) */
@@ -231,6 +255,13 @@ export interface ApiErrorInfo {
  * { success:false, code, message, details?, errors? } + هيدر Retry-After
  * بدون الاعتماد على نوع مكتبة معينة (axios وغيره).
  */
+/** Setup-mode errors the backend can return; each maps to a servers-namespace key */
+const SETUP_MODE_ERROR_KEYS: Record<string, string> = {
+  PROBE_NOT_AVAILABLE_FOR_GUARD: 'errors.probeNotAvailableForGuard',
+  FEATURE_NOT_AVAILABLE_FOR_SETUP_MODE: 'errors.featureNotAvailableForSetupMode',
+  ORIGIN_FIELDS_NOT_ALLOWED_FOR_GUARD: 'errors.originFieldsNotAllowedForGuard',
+}
+
 export function getApiErrorInfo(error: unknown): ApiErrorInfo {
   const err = error as {
     response?: {
@@ -238,6 +269,7 @@ export function getApiErrorInfo(error: unknown): ApiErrorInfo {
       data?: {
         code?: string
         message?: string
+        messageAr?: string
         details?: { retryAfterSec?: number }
         errors?: Array<{ field: string; message: string }>
       }
@@ -257,7 +289,9 @@ export function getApiErrorInfo(error: unknown): ApiErrorInfo {
   return {
     status: res?.status ?? null,
     code: body?.code ?? null,
-    message: body?.message ?? err?.message ?? 'حدث خطأ غير متوقع',
+    // messageAr when the backend sends it, otherwise message
+    message: body?.messageAr ?? body?.message ?? err?.message ?? 'Unexpected error',
+    messageKey: body?.code ? (SETUP_MODE_ERROR_KEYS[body.code] ?? null) : null,
     retryAfterSec,
     fieldErrors: body?.errors ?? [],
   }
@@ -565,4 +599,12 @@ export async function listHeartbeats(
     { params: cleanParams(params) },
   )
   return data.data
+}
+
+/** Translated error text: setup-mode codes map to servers:errors.* keys, otherwise the backend message (messageAr preferred) */
+export function getApiErrorText(error: unknown): string {
+  const info = getApiErrorInfo(error)
+  if (!info.messageKey) return info.message
+  const tr = i18n.t.bind(i18n) as (key: string) => string
+  return tr(`servers:${info.messageKey}`)
 }

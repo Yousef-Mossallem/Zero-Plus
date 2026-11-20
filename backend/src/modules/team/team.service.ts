@@ -634,6 +634,8 @@ export async function getMember(
   return {
     ...user,
     groups: user.groupMemberships.map((m) => m.group),
+    // نفس شكل القائمة (overrides)؛ permissionOverrides محفوظ للتوافق مع القديم
+    overrides: user.permissionOverrides,
     permissions,
   }
 }
@@ -660,19 +662,13 @@ export async function updateMemberRole(
     // أدمن يقدر يغيّر دوره لتحت بمخاطره — نسمح
   }
 
-  const updated = await fastify.prisma.user.update({
+  await fastify.prisma.user.update({
     where: { id: targetUserId },
     data: { role: data.role },
-    select: {
-      id: true,
-      email: true,
-      fullName: true,
-      role: true,
-      organizationId: true,
-    },
   })
 
-  return updated
+  // Return full member (same shape as getMember) so clients keep groups/overrides/permissions
+  return getMember(fastify, actorUserId, targetUserId)
 }
 
 export async function setMemberGroups(

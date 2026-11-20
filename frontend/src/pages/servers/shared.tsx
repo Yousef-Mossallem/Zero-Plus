@@ -47,8 +47,8 @@ export function validateServerForm(form: ServerForm): Record<string, string> {
   else if (/[\s/?#@\\:]/.test(domain)) errors.domain = 'validation.domain.noPathOrPort'
   else if (!domain.includes('.')) errors.domain = 'validation.domain.needsExtension'
 
-  // If GUARD is chosen, origin IP/Port is handled by tunnel agent (placeholder IP used for createServer)
-  if (form.connectionType !== 'GUARD') {
+  // Origin fields are only required for ORIGIN setup mode
+  if (form.connectionType === 'ORIGIN') {
     const ip = form.originIp.trim()
     const octets = ip.split('.')
     const ipOk = octets.length === 4 && octets.every((o) => /^\d{1,3}$/.test(o) && Number(o) <= 255)

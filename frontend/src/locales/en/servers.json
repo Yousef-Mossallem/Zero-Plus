@@ -47,7 +47,11 @@
       "verified": "Ownership verified",
       "notVerified": "Not verified",
       "clear": "Clear",
-      "clearFilters": "Clear filters"
+      "clearFilters": "Clear filters",
+      "allSetupModes": "All setup types",
+      "anyTunnel": "Any tunnel state",
+      "tunnelUp": "Tunnel up",
+      "tunnelDown": "Tunnel down"
     },
     "sort": {
       "newest": "Newest first",
@@ -120,7 +124,20 @@
     "edit": "Edit",
     "editAria": "Edit server",
     "delete": "Delete",
-    "deleteAria": "Delete server"
+    "deleteAria": "Delete server",
+    "setupMode": {
+      "ORIGIN": "Origin",
+      "GUARD": "Guard"
+    },
+    "tunnelUp": "Tunnel connected",
+    "tunnelPending": "Tunnel not connected",
+    "agentLive": "Agent status",
+    "lastHeartbeat": "Last heartbeat:",
+    "tunnelActive": "Tunnel active",
+    "tunnelCommand": "Install command",
+    "enableTunnel": "Enable tunnel",
+    "tunnelDown": "Agent disconnected",
+    "tunnelUnstable": "Unstable (stale heartbeat)"
   },
   "drawer": {
     "fallbackTitle": "Server",
@@ -135,7 +152,8 @@
     "noUsable": "No usable result from the last measurement",
     "sections": {
       "measurement": "Measurement",
-      "health": "Health"
+      "health": "Health",
+      "agent": "Tunnel & Agent status"
     },
     "fields": {
       "maxRate": "Max sustained rate",
@@ -148,7 +166,20 @@
       "currentLoad": "Current load",
       "originReachable": "Origin reachable",
       "httpsOrigin": "HTTPS origin",
-      "lastCheck": "Last health check"
+      "lastCheck": "Last health check",
+      "lastHeartbeat": "Last heartbeat",
+      "agentVersion": "Agent version",
+      "agentOs": "Operating system",
+      "agentCpu": "CPU usage",
+      "agentRam": "RAM usage",
+      "agentDisk": "Disk",
+      "originHealth": "Origin health (from Agent)",
+      "tokenIssued": "Token issued",
+      "originHealthy": "Healthy ({{ms}} ms)",
+      "originDown": "Origin not responding",
+      "agentLoad": "Load average (1m)",
+      "estimatedMaxRps": "Estimated max throughput",
+      "tunnelPeerIp": "Tunnel peer IP"
     },
     "yes": "Yes",
     "no": "No",
@@ -161,7 +192,19 @@
     "retryIn": "Try again in {{s}}s",
     "unverifiedHint": "Verify domain ownership to enable measurement.",
     "maintenanceHint": "Measurement is paused while the server is in maintenance.",
-    "ownerOnly": "Only Owners and Admins can re-measure capacity."
+    "ownerOnly": "Only Owners and Admins can re-measure capacity.",
+    "tunnelConnected": "Online",
+    "tunnelWaiting": "Waiting for heartbeat",
+    "agentDisabled": "Not enabled",
+    "viewCommand": "Install command",
+    "confirmDisable": "Disable the Agent and revoke its token?",
+    "agentDisabledSuccess": "Agent disabled successfully",
+    "disableFailed": "Failed to disable the Agent",
+    "stopAgent": "Disable Agent",
+    "enableGuardDesc": "Enable the tunnel to secure the connection through the Zero Plus Guard agent instead of exposing the origin IP.",
+    "enableGuardNow": "Enable Guard now",
+    "tunnelUnstable": "Unstable (stale heartbeat)",
+    "tunnelDisconnected": "Disconnected"
   },
   "dns": {
     "title": "DNS setup",
@@ -272,7 +315,16 @@
       "added": "Server added",
       "addedDesc": "Follow the DNS steps to activate protection.",
       "updateFailed": "Could not update server",
-      "addFailed": "Could not add server"
+      "addFailed": "Could not add server",
+      "tunnelFailed": "Server created, but enabling the tunnel failed"
+    },
+    "connectionType": {
+      "origin": "Standard Origin",
+      "originDesc": "Point DNS directly at the origin, no Agent.",
+      "guard": "Guard (Agent / tunnel)",
+      "guardDesc": "Encrypted tunnel with an Agent installed on your server.",
+      "guardNotice": "In Guard mode you do not need an origin IP. A secure tunnel is created and an install command is generated to run on your server.",
+      "label": "Setup type"
     }
   },
   "validation": {
@@ -321,6 +373,13 @@
     "step1": "Copy the command above and run it as root on your origin server.",
     "step2": "The agent will establish an encrypted tunnel and send regular heartbeats.",
     "step3": "The tunnel status on the server card will automatically switch to «Online».",
-    "docsLink": "Installation & Troubleshooting Docs"
+    "docsLink": "Installation & Troubleshooting Docs",
+    "copyFailed": "Failed to copy to clipboard",
+    "enableFailed": "Failed to enable agent"
+  },
+  "errors": {
+    "probeNotAvailableForGuard": "Probe is not available for Guard servers.",
+    "featureNotAvailableForSetupMode": "This feature is not available for this server’s setup type.",
+    "originFieldsNotAllowedForGuard": "Origin fields cannot be sent for a Guard server."
   }
 }

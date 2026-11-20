@@ -31,6 +31,8 @@ export type ServerStatus =
 
 export type ServerMode = 'PROTECT' | 'MONITOR_ONLY'
 
+export type ServerSetupMode = 'ORIGIN' | 'GUARD'
+
 export type UserRole = 'OWNER' | 'ADMIN' | 'ANALYST' | 'VIEWER'
 
 /** يشيل القيم الفاضية قبل ما نبعت الـ query params للباك (الباك بيرفض '' في بعض الحقول) */

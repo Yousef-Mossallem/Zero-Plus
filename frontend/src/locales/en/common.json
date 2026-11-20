@@ -6,7 +6,8 @@
     "search": "Search",
     "close": "Close",
     "back": "Back",
-    "tryAgain": "Try again"
+    "tryAgain": "Try again",
+    "done": "Done"
   },
   "status": {
     "loading": "Loading...",
@@ -14,5 +15,14 @@
   },
   "language": {
     "label": "Language"
+  },
+  "ui": {
+    "somethingWrong": "Something went wrong",
+    "showing": "Showing",
+    "of": "of",
+    "perPage": "page",
+    "page": "Page",
+    "prevPage": "Previous page",
+    "nextPage": "Next page"
   }
 }
