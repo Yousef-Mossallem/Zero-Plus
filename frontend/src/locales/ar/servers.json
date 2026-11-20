@@ -124,7 +124,20 @@
     "edit": "تعديل",
     "editAria": "تعديل السيرفر",
     "delete": "حذف",
-    "deleteAria": "حذف السيرفر"
+    "deleteAria": "حذف السيرفر",
+    "setupMode": {
+      "ORIGIN": "Origin",
+      "GUARD": "Guard"
+    },
+    "tunnelUp": "النفق متصل",
+    "tunnelPending": "النفق غير متصل",
+    "agentLive": "حالة الـ Agent",
+    "lastHeartbeat": "آخر نبضة:",
+    "tunnelActive": "النفق مفعّل",
+    "tunnelCommand": "أمر التثبيت",
+    "enableTunnel": "تفعيل النفق",
+    "tunnelDown": "الـ Agent غير متصل",
+    "tunnelUnstable": "غير مستقر (نبض قديم)"
   },
   "drawer": {
     "fallbackTitle": "السيرفر",
@@ -139,7 +152,8 @@
     "noUsable": "لا نتيجة صالحة من آخر قياس",
     "sections": {
       "measurement": "القياس",
-      "health": "الصحة"
+      "health": "الصحة",
+      "agent": "حالة النفق والـ Agent"
     },
     "fields": {
       "maxRate": "أقصى معدل مستدام",
@@ -152,7 +166,15 @@
       "currentLoad": "الحمل الحالي",
       "originReachable": "الأصل متاح",
       "httpsOrigin": "الأصل عبر HTTPS",
-      "lastCheck": "آخر فحص صحة"
+      "lastCheck": "آخر فحص صحة",
+      "lastHeartbeat": "آخر نبضة",
+      "agentVersion": "إصدار الـ Agent",
+      "agentOs": "نظام التشغيل",
+      "agentCpu": "استهلاك المعالج",
+      "agentRam": "استهلاك الذاكرة",
+      "agentDisk": "القرص",
+      "originHealth": "صحة الأصل (من Agent)",
+      "tokenIssued": "تم إصدار التوكن"
     },
     "yes": "نعم",
     "no": "لا",
@@ -165,7 +187,19 @@
     "retryIn": "حاول مجدداً بعد {{s}} ث",
     "unverifiedHint": "أثبت ملكية النطاق لتفعيل القياس.",
     "maintenanceHint": "القياس متوقف أثناء صيانة السيرفر.",
-    "ownerOnly": "المالك والمسؤول فقط يمكنهما إعادة قياس السعة."
+    "ownerOnly": "المالك والمسؤول فقط يمكنهما إعادة قياس السعة.",
+    "tunnelConnected": "متصل Online",
+    "tunnelWaiting": "بانتظار النبضة",
+    "agentDisabled": "غير مفعّل",
+    "viewCommand": "أمر التثبيت",
+    "confirmDisable": "هل تريد إيقاف الـ Agent وإلغاء التوكن؟",
+    "agentDisabledSuccess": "تم إيقاف الـ Agent بنجاح",
+    "disableFailed": "فشل إيقاف الـ Agent",
+    "stopAgent": "إيقاف الـ Agent",
+    "enableGuardDesc": "فعّل النفق الآن لتأمين الاتصال عبر عميل Zero Plus Guard بدلاً من كشف الـ IP مباشرة.",
+    "enableGuardNow": "تفعيل Guard الآن",
+    "tunnelUnstable": "غير مستقر (نبضة قديمة)",
+    "tunnelDisconnected": "غير متصل"
   },
   "dns": {
     "title": "إعداد DNS",
@@ -276,7 +310,16 @@
       "added": "تمت إضافة السيرفر",
       "addedDesc": "اتبع خطوات DNS لتفعيل الحماية.",
       "updateFailed": "تعذّر تحديث السيرفر",
-      "addFailed": "تعذّر إضافة السيرفر"
+      "addFailed": "تعذّر إضافة السيرفر",
+      "tunnelFailed": "تم إنشاء السيرفر لكن فشل تفعيل النفق"
+    },
+    "connectionType": {
+      "origin": "Origin عادي",
+      "originDesc": "توجيه DNS للأصل مباشرة دون Agent.",
+      "guard": "Guard (Agent / نفق)",
+      "guardDesc": "نفق آمن مشفر وتثبيت Agent على سيرفرك.",
+      "guardNotice": "في وضع Guard، لا تحتاج لإدخال عنوان IP الأصل. سيتم إنشاء نفق آمن وتوليد أمر التثبيت لتشغيله على خادمك مباشرة.",
+      "label": "نوع الإعداد"
     }
   },
   "validation": {
@@ -298,5 +341,40 @@
       "range": "يجب أن يكون المنفذ بين 1 و65535",
       "reserved": "هذا المنفذ محجوز لخدمة غير ويب ولا يمكن استخدامه كأصل"
     }
+  },
+  "tunnel": {
+    "modalTitle": "تفعيل حماية Guard / نفق الـ Agent",
+    "modalSubtitle": "ثبّت عميل الحماية (Zero Plus Guard) على سيرفرك لربط النفق مباشرة",
+    "warningTitle": "تنبيه: التوكن يظهر لمرة واحدة فقط!",
+    "warningDesc": "انسخ أمر التثبيت بالكامل وشغّله على خادمك الآن. في حال إغلاق النافذة وفقدان التوكن، ستحتاج إلى إعادة توليد توكن جديد.",
+    "channelLabel": "صيغة أمر التثبيت",
+    "commandLabel": "أمر التثبيت",
+    "copy": "نسخ الأمر",
+    "copied": "تم النسخ",
+    "copiedTitle": "تم نسخ الأمر بنجاح",
+    "copiedDesc": "قم بتشغيل الأمر بصلاحيات root/sudo على سيرفرك.",
+    "alreadyIssued": "التوكن صادر مسبقاً",
+    "needRotate": "يجب إعادة توليد التوكن لتغيير صيغة الأمر.",
+    "rotateBtn": "إعادة توليد التوكن",
+    "confirmRotate": "هل أنت متأكد؟ سيتوقف الـ Agent الحالي",
+    "yesRotate": "نعم، دوّر",
+    "rotatedTitle": "تم تدوير التوكن بنجاح",
+    "rotatedDesc": "تم إنشاء أمر تثبيت وتوكن جديد. توقف الـ Agent القديم.",
+    "rotateFailed": "فشل إعادة توليد التوكن",
+    "done": "تم",
+    "noTokenCached": "تم إصدار التوكن مسبقاً ولا يمكن استرجاعه للحماية.",
+    "generateNew": "توليد أمر وتوكن جديد الآن",
+    "stepsTitle": "خطوات العمل:",
+    "step1": "انسخ الأمر أعلاه وشغّله على سيرفر الـ Origin كمسؤول.",
+    "step2": "سيقوم الـ Agent بإنشاء نفق آمن مشفّر ويرسل نبضات Heartbeat تلقائيًا.",
+    "step3": "ستتحول حالة النفق تلقائيًا على الكارت إلى «متصل Online».",
+    "docsLink": "دليل التثبيت واستكشاف الأخطاء",
+    "copyFailed": "فشل النسخ إلى الحافظة",
+    "enableFailed": "فشل تفعيل الـ Agent"
+  },
+  "errors": {
+    "probeNotAvailableForGuard": "القياس (Probe) غير متاح لسيرفرات Guard.",
+    "featureNotAvailableForSetupMode": "هذه الميزة غير متاحة لنوع إعداد هذا السيرفر.",
+    "originFieldsNotAllowedForGuard": "لا يمكن إرسال بيانات Origin لسيرفر Guard."
   }
 }

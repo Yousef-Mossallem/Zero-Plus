@@ -634,6 +634,8 @@ export async function getMember(
   return {
     ...user,
     groups: user.groupMemberships.map((m) => m.group),
+    // نفس شكل القائمة (overrides)؛ permissionOverrides محفوظ للتوافق مع القديم
+    overrides: user.permissionOverrides,
     permissions,
   }
 }

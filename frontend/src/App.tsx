@@ -3,7 +3,7 @@
 // بيغلّف التطبيق كله: الـ Router + استعادة الجلسة + صائد الأخطاء
 // ==================================================================
 
-import { useEffect, Component, Suspense, ReactNode } from 'react'
+import { useEffect, useState, Component, Suspense, ReactNode } from 'react'
 import { BrowserRouter } from 'react-router-dom'
 
 import i18n from './i18n'
@@ -74,8 +74,8 @@ export default function App() {
   // lang + dir على <html> حسب اللغة الحالية (وتحميل خط العربي)
   useDirection()
 
-  // إشعارات لحظية (Socket.IO): بتشتغل لما المستخدم يسجّل دخول وبتتنضف عند الخروج
-  useNotificationsLive()
+  // حالة التحميل الأولية للتحقق من الجلسة
+  const [isInitialized, setIsInitialized] = useState(false)
 
   // ----------------------------------------------------------------
   // Restore Session on App Load (بشكل آمن)
@@ -84,9 +84,9 @@ export default function App() {
     const store = useAuthStore.getState()
     // التحقق من وجود الدالة قبل استدعائها لمنع انهيار التطبيق
     if (typeof (store as any).initializeAuth === 'function') {
-      (store as any).initializeAuth()
+      (store as any).initializeAuth().then(() => setIsInitialized(true))
     } else if (typeof (store as any).init === 'function') {
-      (store as any).init()
+      (store as any).init().then(() => setIsInitialized(true))
     }
   }, [])
 
@@ -108,18 +108,38 @@ export default function App() {
   }, [])
 
   // ----------------------------------------------------------------
+  // Initialize Notifications Live (after auth is ready)
+  // ----------------------------------------------------------------
+  useEffect(() => {
+    if (isInitialized) {
+      useNotificationsLive()
+    }
+  }, [isInitialized])
+
+  // ----------------------------------------------------------------
   // Render
   // ----------------------------------------------------------------
   return (
     <AppErrorBoundary>
-      <BrowserRouter>
-        {/* Suspense: لحد ما ملفات الترجمة تتحمل (نفس خلفية الموقع عشان مفيش وميض) */}
-        <Suspense fallback={<div className="min-h-screen bg-[#05070f]" />}>
-          <AppRouter />
-          {/* توست الإشعارات اللحظية: فوق كل الصفحات */}
-          <AlertToast />
-        </Suspense>
-      </BrowserRouter>
+      {isInitialized ? (
+        <BrowserRouter>
+          {/* Suspense: لحد ما ملفات الترجمة تتحمل (نفس خلفية الموقع عشان مفيش وميض) */}
+          <Suspense fallback={<div className="min-h-screen bg-[#05070f]" />}>
+            <AppRouter />
+            {/* توست الإشعارات اللحظية: فوق كل الصفحات */}
+            <AlertToast />
+          </Suspense>
+        </BrowserRouter>
+      ) : (
+        <div className="min-h-screen bg-[#05070f] flex items-center justify-center">
+          <div className="text-white text-center">
+            <div className="spinner-border text-white" role="status">
+              <span className="visually-hidden">Loading...</span>
+            </div>
+            <p className="mt-3">جاري التحقق من الجلسة...</p>
+          </div>
+        </div>
+      )}
     </AppErrorBoundary>
   )
 }

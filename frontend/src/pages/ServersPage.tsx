@@ -49,6 +49,7 @@ import { useDebounce } from '../hooks/useDebounce'
 import { getSocket } from '../services/socket'
 import {
   getApiErrorInfo,
+  getApiErrorText,
   listServers,
   mergeServerStatusEvent,
   requestProbe,
@@ -68,6 +69,11 @@ import { DnsModal } from './servers/DnsModal'
 import { DeleteModal } from './servers/DeleteModal'
 import { ServerCard } from './servers/ServerCard'
 import ServerDetailDrawer from './servers/ServerDetailDrawer'
+import { TunnelModal } from './servers/TunnelModal'
+import {
+  enableTunnel,
+  type EnableTunnelResult,
+} from '../services/serversService'
 
 // ------------------------------------------------------------------
 // Constants
@@ -167,6 +173,7 @@ export default function ServersPage() {
   // ---------------- Modals / Drawer ----------------
   const [formState, setFormState] = useState<{ open: boolean; server: Server | null }>({ open: false, server: null })
   const [dnsState, setDnsState] = useState<{ server: Server; dns: DnsInstructions | null } | null>(null)
+  const [tunnelState, setTunnelState] = useState<{ server: Server; initialData: EnableTunnelResult | null } | null>(null)
   const [deleting, setDeleting] = useState<Server | null>(null)
   const [detail, setDetail] = useState<Server | null>(null)
 
@@ -271,7 +278,7 @@ export default function ServersPage() {
         setError(null)
       } catch (err) {
         if (id !== requestId.current) return
-        const { message } = getApiErrorInfo(err)
+        const message = getApiErrorText(err)
         if (!silent) {
           setError(message)
           toastRef.current.error(t('toast.loadFailed'), message)
@@ -375,7 +382,7 @@ export default function ServersPage() {
       toast.success(res.message)
       void load(true) // summary changes
     } catch (err) {
-      toast.error(t('toast.maintenanceFailed'), getApiErrorInfo(err).message)
+      toast.error(t('toast.maintenanceFailed'), getApiErrorText(err))
     } finally {
       setBusyId(null)
     }
@@ -384,6 +391,8 @@ export default function ServersPage() {
   /** Re-measure capacity: POST /probe → 202, the numbers arrive via Socket / polling */
   const handleProbe = async (server: Server) => {
     if (probingIds.has(server.id)) return
+    // Probe is Origin-only (PROBE_NOT_AVAILABLE_FOR_GUARD)
+    if (server.setupMode === 'GUARD') return
 
     if (!server.dnsVerified) {
       toast.info(t('toast.verifyFirst'), t('toast.verifyFirstDesc'))
@@ -396,7 +405,8 @@ export default function ServersPage() {
       startProbing(server.id, server.lastProbeAt)
       toast.info(t('toast.measureStarted'), res.message)
     } catch (err) {
-      const { status: httpStatus, code, message, retryAfterSec } = getApiErrorInfo(err)
+      const { status: httpStatus, code, retryAfterSec } = getApiErrorInfo(err)
+      const message = getApiErrorText(err)
       if (httpStatus === 409 || code === 'OWNERSHIP_REQUIRED') {
         toast.info(t('toast.verifyFirst'), message)
         setDnsState({ server, dns: null })
@@ -455,6 +465,7 @@ export default function ServersPage() {
   }
 
   const openDnsFromDrawer = (server: Server) => {
+    if (server.setupMode === 'GUARD') return
     setDetail(null)
     setDnsState({ server, dns: null })
   }
@@ -476,7 +487,7 @@ export default function ServersPage() {
   // Capacity numbers for the servers on the current page
   const measuredOnPage = servers.filter((s) => s.safeRequestsPerSecond !== null)
   const pageCapacity = measuredOnPage.reduce((n, s) => n + (s.safeRequestsPerSecond ?? 0), 0)
-  const unverifiedOnPage = servers.filter((s) => !s.dnsVerified).length
+  const unverifiedOnPage = servers.filter((s) => s.setupMode !== 'GUARD' && !s.dnsVerified).length
 
   // ==================================================================
   // Render
@@ -738,6 +749,14 @@ export default function ServersPage() {
                 onMaintenance={() => void handleMaintenance(server)}
                 onProbe={() => void handleProbe(server)}
                 onDetails={() => setDetail(server)}
+                onTunnel={async () => {
+                  try {
+                    const res = await enableTunnel(server.id)
+                    setTunnelState({ server, initialData: res })
+                  } catch {
+                    setTunnelState({ server, initialData: null })
+                  }
+                }}
               />
             ))}
           </div>
@@ -763,6 +782,16 @@ export default function ServersPage() {
         server={formState.server}
         onClose={() => setFormState((s) => ({ ...s, open: false }))}
         onSaved={handleSaved}
+        onTunnelCreated={(srv, tunnel) => {
+          setTunnelState({ server: srv, initialData: tunnel })
+        }}
+      />
+      <TunnelModal
+        open={tunnelState !== null}
+        server={tunnelState?.server ?? null}
+        initialData={tunnelState?.initialData ?? null}
+        onClose={() => setTunnelState(null)}
+        onEnabled={() => void load()}
       />
       <DnsModal
         server={dnsServer}
@@ -777,6 +806,14 @@ export default function ServersPage() {
         canManage={canManage}
         onClose={() => setDetail(null)}
         onOpenDns={openDnsFromDrawer}
+        onOpenTunnel={async (srv) => {
+          try {
+            const res = await enableTunnel(srv.id)
+            setTunnelState({ server: srv, initialData: res })
+          } catch {
+            setTunnelState({ server: srv, initialData: null })
+          }
+        }}
         onServerUpdated={replaceServer}
       />
 

@@ -43,7 +43,9 @@
       "policies": "Security policies",
       "policiesHint": "Rules the Gateway enforces",
       "reports": "Reports",
-      "reportsHint": "AI-written security reports"
+      "reportsHint": "AI-written security reports",
+      "team": "Team",
+      "teamHint": "Members, groups and invites"
     }
   },
   "validation": {

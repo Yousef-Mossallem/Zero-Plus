@@ -41,6 +41,8 @@ import ReportsPage from '../pages/ReportsPage'
 import NotificationsPage from '../pages/NotificationsPage'
 import SimulationPage from '../pages/SimulationPage'
 import ProfilePage from '../pages/ProfilePage'
+import TeamPage from '../pages/TeamPage'
+import RequirePermission from '../components/RequirePermission'
 
 // ------------------------------------------------------------------
 // Secondary (تفعّل لما الملفات تبقى جاهزة)
@@ -132,6 +134,11 @@ export default function AppRouter() {
       <Route path="/security-events" element={guard(<SecurityEventsPage />)} />
       <Route path="/reputation" element={guard(<ReputationPage />)} />
       <Route path="/organizations" element={guard(<OrganizationsPage />)} />
+      <Route path="/team" element={guard(
+          <RequirePermission permission="team:view">
+            <TeamPage />
+          </RequirePermission>,
+        )} />
       <Route path="/policies" element={guard(<PoliciesPage />)} />
       <Route path="/reports" element={guard(<ReportsPage />)} />
       <Route path="/notifications" element={guard(<NotificationsPage />)} />

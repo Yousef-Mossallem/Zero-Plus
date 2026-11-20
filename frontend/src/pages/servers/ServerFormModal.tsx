@@ -2,15 +2,19 @@
 // i18n: كل النصوص من servers.form و servers.validation (+ common.actions.cancel).
 
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
-import { AlertTriangle, Globe, Info, Server as ServerIcon } from 'lucide-react'
+import { AlertTriangle, Globe, Info, Server as ServerIcon, Shield, Network } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useToast } from '../../components/ui/Toast'
 import { Button, Field, Modal, TextInput, Toggle } from '../../components/ui/kit'
 import {
   createServer,
+  type UpdateServerInput,
   getApiErrorInfo,
+  getApiErrorText,
   updateServer,
+  enableTunnel,
   type DnsInstructions,
+  type EnableTunnelResult,
   type Server,
 } from '../../services/serversService'
 import { cn } from '../../utils/format'
@@ -98,12 +102,14 @@ export function ServerFormModal({
   server,
   onClose,
   onSaved,
+  onTunnelCreated,
 }: {
   open: boolean
   /** null = add new, otherwise = edit */
   server: Server | null
   onClose: () => void
   onSaved: (server: Server, dns?: DnsInstructions) => void
+  onTunnelCreated?: (server: Server, tunnel: EnableTunnelResult) => void
 }) {
   const toast = useToast()
   const { t } = useTranslation(['servers', 'common'])
@@ -124,6 +130,7 @@ export function ServerFormModal({
       server
         ? {
             domain: server.domain,
+            connectionType: server.setupMode ?? ((server.agentToken || server.tunnelUp) ? 'GUARD' : 'ORIGIN'),
             originIp: server.originIp,
             originPort: String(server.originPort),
             sslEnabled: server.sslEnabled,
@@ -171,48 +178,53 @@ export function ServerFormModal({
 
     setBusy(true)
     try {
-      const input = {
-        domain: normalizeDomain(form.domain),
-        originIp: form.originIp.trim(),
-        originPort: Number(form.originPort),
-        sslEnabled: form.sslEnabled,
-        mode: form.mode,
-      }
+      // setupMode is immutable: an existing server keeps the mode the backend reports
+      const isGuard = (server?.setupMode ?? form.connectionType) === 'GUARD'
+      const domain = normalizeDomain(form.domain)
 
       if (server) {
-        // Edit: send only the fields that changed (the backend body is strict)
-        const patch: Partial<typeof input> = {}
-        if (input.domain !== server.domain) patch.domain = input.domain
-        if (input.originIp !== server.originIp) patch.originIp = input.originIp
-        if (input.originPort !== server.originPort) patch.originPort = input.originPort
-        if (input.sslEnabled !== server.sslEnabled) patch.sslEnabled = input.sslEnabled
-        if (input.mode !== server.mode) patch.mode = input.mode
+        // Edit: send only changed fields (strict body). Origin fields never go to a GUARD server.
+        const patch: UpdateServerInput = {}
+        if (domain !== server.domain) patch.domain = domain
+        if (!isGuard) {
+          if (form.originIp.trim() !== server.originIp) patch.originIp = form.originIp.trim()
+          if (Number(form.originPort) !== server.originPort) patch.originPort = Number(form.originPort)
+          if (form.sslEnabled !== server.sslEnabled) patch.sslEnabled = form.sslEnabled
+        }
+        if (form.mode !== server.mode) patch.mode = form.mode
 
-        if (Object.keys(patch).length === 0) {
-          toast.info(t('form.toast.nothing'), t('form.toast.noChange'))
-          setBusy(false)
-          return
+        let updatedServer = server
+        let dnsRes = undefined
+
+        if (Object.keys(patch).length > 0) {
+          const res = await updateServer(server.id, patch)
+          updatedServer = res.server
+          dnsRes = res.dns
+          if (res.changes.length > 0) toast.success(t('form.toast.updated'), domain)
         }
 
-        const res = await updateServer(server.id, patch)
-
-        if (res.changes.length === 0) {
-          toast.info(t('form.toast.nothing'), t('form.toast.same'))
-        } else {
-          toast.success(t('form.toast.updated'), input.domain)
+        // Guard servers never open the Origin DNS flow
+        onSaved(updatedServer, isGuard ? undefined : dnsRes)
+      } else if (isGuard) {
+        const res = await createServer({ domain, setupMode: 'GUARD' })
+        toast.success(t('form.toast.added'), t('form.toast.addedDesc'))
+        try {
+          const tunnelRes = await enableTunnel(res.server.id)
+          onTunnelCreated?.(res.server, tunnelRes)
+        } catch (tErr) {
+          // Server exists; the tunnel can be enabled from the server card / drawer
+          toast.error(t('form.toast.tunnelFailed'), getApiErrorText(tErr))
         }
-
-        // The backend tells us what the change reset
-        if (res.resets.includes('dnsVerification')) {
-          toast.info(t('form.toast.dnsReset'), t('form.toast.dnsResetDesc'))
-        }
-        if (res.resets.includes('originReachability')) {
-          toast.info(t('form.toast.originReset'), t('form.toast.originResetDesc'))
-        }
-
-        onSaved(res.server, res.dns)
+        onSaved(res.server)
       } else {
-        const res = await createServer(input)
+        const res = await createServer({
+          domain,
+          setupMode: 'ORIGIN',
+          originIp: form.originIp.trim(),
+          originPort: Number(form.originPort),
+          sslEnabled: form.sslEnabled,
+          mode: form.mode,
+        })
         toast.success(t('form.toast.added'), t('form.toast.addedDesc'))
         onSaved(res.server, res.dns)
       }
@@ -229,7 +241,10 @@ export function ServerFormModal({
       }
       setErrors(fieldMap)
 
-      toast.error(server ? t('form.toast.updateFailed') : t('form.toast.addFailed'), info.message)
+      toast.error(
+        server ? t('form.toast.updateFailed') : t('form.toast.addFailed'),
+        getApiErrorText(err),
+      )
     } finally {
       setBusy(false)
     }
@@ -293,38 +308,95 @@ export function ServerFormModal({
           />
         </Field>
 
-        <div className="grid grid-cols-3 gap-3">
-          <div className="col-span-2">
-            <Field
-              label={t('form.originIp.label')}
-              error={resolveError(errors.originIp)}
-              hint={t('form.originIp.hint')}
+        {/* Connection Type Selection: Origin vs Guard */}
+        {!server && (
+        <Field label={t('form.connectionType.label')}>
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => set('connectionType', 'ORIGIN')}
+              className={cn(
+                'flex flex-col rounded-xl border p-3.5 text-start transition',
+                form.connectionType === 'ORIGIN'
+                  ? 'border-cyan-400/50 bg-cyan-500/10'
+                  : 'border-white/10 bg-white/3 hover:border-white/20',
+              )}
             >
+              <div className="flex items-center gap-2">
+                <Network className={cn('h-4 w-4', form.connectionType === 'ORIGIN' ? 'text-cyan-400' : 'text-slate-400')} />
+                <p className={cn('text-sm font-medium', form.connectionType === 'ORIGIN' ? 'text-cyan-200' : 'text-slate-200')}>
+                  {t('form.connectionType.origin')}
+                </p>
+              </div>
+              <p className="mt-1 text-xs text-slate-400">
+                {t('form.connectionType.originDesc')}
+              </p>
+            </button>
+
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => set('connectionType', 'GUARD')}
+              className={cn(
+                'flex flex-col rounded-xl border p-3.5 text-start transition',
+                form.connectionType === 'GUARD'
+                  ? 'border-cyan-400/50 bg-cyan-500/10'
+                  : 'border-white/10 bg-white/3 hover:border-white/20',
+              )}
+            >
+              <div className="flex items-center gap-2">
+                <Shield className={cn('h-4 w-4', form.connectionType === 'GUARD' ? 'text-cyan-400' : 'text-slate-400')} />
+                <p className={cn('text-sm font-medium', form.connectionType === 'GUARD' ? 'text-cyan-200' : 'text-slate-200')}>
+                  {t('form.connectionType.guard')}
+                </p>
+              </div>
+              <p className="mt-1 text-xs text-slate-400">
+                {t('form.connectionType.guardDesc')}
+              </p>
+            </button>
+          </div>
+        </Field>
+        )}
+
+        {form.connectionType === 'GUARD' ? (
+          <Notice tone="cyan">
+            {t('form.connectionType.guardNotice')}
+          </Notice>
+        ) : (
+          <div className="grid grid-cols-3 gap-3">
+            <div className="col-span-2">
+              <Field
+                label={t('form.originIp.label')}
+                error={resolveError(errors.originIp)}
+                hint={t('form.originIp.hint')}
+              >
+                <TextInput
+                  icon={ServerIcon}
+                  value={form.originIp}
+                  invalid={Boolean(errors.originIp)}
+                  disabled={busy}
+                  onChange={(e) => set('originIp', e.target.value)}
+                  placeholder="203.0.113.10"
+                  autoComplete="off"
+                  spellCheck={false}
+                  dir="ltr"
+                />
+              </Field>
+            </div>
+            <Field label={t('form.port')} error={resolveError(errors.originPort)}>
               <TextInput
-                icon={ServerIcon}
-                value={form.originIp}
-                invalid={Boolean(errors.originIp)}
+                inputMode="numeric"
+                value={form.originPort}
+                invalid={Boolean(errors.originPort)}
                 disabled={busy}
-                onChange={(e) => set('originIp', e.target.value)}
-                placeholder="203.0.113.10"
-                autoComplete="off"
-                spellCheck={false}
+                onChange={(e) => onPortChange(e.target.value.replace(/[^\d]/g, ''))}
+                placeholder="443"
                 dir="ltr"
               />
             </Field>
           </div>
-          <Field label={t('form.port')} error={resolveError(errors.originPort)}>
-            <TextInput
-              inputMode="numeric"
-              value={form.originPort}
-              invalid={Boolean(errors.originPort)}
-              disabled={busy}
-              onChange={(e) => onPortChange(e.target.value.replace(/[^\d]/g, ''))}
-              placeholder="443"
-              dir="ltr"
-            />
-          </Field>
-        </div>
+        )}
 
         <Field label={t('form.mode.label')} error={resolveError(errors.mode)}>
           <div className="grid grid-cols-2 gap-2">

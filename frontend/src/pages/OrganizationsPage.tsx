@@ -230,6 +230,7 @@ export default function OrganizationsPage() {
     { label: t('sidebar.links.servers'), hint: t('sidebar.links.serversHint'), path: '/servers', icon: Server },
     { label: t('sidebar.links.policies'), hint: t('sidebar.links.policiesHint'), path: '/policies', icon: SlidersHorizontal },
     { label: t('sidebar.links.reports'), hint: t('sidebar.links.reportsHint'), path: '/reports', icon: FileText },
+    { label: t('sidebar.links.team'), hint: t('sidebar.links.teamHint'), path: '/team', icon: Users },
   ]
 
   // ==================================================================

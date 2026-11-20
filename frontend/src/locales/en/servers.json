@@ -120,7 +120,20 @@
     "edit": "Edit",
     "editAria": "Edit server",
     "delete": "Delete",
-    "deleteAria": "Delete server"
+    "deleteAria": "Delete server",
+    "setupMode": {
+      "ORIGIN": "Origin",
+      "GUARD": "Guard"
+    },
+    "tunnelUp": "Tunnel connected",
+    "tunnelPending": "Tunnel not connected",
+    "agentLive": "Agent status",
+    "lastHeartbeat": "Last heartbeat:",
+    "tunnelActive": "Tunnel active",
+    "tunnelCommand": "Install command",
+    "enableTunnel": "Enable tunnel",
+    "tunnelDown": "Agent disconnected",
+    "tunnelUnstable": "Unstable (stale heartbeat)"
   },
   "drawer": {
     "fallbackTitle": "Server",
@@ -135,7 +148,8 @@
     "noUsable": "No usable result from the last measurement",
     "sections": {
       "measurement": "Measurement",
-      "health": "Health"
+      "health": "Health",
+      "agent": "Tunnel & Agent status"
     },
     "fields": {
       "maxRate": "Max sustained rate",
@@ -148,7 +162,15 @@
       "currentLoad": "Current load",
       "originReachable": "Origin reachable",
       "httpsOrigin": "HTTPS origin",
-      "lastCheck": "Last health check"
+      "lastCheck": "Last health check",
+      "lastHeartbeat": "Last heartbeat",
+      "agentVersion": "Agent version",
+      "agentOs": "Operating system",
+      "agentCpu": "CPU usage",
+      "agentRam": "RAM usage",
+      "agentDisk": "Disk",
+      "originHealth": "Origin health (from Agent)",
+      "tokenIssued": "Token issued"
     },
     "yes": "Yes",
     "no": "No",
@@ -161,7 +183,19 @@
     "retryIn": "Try again in {{s}}s",
     "unverifiedHint": "Verify domain ownership to enable measurement.",
     "maintenanceHint": "Measurement is paused while the server is in maintenance.",
-    "ownerOnly": "Only Owners and Admins can re-measure capacity."
+    "ownerOnly": "Only Owners and Admins can re-measure capacity.",
+    "tunnelConnected": "Online",
+    "tunnelWaiting": "Waiting for heartbeat",
+    "agentDisabled": "Not enabled",
+    "viewCommand": "Install command",
+    "confirmDisable": "Disable the Agent and revoke its token?",
+    "agentDisabledSuccess": "Agent disabled successfully",
+    "disableFailed": "Failed to disable the Agent",
+    "stopAgent": "Disable Agent",
+    "enableGuardDesc": "Enable the tunnel to secure the connection through the Zero Plus Guard agent instead of exposing the origin IP.",
+    "enableGuardNow": "Enable Guard now",
+    "tunnelUnstable": "Unstable (stale heartbeat)",
+    "tunnelDisconnected": "Disconnected"
   },
   "dns": {
     "title": "DNS setup",
@@ -272,7 +306,16 @@
       "added": "Server added",
       "addedDesc": "Follow the DNS steps to activate protection.",
       "updateFailed": "Could not update server",
-      "addFailed": "Could not add server"
+      "addFailed": "Could not add server",
+      "tunnelFailed": "Server created, but enabling the tunnel failed"
+    },
+    "connectionType": {
+      "origin": "Standard Origin",
+      "originDesc": "Point DNS directly at the origin, no Agent.",
+      "guard": "Guard (Agent / tunnel)",
+      "guardDesc": "Encrypted tunnel with an Agent installed on your server.",
+      "guardNotice": "In Guard mode you do not need an origin IP. A secure tunnel is created and an install command is generated to run on your server.",
+      "label": "Setup type"
     }
   },
   "validation": {
@@ -294,5 +337,40 @@
       "range": "Port must be between 1 and 65535",
       "reserved": "This port is reserved for a non-web service and can’t be used as an origin"
     }
+  },
+  "tunnel": {
+    "modalTitle": "Enable Guard / Agent Tunnel",
+    "modalSubtitle": "Install the Zero Plus Guard agent on your server to connect the tunnel directly",
+    "warningTitle": "Warning: The token is displayed only once!",
+    "warningDesc": "Copy the full install command and run it on your server now. If you close this modal and lose the token, you will need to rotate and generate a new token.",
+    "channelLabel": "Install Format",
+    "commandLabel": "Install Command",
+    "copy": "Copy Command",
+    "copied": "Copied",
+    "copiedTitle": "Command copied to clipboard",
+    "copiedDesc": "Run the command with root/sudo privileges on your server.",
+    "alreadyIssued": "Token already issued",
+    "needRotate": "Token must be rotated to change command format.",
+    "rotateBtn": "Rotate Token",
+    "confirmRotate": "Are you sure? Current agent will be disconnected",
+    "yesRotate": "Yes, Rotate",
+    "rotatedTitle": "Token rotated successfully",
+    "rotatedDesc": "A new token and command were generated. Old agent stopped.",
+    "rotateFailed": "Failed to rotate token",
+    "done": "Done",
+    "noTokenCached": "Token was issued previously and cannot be retrieved for security.",
+    "generateNew": "Generate new token and command now",
+    "stepsTitle": "Steps:",
+    "step1": "Copy the command above and run it as root on your origin server.",
+    "step2": "The agent will establish an encrypted tunnel and send regular heartbeats.",
+    "step3": "The tunnel status on the server card will automatically switch to «Online».",
+    "docsLink": "Installation & Troubleshooting Docs",
+    "copyFailed": "Failed to copy to clipboard",
+    "enableFailed": "Failed to enable agent"
+  },
+  "errors": {
+    "probeNotAvailableForGuard": "Probe is not available for Guard servers.",
+    "featureNotAvailableForSetupMode": "This feature is not available for this server’s setup type.",
+    "originFieldsNotAllowedForGuard": "Origin fields cannot be sent for a Guard server."
   }
 }

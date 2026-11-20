@@ -20,6 +20,7 @@
 //     الصفحة عن طريق getApiErrorInfo (تحت)
 // ==================================================================
 
+import i18n from 'i18next'
 import api from './api'
 import { cleanParams } from './types'
 import type { Pagination, ServerMode, ServerStatus } from './types'
@@ -39,6 +40,8 @@ export interface Server {
   originPort: number
   status: ServerStatus
   mode: ServerMode
+  /** ORIGIN | GUARD — fixed at creation time by the backend */
+  setupMode?: SetupMode
   cpuCores: number | null
   ramMb: number | null
   verificationToken: string
@@ -71,6 +74,23 @@ export interface Server {
   probeRecommendation: ProbeRecommendation | null
   /** آخر مرة اكتمل فيها قياس (null = لم يُقس بعد) */
   lastProbeAt: string | null
+
+  // ---- Agent / Guard / Tunnel ----
+  agentToken?: string | null
+  agentTokenHash?: string | null
+  agentVersion?: string | null
+  agentOs?: AgentOs | null
+  agentArch?: string | null
+  lastAgentAt?: string | null
+  tunnelUp?: boolean
+  tunnelPeerIp?: string | null
+  agentCpuPercent?: number | null
+  agentRamPercent?: number | null
+  agentDiskPercent?: number | null
+  agentLoadAvg1m?: number | null
+  estimatedMaxRps?: number | null
+  agentOriginOk?: boolean | null
+  agentOriginLatMs?: number | null
 }
 
 export interface DnsRecordInstruction {
@@ -136,15 +156,32 @@ export interface ServersListResult {
   summary: Record<ServerStatus, number>
 }
 
-export interface CreateServerInput {
+export type SetupMode = 'ORIGIN' | 'GUARD'
+
+/** POST /servers — setupMode is sent explicitly and is immutable afterwards */
+export type CreateServerInput =
+  | {
+      domain: string
+      setupMode: 'ORIGIN'
+      originIp: string
+      originPort?: number
+      sslEnabled?: boolean
+      mode?: ServerMode
+    }
+  | {
+      // GUARD: the backend rejects origin fields (ORIGIN_FIELDS_NOT_ALLOWED_FOR_GUARD)
+      domain: string
+      setupMode: 'GUARD'
+    }
+
+/** PATCH /servers/:id — setupMode can never be changed */
+export type UpdateServerInput = Partial<{
   domain: string
   originIp: string
-  originPort?: number
-  sslEnabled?: boolean
-  mode?: ServerMode
-}
-
-export type UpdateServerInput = Partial<CreateServerInput>
+  originPort: number
+  sslEnabled: boolean
+  mode: ServerMode
+}>
 
 export interface ServerChange {
   field: 'domain' | 'originIp' | 'originPort' | 'sslEnabled' | 'mode'
@@ -203,6 +240,8 @@ export interface ApiErrorInfo {
   status: number | null
   code: string | null
   message: string
+  /** i18n key (servers ns) for known setup-mode error codes, else null */
+  messageKey: string | null
   /** من details.retryAfterSec أو هيدر Retry-After (للـ 429) */
   retryAfterSec: number | null
   /** أخطاء الحقول (400 VALIDATION_ERROR) */
@@ -214,6 +253,13 @@ export interface ApiErrorInfo {
  * { success:false, code, message, details?, errors? } + هيدر Retry-After
  * بدون الاعتماد على نوع مكتبة معينة (axios وغيره).
  */
+/** Setup-mode errors the backend can return; each maps to a servers-namespace key */
+const SETUP_MODE_ERROR_KEYS: Record<string, string> = {
+  PROBE_NOT_AVAILABLE_FOR_GUARD: 'errors.probeNotAvailableForGuard',
+  FEATURE_NOT_AVAILABLE_FOR_SETUP_MODE: 'errors.featureNotAvailableForSetupMode',
+  ORIGIN_FIELDS_NOT_ALLOWED_FOR_GUARD: 'errors.originFieldsNotAllowedForGuard',
+}
+
 export function getApiErrorInfo(error: unknown): ApiErrorInfo {
   const err = error as {
     response?: {
@@ -221,6 +267,7 @@ export function getApiErrorInfo(error: unknown): ApiErrorInfo {
       data?: {
         code?: string
         message?: string
+        messageAr?: string
         details?: { retryAfterSec?: number }
         errors?: Array<{ field: string; message: string }>
       }
@@ -240,7 +287,9 @@ export function getApiErrorInfo(error: unknown): ApiErrorInfo {
   return {
     status: res?.status ?? null,
     code: body?.code ?? null,
-    message: body?.message ?? err?.message ?? 'حدث خطأ غير متوقع',
+    // messageAr when the backend sends it, otherwise message
+    message: body?.messageAr ?? body?.message ?? err?.message ?? 'Unexpected error',
+    messageKey: body?.code ? (SETUP_MODE_ERROR_KEYS[body.code] ?? null) : null,
     retryAfterSec,
     fieldErrors: body?.errors ?? [],
   }
@@ -402,4 +451,158 @@ export async function deleteServer(
     data: { id: string; domain: string; deletedEvents: number }
   }>(`/servers/${id}`, { params: { confirmDomain } })
   return { message: data.message, data: data.data }
+}
+
+// ==================================================================
+// Agent / Guard / Tunnel API (المسارات الجديدة تحت /servers)
+// ==================================================================
+
+export type InstallChannel = 'script' | 'docker' | 'binary'
+export type AgentOs = 'LINUX' | 'WINDOWS' | 'UNKNOWN'
+
+export interface EnableTunnelInput {
+  rotateToken?: boolean
+  installChannel?: InstallChannel
+  preferOs?: AgentOs
+  preferArch?: string
+}
+
+export interface InstallCommandInfo {
+  channel: InstallChannel
+  command: string
+  agentToken: string
+  tokenHint?: string
+  serverId: string
+  domain?: string
+  docsUrl?: string
+}
+
+export interface EnableTunnelResult {
+  serverId: string
+  domain?: string
+  rotated: boolean
+  install: InstallCommandInfo
+}
+
+export interface AgentStatus {
+  serverId: string
+  hasToken: boolean
+  tunnelUp: boolean
+  lastAgentAt: string | null
+  agentVersion: string | null
+  agentOs: AgentOs | null
+  agentArch: string | null
+  agentCpuPercent: number | null
+  agentRamPercent: number | null
+  agentDiskPercent: number | null
+  agentLoadAvg1m: number | null
+  estimatedMaxRps: number | null
+  agentOriginOk: boolean | null
+  agentOriginLatMs: number | null
+  tunnelPeerIp: string | null
+  isFresh: boolean
+}
+
+export interface HeartbeatItem {
+  id?: string
+  serverId?: string
+  recordedAt: string
+  tunnelUp: boolean
+  cpuPercent: number | null
+  ramPercent: number | null
+  diskPercent: number | null
+  loadAvg1m: number | null
+  originOk: boolean | null
+  originLatMs: number | null
+  rpsObserved: number | null
+}
+
+export interface HeartbeatsListResult {
+  serverId: string
+  items: HeartbeatItem[]
+}
+
+export interface DisableAgentResult {
+  ok: boolean
+  serverId: string
+  tokenRevoked: boolean
+}
+
+/**
+ * تفعيل النفق وتوليد أمر التثبيت
+ * POST /servers/:serverId/enable-tunnel
+ */
+export async function enableTunnel(
+  serverId: string,
+  input: EnableTunnelInput = {},
+): Promise<EnableTunnelResult> {
+  const { data } = await api.post<{ success: boolean; data: EnableTunnelResult }>(
+    `/servers/${serverId}/enable-tunnel`,
+    input,
+  )
+  return data.data
+}
+
+/**
+ * إعادة توليد التوكن
+ * POST /servers/:serverId/rotate-agent-token
+ */
+export async function rotateAgentToken(
+  serverId: string,
+  input: { confirm?: true; installChannel?: InstallChannel } = {},
+): Promise<EnableTunnelResult> {
+  const { data } = await api.post<{ success: boolean; data: EnableTunnelResult }>(
+    `/servers/${serverId}/rotate-agent-token`,
+    input,
+  )
+  return data.data
+}
+
+/**
+ * إيقاف الـ Agent
+ * POST /servers/:serverId/disable-agent
+ */
+export async function disableAgent(
+  serverId: string,
+  revokeToken = true,
+): Promise<DisableAgentResult> {
+  const { data } = await api.post<{ success: boolean; data: DisableAgentResult }>(
+    `/servers/${serverId}/disable-agent`,
+    { revokeToken },
+  )
+  return data.data
+}
+
+/**
+ * حالة الـ Agent من snapshot
+ * GET /servers/:serverId/agent-status
+ */
+export async function getAgentStatus(serverId: string): Promise<AgentStatus> {
+  const { data } = await api.get<{ success: boolean; data: AgentStatus }>(
+    `/servers/${serverId}/agent-status`,
+  )
+  return data.data
+}
+
+/**
+ * سجل النبضات الأخيرة
+ * GET /servers/:serverId/heartbeats
+ */
+export async function listHeartbeats(
+  serverId: string,
+  params: { limit?: number; from?: string; to?: string; tunnelUpOnly?: boolean } = {},
+): Promise<HeartbeatsListResult> {
+  const { data } = await api.get<{ success: boolean; data: HeartbeatsListResult }>(
+    `/servers/${serverId}/heartbeats`,
+    { params: cleanParams(params) },
+  )
+  return data.data
+}
+
+/** Translated error text: setup-mode codes map to servers:errors.* keys, otherwise the backend message (messageAr preferred) */
+export function getApiErrorText(error: unknown): string {
+  const info = getApiErrorInfo(error)
+  if (!info.messageKey) return info.message
+  const tr = i18n.t.bind(i18n) as (key: string) => string
+  return tr(`servers:${info.messageKey}`)
 }

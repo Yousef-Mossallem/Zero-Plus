@@ -56,3 +56,21 @@ export function formatRps(value: number | null | undefined): string {
   if (value === null || value === undefined || Number.isNaN(value)) return '—'
   return `${value.toLocaleString('en-US')} req/s`
 }
+
+/**
+ * Guard agent state for list items. The list response has no `isFresh`
+ * (it only exists in GET /servers/:id/agent-status), so it is derived from
+ * lastAgentAt using the same default window as the backend (AGENT_FRESH_WINDOW_SEC = 120).
+ */
+export const AGENT_FRESH_WINDOW_MS = 120_000
+export type GuardAgentState = 'connected' | 'unstable' | 'disconnected'
+
+export function getGuardAgentState(s: {
+  tunnelUp?: boolean
+  lastAgentAt?: string | null
+}): GuardAgentState {
+  if (!s.tunnelUp) return 'disconnected'
+  const ts = s.lastAgentAt ? new Date(s.lastAgentAt).getTime() : NaN
+  const fresh = Number.isFinite(ts) && Date.now() - ts <= AGENT_FRESH_WINDOW_MS
+  return fresh ? 'connected' : 'unstable'
+}

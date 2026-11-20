@@ -62,10 +62,9 @@ function getStoredToken(): string | null {
     const raw = localStorage.getItem(AUTH_STORAGE_KEY)
 
     if (raw) {
-      const parsed = JSON.parse(raw) as {
-        state?: { token?: string | null }
-      }
+      const parsed = JSON.parse(raw)
 
+      // Type-safe access
       const fromStore = parsed?.state?.token
       if (fromStore) {
         return fromStore

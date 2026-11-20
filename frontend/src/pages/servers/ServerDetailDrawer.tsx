@@ -21,10 +21,30 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Activity, AlertTriangle, Gauge, Globe, Loader2, Radar, Timer } from 'lucide-react'
+import {
+  Activity,
+  AlertTriangle,
+  Gauge,
+  Globe,
+  Key,
+  Loader2,
+  PowerOff,
+  Radar,
+  Shield,
+  Timer,
+} from 'lucide-react'
 import { useToast } from '../../components/ui/Toast'
 import { Badge, Button, Drawer, KeyValue, Skeleton } from '../../components/ui/kit'
-import { getApiErrorInfo, getServer, requestProbe, type Server } from '../../services/serversService'
+import {
+  getApiErrorInfo,
+  getApiErrorText,
+  getServer,
+  requestProbe,
+  getAgentStatus,
+  disableAgent,
+  type AgentStatus,
+  type Server,
+} from '../../services/serversService'
 import { REC_META, formatRps, getConfidenceLabel } from '../../utils/serverMeta'
 import { formatDateTime, formatMs, timeAgo } from '../../utils/format'
 import { STATUS_META } from './shared'
@@ -46,6 +66,7 @@ export default function ServerDetailDrawer({
   canManage,
   onClose,
   onOpenDns,
+  onOpenTunnel,
   onServerUpdated,
 }: {
   /** The server from the list (kept fresh by the Socket) */
@@ -53,11 +74,14 @@ export default function ServerDetailDrawer({
   canManage: boolean
   onClose: () => void
   onOpenDns: (server: Server) => void
+  onOpenTunnel?: (server: Server) => void
   onServerUpdated: (server: Server) => void
 }) {
   const toast = useToast()
   const { t } = useTranslation('servers')
   const [full, setFull] = useState<Server | null>(null)
+  const [agentStatus, setAgentStatus] = useState<AgentStatus | null>(null)
+  const [disablingAgent, setDisablingAgent] = useState(false)
   const [loading, setLoading] = useState(false)
   const [probing, setProbing] = useState(false)
   const [starting, setStarting] = useState(false)
@@ -87,17 +111,46 @@ export default function ServerDetailDrawer({
     }
   }
 
+  const guardMode = server?.setupMode
+
   // ---------------- Reset when the opened server changes or the drawer closes ----------------
   useEffect(() => {
     setProbing(false)
     setStarting(false)
     setNeedsOwnership(false)
     setCooldown(0)
+    setAgentStatus(null)
     probeStartedWith.current = null
     clearProbeTimer()
     if (!id) setFull(null)
     return clearProbeTimer
   }, [id])
+
+  // ---------------- Fetch Agent status (with polling while open) ----------------
+  useEffect(() => {
+    // agent-status exists only for GUARD servers
+    if (!id || guardMode !== 'GUARD') return
+    let cancelled = false
+
+    const fetchStatus = () => {
+      getAgentStatus(id)
+        .then((data) => {
+          if (!cancelled) setAgentStatus(data)
+        })
+        .catch(() => {
+          // ignore if not configured or 404
+        })
+    }
+
+    fetchStatus()
+
+    // Polling every 15s to keep heartbeat / metrics fresh
+    const interval = setInterval(fetchStatus, 15_000)
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+    }
+  }, [id, guardMode])
 
   // ---------------- Fetch details (on open + whenever the server updates) ----------------
   useEffect(() => {
@@ -203,7 +256,8 @@ export default function ServerDetailDrawer({
         cb.current.toast.info(cb.current.t('toast.measureSlow'), cb.current.t('toast.measureSlowDesc'))
       }, PROBE_WAIT_MS)
     } catch (err) {
-      const { status, code, message, retryAfterSec } = getApiErrorInfo(err)
+      const { status, code, retryAfterSec } = getApiErrorInfo(err)
+      const message = getApiErrorText(err)
       if (status === 409 || code === 'OWNERSHIP_REQUIRED') {
         setNeedsOwnership(true)
         toast.info(t('toast.verifyFirst'), message)
@@ -222,7 +276,8 @@ export default function ServerDetailDrawer({
   }
 
   const rec = s?.probeRecommendation ? REC_META[s.probeRecommendation] : undefined
-  const unverified = s ? !s.dnsVerified : false
+  const isGuard = s?.setupMode === 'GUARD'
+  const unverified = s && !isGuard ? !s.dnsVerified : false
   const neverMeasured = s ? s.lastProbeAt === null : false
   const inMaintenance = s?.status === 'MAINTENANCE'
 
@@ -251,15 +306,22 @@ export default function ServerDetailDrawer({
             <Badge tone={STATUS_META[s.status].tone} dot>
               {STATUS_META[s.status].label}
             </Badge>
-            <Badge tone={s.dnsVerified ? 'emerald' : 'amber'}>
-              {s.dnsVerified ? t('drawer.verified') : t('drawer.notVerified')}
-            </Badge>
-            <Badge tone={s.gatewayReachable ? 'emerald' : 'slate'}>
-              {s.gatewayReachable ? t('drawer.routingOk') : t('drawer.routingPending')}
-            </Badge>
+            <Badge tone={isGuard ? 'cyan' : 'slate'}>{t(`card.setupMode.${isGuard ? 'GUARD' : 'ORIGIN'}`)}</Badge>
+            {!isGuard && (
+              <>
+                <Badge tone={s.dnsVerified ? 'emerald' : 'amber'}>
+                  {s.dnsVerified ? t('drawer.verified') : t('drawer.notVerified')}
+                </Badge>
+                <Badge tone={s.gatewayReachable ? 'emerald' : 'slate'}>
+                  {s.gatewayReachable ? t('drawer.routingOk') : t('drawer.routingPending')}
+                </Badge>
+              </>
+            )}
           </div>
 
           {/* ---------- Safe capacity (primary number) ---------- */}
+          {!isGuard && (
+          <>
           <div className="relative overflow-hidden rounded-2xl border border-white/8 bg-white/3 p-5">
             <div className="absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-cyan-400/60 to-transparent" />
             <p className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
@@ -308,6 +370,122 @@ export default function ServerDetailDrawer({
             </KeyValue>
           </section>
 
+          </>
+          )}
+
+          {isGuard && (
+          <>
+          {/* ---------- Guard / Agent / Tunnel Section ---------- */}
+          <section className="rounded-2xl border border-white/8 bg-linear-to-b from-white/3 to-transparent p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <h4 className={sectionTitle}>{t('drawer.sections.agent')}</h4>
+              {!agentStatus?.hasToken ? (
+                <span className="text-xs text-slate-500">{t('drawer.agentDisabled')}</span>
+              ) : agentStatus.tunnelUp && agentStatus.isFresh ? (
+                <span className="inline-flex items-center gap-1 rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2 py-0.5 text-xs text-emerald-300">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                  {t('drawer.tunnelConnected')}
+                </span>
+              ) : agentStatus.tunnelUp ? (
+                <span className="inline-flex items-center gap-1 rounded-full border border-amber-400/30 bg-amber-500/10 px-2 py-0.5 text-xs text-amber-300">
+                  <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
+                  {t('drawer.tunnelUnstable')}
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 rounded-full border border-rose-400/30 bg-rose-500/10 px-2 py-0.5 text-xs text-rose-300">
+                  <span className="h-1.5 w-1.5 rounded-full bg-rose-400" />
+                  {agentStatus.lastAgentAt ? t('drawer.tunnelDisconnected') : t('drawer.tunnelWaiting')}
+                </span>
+              )}
+            </div>
+
+            {agentStatus?.hasToken ? (
+              <div className="space-y-2 text-xs">
+                <KeyValue label={t('drawer.fields.tokenIssued')}>{yesNo(agentStatus.hasToken)}</KeyValue>
+                <KeyValue label={t('drawer.fields.lastHeartbeat')}>
+                  {agentStatus.lastAgentAt ? `${timeAgo(agentStatus.lastAgentAt)} (${formatDateTime(agentStatus.lastAgentAt)})` : '—'}
+                </KeyValue>
+                <KeyValue label={t('drawer.fields.agentVersion')}>
+                  {agentStatus.agentVersion ?? '1.0.0'}
+                </KeyValue>
+                <KeyValue label={t('drawer.fields.agentOs')}>
+                  {agentStatus.agentOs ? `${agentStatus.agentOs} (${agentStatus.agentArch ?? 'amd64'})` : '—'}
+                </KeyValue>
+                <KeyValue label={t('drawer.fields.agentCpu')}>
+                  {agentStatus.agentCpuPercent != null ? `${agentStatus.agentCpuPercent.toFixed(1)}%` : '—'}
+                </KeyValue>
+                <KeyValue label={t('drawer.fields.agentRam')}>
+                  {agentStatus.agentRamPercent != null ? `${agentStatus.agentRamPercent.toFixed(1)}%` : '—'}
+                </KeyValue>
+                <KeyValue label={t('drawer.fields.agentDisk')}>
+                  {agentStatus.agentDiskPercent != null ? `${agentStatus.agentDiskPercent.toFixed(1)}%` : '—'}
+                </KeyValue>
+                <KeyValue label={t('drawer.fields.originHealth')}>
+                  {agentStatus.agentOriginOk === true
+                    ? `سليم (${agentStatus.agentOriginLatMs ?? 0} ms)`
+                    : agentStatus.agentOriginOk === false
+                    ? 'الأصل لا يستجيب'
+                    : '—'}
+                </KeyValue>
+
+                {canManage && (
+                  <div className="mt-4 flex flex-wrap gap-2 pt-2 border-t border-white/6">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      icon={Key}
+                      onClick={() => onOpenTunnel?.(s)}
+                    >
+                      {t('drawer.viewCommand')}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="danger"
+                      icon={PowerOff}
+                      loading={disablingAgent}
+                      onClick={async () => {
+                        if (!confirm(t('drawer.confirmDisable'))) return
+                        setDisablingAgent(true)
+                        try {
+                          await disableAgent(s.id)
+                          toast.success(t('drawer.agentDisabledSuccess'))
+                          setAgentStatus((prev) => (prev ? { ...prev, tunnelUp: false, hasToken: false } : null))
+                        } catch {
+                          toast.error(t('drawer.disableFailed'))
+                        } finally {
+                          setDisablingAgent(false)
+                        }
+                      }}
+                    >
+                      {t('drawer.stopAgent')}
+                    </Button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="rounded-xl border border-dashed border-white/10 p-3 text-center">
+                <p className="text-xs text-slate-400">
+                  {t('drawer.enableGuardDesc')}
+                </p>
+                {canManage && (
+                  <Button
+                    size="sm"
+                    variant="primary"
+                    icon={Shield}
+                    className="mt-2"
+                    onClick={() => onOpenTunnel?.(s)}
+                  >
+                    {t('drawer.enableGuardNow')}
+                  </Button>
+                )}
+              </div>
+            )}
+          </section>
+
+          </>
+          )}
+
+          {!isGuard && (
           <section>
             <h4 className={sectionTitle}>{t('drawer.sections.health')}</h4>
             <KeyValue label={t('drawer.fields.avgResponse')}>{formatMs(s.avgResponseTimeMs)}</KeyValue>
@@ -319,6 +497,10 @@ export default function ServerDetailDrawer({
             <KeyValue label={t('drawer.fields.lastCheck')}>{timeAgo(s.lastHealthCheckAt)}</KeyValue>
           </section>
 
+          )}
+
+          {!isGuard && (
+          <>
           {/* ---------- Actions ---------- */}
           {needsOwnership && (
             <div className="zp-anim-fade-up flex gap-3 rounded-xl border border-amber-400/25 bg-amber-500/6 p-4">
@@ -361,6 +543,8 @@ export default function ServerDetailDrawer({
             <p className="rounded-xl border border-white/8 bg-white/3 px-4 py-3 text-sm text-slate-500">
               {t('drawer.ownerOnly')}
             </p>
+          )}
+          </>
           )}
         </div>
       )}

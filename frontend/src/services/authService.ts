@@ -43,6 +43,8 @@ export interface AuthUser {
   email: string
   fullName: string
   role: string
+  /** الصلاحيات النهائية (GET /auth/me) — OWNER = كل الصلاحيات */
+  permissions?: string[]
   organizationId: string
   lastLoginAt?: string | null
   createdAt?: string

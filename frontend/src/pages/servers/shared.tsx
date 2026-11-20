@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next'
 import i18n from '../../i18n'
 import { useToast } from '../../components/ui/Toast'
 import { type Tone } from '../../components/ui/kit'
-import type { ServerMode, ServerStatus } from '../../services/types'
+import type { ServerMode, ServerStatus, ServerSetupMode } from '../../services/types'
 
 // ==================================================================
 // Constants
@@ -47,15 +47,18 @@ export function validateServerForm(form: ServerForm): Record<string, string> {
   else if (/[\s/?#@\\:]/.test(domain)) errors.domain = 'validation.domain.noPathOrPort'
   else if (!domain.includes('.')) errors.domain = 'validation.domain.needsExtension'
 
-  const ip = form.originIp.trim()
-  const octets = ip.split('.')
-  const ipOk = octets.length === 4 && octets.every((o) => /^\d{1,3}$/.test(o) && Number(o) <= 255)
-  if (!ip) errors.originIp = 'validation.originIp.required'
-  else if (!ipOk) errors.originIp = 'validation.originIp.invalid'
+  // Origin fields are only required for ORIGIN setup mode
+  if (form.setupMode === 'ORIGIN') {
+    const ip = form.originIp.trim()
+    const octets = ip.split('.')
+    const ipOk = octets.length === 4 && octets.every((o) => /^\d{1,3}$/.test(o) && Number(o) <= 255)
+    if (!ip) errors.originIp = 'validation.originIp.required'
+    else if (!ipOk) errors.originIp = 'validation.originIp.invalid'
 
-  const port = Number(form.originPort)
-  if (!Number.isInteger(port) || port < 1 || port > 65535) {
-    errors.originPort = 'validation.originPort.range'
+    const port = Number(form.originPort)
+    if (!Number.isInteger(port) || port < 1 || port > 65535) {
+      errors.originPort = 'validation.originPort.range'
+    }
   }
 
   return errors
@@ -71,6 +74,7 @@ export interface ServerForm {
   originPort: string
   sslEnabled: boolean
   mode: ServerMode
+  setupMode: ServerSetupMode
 }
 
 export const EMPTY_FORM: ServerForm = {
@@ -79,6 +83,7 @@ export const EMPTY_FORM: ServerForm = {
   originPort: '443',
   sslEnabled: true,
   mode: 'PROTECT',
+  setupMode: 'ORIGIN',
 }
 
 // ==================================================================
